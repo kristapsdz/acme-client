@@ -15,6 +15,36 @@
 
 #include "extern.h"
 
+static void
+dowarnx(const char *fmt, ...)
+{
+	va_list	 	 ap;
+
+	va_start(ap, fmt);
+	dovwarnx("keyproc", fmt, ap);
+	va_end(ap);
+}
+
+static void
+dodbg(const char *fmt, ...)
+{
+	va_list	 	 ap;
+
+	va_start(ap, fmt);
+	dovdbg("keyproc", fmt, ap);
+	va_end(ap);
+}
+
+static void
+doerr(const char *fmt, ...)
+{
+	va_list	 	 ap;
+
+	va_start(ap, fmt);
+	doverr("keyproc", fmt, ap);
+	va_end(ap);
+}
+
 /*
  * Create an X509 certificate from the private RSA key we have on file.
  * To do this, we first open the RSA key file, then jail ourselves.
@@ -36,14 +66,14 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	ERR_load_crypto_strings();
 
 	if (-1 == asprintf(&path, "%s/privkey.pem", certdir)) 
-		err(EXIT_FAILURE, "asprintf");
+		doerr("asprintf");
 
 	/* 
 	 * Next, open our private key file.
 	 * After this, we're going to go dark.
 	 */
 	if (NULL == (f = fopen(path, "r")))
-		err(EXIT_FAILURE, "%s", path);
+		doerr("%s", path);
 
 #ifdef __APPLE__
 	/*
@@ -53,21 +83,20 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	 * stuck with a weaker sandbox.
 	 */
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
- 	    SANDBOX_NAMED, NULL)) {
-		warnx("sandbox_init");
-		exit(EXIT_FAILURE);
-	}
+ 	    SANDBOX_NAMED, NULL))
+		doerr("sandbox_init");
 #endif
 	/*
 	 * Jails: start with file-system.
 	 * Go into the usual place.
 	 */
 	if (-1 == chroot("/var/empty"))
-		err(EXIT_FAILURE, "%s: chroot", "/var/empty");
+		doerr("%s: chroot", "/var/empty");
 	if (-1 == chdir("/"))
-		err(EXIT_FAILURE, "/: chdir");
+		doerr("/: chdir");
+
 	if (NULL == (sockf = fdopen(netsock, "a")))
-		err(EXIT_FAILURE, "fdopen");
+		doerr("fdopen");
 
 #ifdef __OpenBSD__
 	/* 
@@ -75,8 +104,10 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	 * inherited from our open descriptors.
 	 */
 	if (-1 == pledge("stdio", NULL))
-		err(EXIT_FAILURE, "pledge");
+		doerr("pledge");
 #endif
+
+	dodbg("starting");
 
 	x = NULL;
 	evp = NULL;
@@ -94,27 +125,31 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 		RAND_seed(rbuf, sizeof(rbuf));
 	}
 
+	dodbg("reading private key: %s", path);
+
 	/* 
 	 * Parse our private key from an already-open steam.
 	 * From now on, use the "error" label for errors.
 	 */
 	r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
 	if (NULL == r) {
-		warnx("%s", path);
+		dowarnx("%s", path);
 		goto error;
 	}
 	fclose(f);
 	f = NULL;
+
+	dodbg("creating certificate: %s", path);
 
 	/*
 	 * We're going to merge this into an EVP.
 	 * Once these succeed, the RSA key will be free'd with the EVP.
 	 */
 	if (NULL == (evp = EVP_PKEY_new())) {
-		warnx("EVP_PKEY_new");
+		dowarnx("EVP_PKEY_new");
 		goto error;
 	} else if ( ! EVP_PKEY_assign_RSA(evp, r)) {
-		warnx("EVP_PKEY_assign_RSA");
+		dowarnx("EVP_PKEY_assign_RSA");
 		goto error;
 	} 
 
@@ -125,10 +160,10 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	 * Then set it as the X509 requester's key.
 	 */
 	if (NULL == (x = X509_REQ_new())) {
-		warnx("X509_new");
+		dowarnx("X509_new");
 		goto error;
 	} else if ( ! X509_REQ_set_pubkey(x, evp)) {
-		warnx("X509_set_pubkey");
+		dowarnx("X509_set_pubkey");
 		goto error;
 	}
 
@@ -137,26 +172,28 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	 * TODO: SAN.
 	 */
 	if (NULL == (name = X509_NAME_new())) {
-		warnx("X509_NAME_new");
+		dowarnx("X509_NAME_new");
 		goto error;
 	} else if ( ! X509_NAME_add_entry_by_txt(name, "CN", 
 	           MBSTRING_ASC, domain, -1, -1, 0)) {
-		warnx("X509_NAME_add_entry_by_txt: CN=%s", domain);
+		dowarnx("X509_NAME_add_entry_by_txt: CN=%s", domain);
 		goto error;
 	} else if ( ! X509_REQ_set_subject_name(x, name)) {
-		warnx("X509_req_set_issuer_name");
+		dowarnx("X509_req_set_issuer_name");
 		goto error;
 	}
+
+	dodbg("serialising certificate: %s", path);
 	
 	/*
 	 * Finally, sign the X509 request using SHA256.
 	 * Then write it into the netproc()'s socket.
 	 */
 	if ( ! X509_REQ_sign(x, evp, EVP_sha256())) {
-		warnx("X509_sign");
+		dowarnx("X509_sign");
 		goto error;
 	} else if ( ! PEM_write_X509_REQ(sockf, x)) {
-		warnx("PEM_write_X509_REQ");
+		dowarnx("PEM_write_X509_REQ");
 		goto error;
 	}
 
@@ -168,8 +205,8 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	EVP_PKEY_free(evp);
 	X509_NAME_free(name);
 	ERR_free_strings();
+	dodbg("finished");
 	return(1);
-
 error:
 	if (NULL != f)
 		fclose(f);

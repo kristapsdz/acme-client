@@ -29,6 +29,36 @@ struct	buf {
 };
 
 static void
+doerr(const char *fmt, ...)
+{
+	va_list	 	 ap;
+
+	va_start(ap, fmt);
+	doverr("netproc", fmt, ap);
+	va_end(ap);
+}
+
+static void
+dowarnx(const char *fmt, ...)
+{
+	va_list	 	 ap;
+
+	va_start(ap, fmt);
+	dovwarnx("netproc", fmt, ap);
+	va_end(ap);
+}
+
+static void
+dowarn(const char *fmt, ...)
+{
+	va_list	 	 ap;
+
+	va_start(ap, fmt);
+	dovwarn("netproc", fmt, ap);
+	va_end(ap);
+}
+
+static void
 dodbg(const char *fmt, ...)
 {
 	va_list	 	 ap;
@@ -36,6 +66,67 @@ dodbg(const char *fmt, ...)
 	va_start(ap, fmt);
 	dovdbg("netproc", fmt, ap);
 	va_end(ap);
+}
+
+static char *
+readstring(int fd, const char *name)
+{
+	ssize_t		 ssz;
+	size_t		 sz;
+	char		*p;
+
+	p = NULL;
+
+	if ((ssz = read(fd, &sz, sizeof(size_t))) < 0)
+		warn("read: %s length", name);
+	else if ((size_t)ssz != sizeof(size_t))
+		dowarnx("short read: %s length", name);
+	else if (NULL == (p = calloc(1, sz + 1)))
+		dowarn("malloc");
+	else if ((ssz = read(fd, p, sz)) < 0)
+		dowarn("read: %s", name);
+	else if ((size_t)ssz != sz)
+		dowarnx("short read: %s", name);
+	else
+		return(p);
+
+	free(p);
+	return(NULL);
+}
+
+static char *
+readstream(int certsock, const char *name)
+{
+	ssize_t		 ssz;
+	size_t		 sz;
+	char		 buf[BUFSIZ];
+	void		*pp;
+	char		*p;
+
+	p = NULL;
+	sz = 0;
+	while ((ssz = read(certsock, buf, sizeof(buf))) > 0) {
+		if (NULL == (pp = realloc(p, sz + ssz + 1))) {
+			dowarn("realloc");
+			free(p);
+			return(NULL);
+		}
+		p = pp;
+		memcpy(p + sz, buf, ssz);
+		sz += ssz;
+		p[sz] = '\0';
+	}
+
+	if (ssz < 0) {
+		dowarn("read: %s", name);
+		free(p);
+		return(NULL);
+	} else if (0 == sz) {
+		dowarnx("empty read: %s", name);
+		return(NULL);
+	}
+
+	return(p);
 }
 
 /*
@@ -49,25 +140,25 @@ netcleanup(char *dir)
 
 	/* Start with the jail's resolv.conf. */
 	if (-1 == asprintf(&tmp, "%s" PATH_RESOLV, dir)) {
-		warn("asprintf");
+		dowarn("asprintf");
 		tmp = NULL;
 	} else if (-1 == remove(tmp) && ENOENT != errno) 
-		warn("%s", tmp);
+		dowarn("%s", tmp);
 
 	free(tmp);
 
 	/* Now the etc directory containing the resolv. */
 	if (-1 == asprintf(&tmp, "%s/etc", dir)) {
-		warn("asprintf");
+		dowarn("asprintf");
 		tmp = NULL;
 	} else if (-1 == remove(tmp) && ENOENT != errno)
-		warn("%s", tmp);
+		dowarn("%s", tmp);
 
 	free(tmp);
 
 	/* Finally, the jail itself. */
 	if (-1 == remove(dir) && ENOENT != errno)
-		warn("%s", dir);
+		dowarn("%s", dir);
 
 	free(dir);
 }
@@ -94,19 +185,19 @@ netprepare(void)
 	 */
 	dir = strdup("/tmp/letskencrypt.XXXXXXXXXX");
 	if (NULL == dir) {
-		warn("strdup");
+		dowarn("strdup");
 		return(NULL);
 	} else if (NULL == mkdtemp(dir)) {
-		warn("mkdtemp");
+		dowarn("mkdtemp");
 		return(NULL);
 	}
 
 	/* Create the /etc directory. */
 	if (-1 == asprintf(&tmp, "%s/etc", dir)) {
-		warn("asprintf");
+		dowarn("asprintf");
 		goto err;
 	} else if (-1 == mkdir(tmp, 0755)) {
-		warn("%s", tmp);
+		dowarn("%s", tmp);
 		goto err;
 	}
 
@@ -116,33 +207,33 @@ netprepare(void)
 	/* Open /etc/resolv.conf. */
 	fd2 = open(PATH_RESOLV, O_RDONLY, 0);
 	if (-1 == fd2) {
-		warn(PATH_RESOLV);
+		dowarn(PATH_RESOLV);
 		goto err;
 	}
 
 	/* Create the new /etc/resolv.conf file. */
 	oflags = O_CREAT|O_TRUNC|O_WRONLY|O_APPEND;
 	if (-1 == asprintf(&tmp, "%s" PATH_RESOLV, dir)) {
-		warn("asprintf");
+		dowarn("asprintf");
 		goto err;
 	} else if (-1 == (fd = open(tmp, oflags, 0644))) {
-		warn("%s", tmp);
+		dowarn("%s", tmp);
 		goto err;
 	}
 
 	/* Copy via a static buffer. */
 	while ((ssz = read(fd2, dbuf, sizeof(dbuf))) > 0) {
 		if ((ssz2 = write(fd, dbuf, ssz)) < 0) {
-			warn("%s", tmp);
+			dowarn("%s", tmp);
 			goto err;
 		} else if (ssz2 != ssz) {
-			warnx("%s: short write", tmp);
+			dowarnx("%s: short write", tmp);
 			goto err;
 		}
 	}
 
 	if (ssz < 0) {
-		warn(PATH_RESOLV);
+		dowarn(PATH_RESOLV);
 		goto err;
 	}
 
@@ -169,7 +260,7 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 	nsz = sz * nm;
 	buf->buf = realloc(buf->buf, buf->sz + nsz + 1);
 	if (NULL == buf->buf) {
-		warn("realloc");
+		dowarn("realloc");
 		return(0);
 	}
 	memcpy(buf->buf + buf->sz, ptr, nsz);
@@ -188,17 +279,12 @@ netproc(int certsock, int acctsock)
 {
 	char		*home, *mod, *exp;
 	pid_t		 pid;
-	int		 st, rc;
-	char		*cert, *token, *string, *nonce;
-	char		 buf[BUFSIZ];
-	ssize_t		 ssz;
+	int		 st, rc, cc;
+	char		*cert, *token, *string, *nonce, *thumb;
 	size_t		 sz;
 	CURL		*c;
 	CURLcode	 res;
 	struct buf	 hbuf;
-	void		*pp;
-
-	dodbg("starting up");
 
 	rc = EXIT_FAILURE;
 
@@ -206,27 +292,23 @@ netproc(int certsock, int acctsock)
 	if (NULL == (home = netprepare()))
 		return(0);
 
-	dodbg("prepared jail: %s", home);
-
 	/*
 	 * Begin by forking.
 	 * We need to do this because somebody needs to clean up the
 	 * jail, and we can't do that if we're already in it.
 	 */
 	if (-1 == (pid = fork())) 
-		err(EXIT_FAILURE, "fork");
+		doerr("fork");
 
 	if (pid > 0) {
 		close(certsock);
 		close(acctsock);
 		if (-1 == waitpid(pid, &st, 0))
-			err(EXIT_FAILURE, "waitpid");
+			doerr("waitpid");
 		netcleanup(home);
 		return(WIFEXITED(st) && 
 		       EXIT_SUCCESS == WEXITSTATUS(st));
 	}
-
-	dodbg("started child");
 
 #ifdef __APPLE__
 	/*
@@ -247,15 +329,18 @@ netproc(int certsock, int acctsock)
 	 */
 #ifndef __APPLE__
 	if (-1 == chroot(home))
-		err(EXIT_FAILURE, "%s: chroot", home);
+		doerr("%s: chroot", home);
 	else if (-1 == chdir("/"))
-		err(EXIT_FAILURE, "/: chdir");
+		doerr("/: chdir");
 #endif
 
-	dodbg("sandboxed in jail: %s", home);
+	dodbg("started in jail: %s", home);
 	free(home);
-	mod = exp = nonce = cert = NULL;
+	home = NULL;
+
+	mod = exp = nonce = cert = thumb = NULL;
 	memset(&hbuf, 0, sizeof(hbuf));
+
 	if (NULL == (c = curl_easy_init())) 
 		errx(EXIT_FAILURE, "curl_easy_init");
 
@@ -273,7 +358,7 @@ netproc(int certsock, int acctsock)
 	curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, netheaders);
 	curl_easy_setopt(c, CURLOPT_HEADERDATA, &hbuf);
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
-	      warnx("%s: %s", URL_CA, curl_easy_strerror(res));
+	      dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
 	      goto out;
 	}
 
@@ -285,13 +370,13 @@ netproc(int certsock, int acctsock)
 		if (strncmp(token, "Replay-Nonce: ", 14))
 			continue;
 		if (NULL == (nonce = strdup(token + 14))) {
-			warn("strdup");
+			dowarn("strdup");
 			goto out;
 		}
 		break;
 	}
 	if (NULL == nonce) {
-		warnx("replay nonce not found in headers");
+		dowarnx("replay nonce not found in headers");
 		goto out;
 	}
 	dodbg("replay nonce: %s", nonce);
@@ -301,77 +386,54 @@ netproc(int certsock, int acctsock)
 	 * to the letsencrypt server.
 	 * This will come from our key process.
 	 */
-	sz = 0;
-	while ((ssz = read(certsock, buf, sizeof(buf))) > 0) {
-		pp = realloc(cert, sz + ssz + 1);
-		if (NULL == pp) {
-			warn("realloc");
-			goto out;
-		}
-		cert = pp;
-		memcpy(cert + sz, buf, ssz);
-		sz += ssz;
-		cert[sz] = '\0';
+	if (NULL == (cert = readstream(certsock, "certificate"))) {
+		dowarnx("readstream: keyproc");
+		goto out;
 	}
 	close(certsock);
 	certsock = -1;
-	if (ssz < 0) {
-		warn("read: certificate socket");
-		goto out;
-	}
-	dodbg("read %zu byte certificate", sz);
+	dodbg("read certificate: %zu bytes", sz);
 
 	/*
 	 * Now we've acquired our certificate.
 	 * Move on to acquiring our account key numbers.
 	 */
-	if ((ssz = read(acctsock, &sz, sizeof(size_t))) < 0) {
-		warn("read: account socket");
+	if (NULL == (mod = readstring(acctsock, "modulus"))) {
+		dowarnx("readstring: acctsock");
 		goto out;
-	} else if ((size_t)ssz != sizeof(size_t)) {
-		warnx("short read: account socket");
-		goto out;
-	} else if (NULL == (mod = calloc(1, sz + 1))) {
-		warn("malloc");
-		goto out;
-	} else if ((ssz = read(acctsock, mod, sz)) < 0) {
-		warn("read: account socket");
-		goto out;
-	} else if ((size_t)ssz != sz) {
-		warnx("short read: account socket");
+	} else if (NULL == (exp = readstring(acctsock, "exponent"))) {
+		dowarnx("readstring: account socket");
 		goto out;
 	}
-	dodbg("read modulus: %zu bytes", sz);
-
-	if ((ssz = read(acctsock, &sz, sizeof(size_t))) < 0) {
-		warn("read: account socket");
-		goto out;
-	} else if ((size_t)ssz != sizeof(size_t)) {
-		warnx("short read: account socket");
-		goto out;
-	} else if (NULL == (exp = calloc(1, sz + 1))) {
-		warn("malloc");
-		goto out;
-	} else if ((ssz = read(acctsock, exp, sz)) < 0) {
-		warn("read: account socket");
-		goto out;
-	} else if ((size_t)ssz != sz) {
-		warnx("short read: account socket");
-		goto out;
-	}
-	dodbg("read exponent: %zu bytes", sz);
 	close(acctsock);
 	acctsock = -1;
+
+	dodbg("read modulus: %zu bytes", strlen(mod));
+	dodbg("read exponent: %zu bytes", strlen(exp));
+
+	cc = asprintf(&thumb, "{ "
+		"\"e\": \"%s\", "
+		"\"kty\": \"RSA\", "
+		"\"n\": \"%s\" }", exp, mod);
+	if (-1 == cc) {
+		dowarn("asprintf");
+		thumb = NULL;
+		goto out;
+	}
+	printf("%s\n", thumb);
 
 	rc = EXIT_SUCCESS;
 out:
 	if (-1 != certsock)
 		close(certsock);
+	if (-1 != acctsock)
+		close(acctsock);
 	free(hbuf.buf);
 	free(cert);
 	free(nonce);
 	free(mod);
 	free(exp);
+	free(thumb);
 	curl_easy_cleanup(c);
 	curl_global_cleanup();
 	exit(rc);

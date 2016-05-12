@@ -254,7 +254,7 @@ acctproc(int netsock, const char *acctkey)
 		doerr("pledge");
 #endif
 
-	dodbg("starting");
+	dodbg("parsing private key: %s", acctkey);
 
 	/* 
 	 * Parse our private key from an already-open steam.
@@ -266,6 +266,8 @@ acctproc(int netsock, const char *acctkey)
 		goto error;
 	}
 	fclose(f);
+
+	dodbg("serialising private key: %s", acctkey);
 
 	/*
 	 * Now write the exponent and modulus in the JWK format.
@@ -280,8 +282,8 @@ acctproc(int netsock, const char *acctkey)
 
 	RSA_free(r);
 	ERR_free_strings();
+	dodbg("finished");
 	return(1);
-
 error:
 	ERR_print_errors_fp(stderr);
 	if (NULL != f)
