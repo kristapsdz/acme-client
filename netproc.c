@@ -234,6 +234,9 @@ err:
 	return(NULL);
 }
 
+/*
+ * Pass the response body directly to the JSON parser.
+ */
 static size_t 
 netbody(void *ptr, size_t sz, size_t nm, void *arg)
 {
@@ -256,6 +259,9 @@ netbody(void *ptr, size_t sz, size_t nm, void *arg)
 	return(0);
 }
 
+/*
+ * Look for, extract, and duplicate the Replay-Nonce header.
+ */
 static size_t 
 netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 {
@@ -277,6 +283,9 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 	return(nsz);
 }
 
+/*
+ * Extract a single string from the returned JSON object.
+ */
 static char *
 json_getstring(json_object *parent, const char *name)
 {
@@ -298,6 +307,9 @@ json_getstring(json_object *parent, const char *name)
 	return(cp);
 }
 
+/*
+ * Extract the CA paths from the JSON response object.
+ */
 static int
 capaths_parse(struct json *json, struct capaths *paths)
 {
@@ -313,6 +325,9 @@ capaths_parse(struct json *json, struct capaths *paths)
 	       NULL != paths->revokecert);
 }
 
+/*
+ * Free up all of our CA-noted paths (which may all be NULL).
+ */
 static void
 capaths_free(struct capaths *p)
 {
@@ -474,6 +489,19 @@ netproc(int certsock, int acctsock, const char *domain)
 		goto out;
 	}
 	dodbg("read signed digest: %zu bytes", strlen(reqsn));
+
+	dodbg("connecting: %s", paths.newauthz);
+	curl_easy_reset(c);
+	curl_easy_setopt(c, CURLOPT_URL, paths.newauthz);
+	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
+	curl_easy_setopt(c, CURLOPT_POSTFIELDS, reqsn);
+
+	if (CURLE_OK != (res = curl_easy_perform(c))) {
+	      dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
+	      goto out;
+	}
 
 	/*
 	 * Now wait until we've received the certificate we want to send

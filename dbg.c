@@ -14,7 +14,7 @@ dovdbg(const char *sub, const char *fmt, va_list ap)
 
 	if ( ! verbose)
 		return;
-	printf("%s(%u): DEBUG: ", sub, getpid());
+	fprintf(stderr, "%s(%u): DEBUG: ", sub, getpid());
 	vprintf(fmt, ap);
 	putchar('\n');
 }

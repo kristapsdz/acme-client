@@ -170,7 +170,7 @@ op_sign(int fd, RSA *r)
 
 	/* Now we construct the public header. */
 	cc = asprintf(&head, "{\"alg\": \"RS256\", "
-		"\"jwk: {\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}}",
+		"\"jwk\": {\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}}",
 		exp, mod);
 	if (-1 == cc) {
 		dowarn("asprintf");
@@ -181,7 +181,7 @@ op_sign(int fd, RSA *r)
 	/* Now the header combined with the nonce, base64'd. */
 	cc = asprintf(&prot, "{"
 		"\"alg\": \"RS256\", "
-		"\"jwk: {\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}, "
+		"\"jwk\": {\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}, "
 		"\"nonce\": \"%s\"}", exp, mod, nonce);
 	if (-1 == cc) {
 		dowarn("asprintf");
@@ -243,9 +243,10 @@ op_sign(int fd, RSA *r)
 	 * Write this back to the requester.
 	 */
 	cc = asprintf(&final, 
-		"{\"header\": \"%s\", \"protected\": \"%s\", "
+		"{\"header\": %s, \"protected\": \"%s\", "
 		"\"payload\": \"%s\", \"signature\": \"%s\"}",
 			head, prot64, pay64, dig64);
+
 	if (-1 == cc) {
 		dowarn("asprintf");
 		goto out;
