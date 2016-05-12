@@ -15,13 +15,15 @@
 
 #include "extern.h"
 
+#define SUB "keyproc"
+
 static void
 dowarnx(const char *fmt, ...)
 {
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	dovwarnx("keyproc", fmt, ap);
+	dovwarnx(SUB, fmt, ap);
 	va_end(ap);
 }
 
@@ -31,7 +33,7 @@ dodbg(const char *fmt, ...)
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	dovdbg("keyproc", fmt, ap);
+	dovdbg(SUB, fmt, ap);
 	va_end(ap);
 }
 
@@ -41,7 +43,7 @@ doerr(const char *fmt, ...)
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	doverr("keyproc", fmt, ap);
+	doverr(SUB, fmt, ap);
 	va_end(ap);
 }
 
@@ -221,6 +223,7 @@ error:
 	if (NULL != evp)
 		EVP_PKEY_free(evp);
 	ERR_free_strings();
+	dodbg("finished (error)");
 	return(0);
 }
 

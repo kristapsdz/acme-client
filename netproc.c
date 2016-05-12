@@ -1,6 +1,5 @@
 #include <sys/stat.h>
 
-#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #ifdef __APPLE__
@@ -23,10 +22,7 @@
 # define URL_CA "https://acme-staging.api.letsencrypt.org/directory"
 #endif
 
-struct	buf {
-	char	*buf;
-	size_t	 sz;
-};
+#define	SUB "netproc"
 
 static void
 doerr(const char *fmt, ...)
@@ -34,7 +30,7 @@ doerr(const char *fmt, ...)
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	doverr("netproc", fmt, ap);
+	doverr(SUB, fmt, ap);
 	va_end(ap);
 }
 
@@ -44,7 +40,7 @@ dowarnx(const char *fmt, ...)
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	dovwarnx("netproc", fmt, ap);
+	dovwarnx(SUB, fmt, ap);
 	va_end(ap);
 }
 
@@ -54,7 +50,7 @@ dowarn(const char *fmt, ...)
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	dovwarn("netproc", fmt, ap);
+	dovwarn(SUB, fmt, ap);
 	va_end(ap);
 }
 
@@ -64,34 +60,8 @@ dodbg(const char *fmt, ...)
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	dovdbg("netproc", fmt, ap);
+	dovdbg(SUB, fmt, ap);
 	va_end(ap);
-}
-
-static char *
-readstring(int fd, const char *name)
-{
-	ssize_t		 ssz;
-	size_t		 sz;
-	char		*p;
-
-	p = NULL;
-
-	if ((ssz = read(fd, &sz, sizeof(size_t))) < 0)
-		warn("read: %s length", name);
-	else if ((size_t)ssz != sizeof(size_t))
-		dowarnx("short read: %s length", name);
-	else if (NULL == (p = calloc(1, sz + 1)))
-		dowarn("malloc");
-	else if ((ssz = read(fd, p, sz)) < 0)
-		dowarn("read: %s", name);
-	else if ((size_t)ssz != sz)
-		dowarnx("short read: %s", name);
-	else
-		return(p);
-
-	free(p);
-	return(NULL);
 }
 
 static char *
@@ -252,20 +222,34 @@ err:
 }
 
 static size_t 
-netheaders(void *ptr, size_t sz, size_t nm, void *arg)
+netbody(void *ptr, size_t sz, size_t nm, void *arg)
 {
-	struct buf	*buf = arg;
 	size_t		 nsz;
 
+	(void)arg;
 	nsz = sz * nm;
-	buf->buf = realloc(buf->buf, buf->sz + nsz + 1);
-	if (NULL == buf->buf) {
-		dowarn("realloc");
+	printf("%.*s", (int)nsz, ptr);
+	return(nsz);
+}
+
+static size_t 
+netheaders(void *ptr, size_t sz, size_t nm, void *arg)
+{
+	char		**noncep = arg;
+	size_t		  nsz, psz;
+
+	nsz = sz * nm;
+	if (strncmp(ptr, "Replay-Nonce: ", 14)) 
+		return(nsz);
+
+	if (NULL == (*noncep = strdup((char *)ptr + 14))) {
+		dowarn("strdup");
+		return(0);
+	} else if ((psz = strlen(*noncep)) < 2) {
+		dowarnx("short nonce");
 		return(0);
 	}
-	memcpy(buf->buf + buf->sz, ptr, nsz);
-	buf->sz += nsz;
-	buf->buf[buf->sz] = '\0';
+	(*noncep)[psz - 2] = '\0';
 	return(nsz);
 }
 
@@ -275,16 +259,13 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
  * account key information.
  */
 int
-netproc(int certsock, int acctsock)
+netproc(int certsock, int acctsock, const char *domain)
 {
-	char		*home, *mod, *exp;
 	pid_t		 pid;
 	int		 st, rc, cc;
-	char		*cert, *token, *string, *nonce, *thumb;
-	size_t		 sz;
+	char		*home, *cert, *nonce, *req, *reqsn;
 	CURL		*c;
 	CURLcode	 res;
-	struct buf	 hbuf;
 
 	rc = EXIT_FAILURE;
 
@@ -319,7 +300,7 @@ netproc(int certsock, int acctsock)
 	 */
 	if (-1 == sandbox_init(kSBXProfileNoWrite, 
  	    SANDBOX_NAMED, NULL))
-		errx(EXIT_FAILURE, "sandbox_init");
+		doerr("sandbox_init");
 #endif
 	/*
 	 * We're doing the work.
@@ -338,11 +319,11 @@ netproc(int certsock, int acctsock)
 	free(home);
 	home = NULL;
 
-	mod = exp = nonce = cert = thumb = NULL;
-	memset(&hbuf, 0, sizeof(hbuf));
+	c = NULL;
+	reqsn = req = nonce = cert = NULL;
 
 	if (NULL == (c = curl_easy_init())) 
-		errx(EXIT_FAILURE, "curl_easy_init");
+		doerr("curl_easy_init");
 
 	/*
 	 * Grab our nonce.
@@ -351,35 +332,58 @@ netproc(int certsock, int acctsock)
 	 * do is grab a single field.
 	 */
 	dodbg("connecting: %s", URL_CA);
+
 	curl_easy_setopt(c, CURLOPT_URL, URL_CA);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(c, CURLOPT_NOBODY, 1L);
+	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, netbody);
 	curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, netheaders);
-	curl_easy_setopt(c, CURLOPT_HEADERDATA, &hbuf);
+	curl_easy_setopt(c, CURLOPT_HEADERDATA, &nonce);
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
 	      dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
 	      goto out;
 	}
 
-	/* Parse the nonce out of the HTTP headers. */
-	string = hbuf.buf;
-	while (NULL != (token = strsep(&string, "\r\n"))) {
-		if (0 == (sz = strlen(token)))
-			continue;
-		if (strncmp(token, "Replay-Nonce: ", 14))
-			continue;
-		if (NULL == (nonce = strdup(token + 14))) {
-			dowarn("strdup");
-			goto out;
-		}
-		break;
-	}
 	if (NULL == nonce) {
 		dowarnx("replay nonce not found in headers");
 		goto out;
 	}
 	dodbg("replay nonce: %s", nonce);
+
+	/*
+	 * Set up to ask the acme server to authorise a domain.
+	 * First, we prepare the request itself.
+	 * Then we ask acctproc to sign it for us.
+	 * Then we send that to the request server.
+	 */
+	cc = asprintf(&req, 
+    		"{\"resource\": \"new-authz\", "
+		"\"identifier\": {\"type\": \"dns\", \"value\": \"%s\"}}",
+		domain);
+	if (-1 == cc) {
+		dowarn("asprintf");
+		goto out;
+	}
+
+	if ( ! writeop(SUB, acctsock, ACCT_SIGN)) {
+		dowarnx("writeop");
+		goto out;
+	} else if ( ! writestring(SUB, acctsock, "payload", req)) {
+		dowarnx("writestring: payload");
+		goto out;
+	} else if ( ! writestring(SUB, acctsock, "nonce", nonce)) {
+		dowarnx("writestring: nonce");
+		goto out;
+	}
+
+	dodbg("reading response...");
+	
+	if (NULL == (reqsn = readstring(SUB, acctsock, "req"))) {
+		dowarnx("readstring: req");
+		goto out;
+	}
+
+	dodbg("read signed digest: %zu bytes", strlen(reqsn));
 
 	/*
 	 * Now wait until we've received the certificate we want to send
@@ -392,35 +396,7 @@ netproc(int certsock, int acctsock)
 	}
 	close(certsock);
 	certsock = -1;
-	dodbg("read certificate: %zu bytes", sz);
-
-	/*
-	 * Now we've acquired our certificate.
-	 * Move on to acquiring our account key numbers.
-	 */
-	if (NULL == (mod = readstring(acctsock, "modulus"))) {
-		dowarnx("readstring: acctsock");
-		goto out;
-	} else if (NULL == (exp = readstring(acctsock, "exponent"))) {
-		dowarnx("readstring: account socket");
-		goto out;
-	}
-	close(acctsock);
-	acctsock = -1;
-
-	dodbg("read modulus: %zu bytes", strlen(mod));
-	dodbg("read exponent: %zu bytes", strlen(exp));
-
-	cc = asprintf(&thumb, "{ "
-		"\"e\": \"%s\", "
-		"\"kty\": \"RSA\", "
-		"\"n\": \"%s\" }", exp, mod);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		thumb = NULL;
-		goto out;
-	}
-	printf("%s\n", thumb);
+	dodbg("read certificate: %zu bytes", strlen(cert));
 
 	rc = EXIT_SUCCESS;
 out:
@@ -428,13 +404,12 @@ out:
 		close(certsock);
 	if (-1 != acctsock)
 		close(acctsock);
-	free(hbuf.buf);
 	free(cert);
+	free(req);
 	free(nonce);
-	free(mod);
-	free(exp);
-	free(thumb);
-	curl_easy_cleanup(c);
+	free(reqsn);
+	if (NULL != c)
+		curl_easy_cleanup(c);
 	curl_global_cleanup();
 	exit(rc);
 	/* NOTREACHED */

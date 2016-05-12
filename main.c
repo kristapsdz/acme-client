@@ -85,7 +85,7 @@ main(int argc, char *argv[])
 	if (0 == pid_net) {
 		close(key_fds[0]);
 		close(acct_fds[0]);
-		c = netproc(key_fds[1], acct_fds[1]);
+		c = netproc(key_fds[1], acct_fds[1], domain);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -115,6 +115,8 @@ main(int argc, char *argv[])
 		c = acctproc(acct_fds[0], acctkey);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
+
+	close(acct_fds[0]);
 
 	/*
 	 * Collect our subprocesses.
