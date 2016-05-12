@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include <curl/curl.h>
+#include <json-c/json.h>
 
 #include "extern.h"
 
@@ -23,6 +24,18 @@
 #endif
 
 #define	SUB "netproc"
+
+struct	json {
+	struct json_tokener	*tok;
+	struct json_object	*obj;
+};
+
+struct	capaths {
+	char		*newauthz;
+	char		*newcert;
+	char		*newreg;
+	char		*revokecert;
+};
 
 static void
 doerr(const char *fmt, ...)
@@ -224,12 +237,23 @@ err:
 static size_t 
 netbody(void *ptr, size_t sz, size_t nm, void *arg)
 {
-	size_t		 nsz;
+	struct json	*json = arg;
+	enum json_tokener_error er;
 
-	(void)arg;
-	nsz = sz * nm;
-	printf("%.*s", (int)nsz, ptr);
-	return(nsz);
+	if (NULL != json->obj) {
+		dowarnx("data after complete JSON");
+		return(0);
+	}
+
+	json->obj = json_tokener_parse_ex(json->tok, ptr, nm * sz);
+	er = json_tokener_get_error(json->tok);
+	if (er == json_tokener_success || 
+	    er == json_tokener_continue)
+		return(sz * nm);
+
+	dowarnx("json_tokener_parse_ex: %s", 
+		json_tokener_error_desc(er));
+	return(0);
 }
 
 static size_t 
@@ -253,6 +277,52 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 	return(nsz);
 }
 
+static char *
+json_getstring(json_object *parent, const char *name)
+{
+	json_object	*p;
+	char		*cp;
+
+	/* Verify that the email is sane. */
+	if ( ! json_object_object_get_ex(parent, name, &p)) {
+		dowarnx("no JSON object: %s", name);
+		return(NULL);
+	} else if (json_type_string != json_object_get_type(p)) {
+		dowarnx("bad JSON object type: %s", name);
+		return(NULL);
+	} else if (NULL == (cp = strdup(json_object_get_string(p)))) {
+		dowarn("strdup");
+		return(NULL);
+	}
+
+	return(cp);
+}
+
+static int
+capaths_parse(struct json *json, struct capaths *paths)
+{
+
+	paths->newauthz = json_getstring(json->obj, "new-authz");
+	paths->newcert = json_getstring(json->obj, "new-cert");
+	paths->newreg = json_getstring(json->obj, "new-reg");
+	paths->revokecert = json_getstring(json->obj, "revoke-cert");
+
+	return(NULL != paths->newauthz &&
+	       NULL != paths->newcert &&
+	       NULL != paths->newreg &&
+	       NULL != paths->revokecert);
+}
+
+static void
+capaths_free(struct capaths *p)
+{
+
+	free(p->newauthz);
+	free(p->newcert);
+	free(p->newreg);
+	free(p->revokecert);
+}
+
 /*
  * Here we communicate with the letsencrypt server.
  * For this, we'll need the certificate we want to upload and our
@@ -266,6 +336,8 @@ netproc(int certsock, int acctsock, const char *domain)
 	char		*home, *cert, *nonce, *req, *reqsn;
 	CURL		*c;
 	CURLcode	 res;
+	struct json	 json;
+	struct capaths	 paths;
 
 	rc = EXIT_FAILURE;
 
@@ -319,17 +391,27 @@ netproc(int certsock, int acctsock, const char *domain)
 	free(home);
 	home = NULL;
 
-	c = NULL;
+	/* Zero all the things. */
+	memset(&json, 0, sizeof(struct json));
+	memset(&paths, 0, sizeof(struct capaths));
 	reqsn = req = nonce = cert = NULL;
+	c = NULL;
 
-	if (NULL == (c = curl_easy_init())) 
+	if (NULL == (c = curl_easy_init())) {
 		doerr("curl_easy_init");
+		goto out;
+	} else if (NULL == (json.tok = json_tokener_new())) {
+		doerr("json_tokener_new");
+		goto out;
+	}
 
 	/*
 	 * Grab our nonce.
 	 * Do this before getting any of our account information.
 	 * We specifically do only a HEAD request because all we want to
 	 * do is grab a single field.
+	 * We'll also grab the JSON content of the message, which has a
+	 * directory of all the bits that we want.
 	 */
 	dodbg("connecting: %s", URL_CA);
 
@@ -337,6 +419,7 @@ netproc(int certsock, int acctsock, const char *domain)
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
 	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, netbody);
+	curl_easy_setopt(c, CURLOPT_WRITEDATA, &json);
 	curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, netheaders);
 	curl_easy_setopt(c, CURLOPT_HEADERDATA, &nonce);
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
@@ -347,7 +430,14 @@ netproc(int certsock, int acctsock, const char *domain)
 	if (NULL == nonce) {
 		dowarnx("replay nonce not found in headers");
 		goto out;
+	} else if (NULL == json.obj) {
+		dowarnx("proper JSON object not found");
+		goto out;
+	} else if ( ! capaths_parse(&json, &paths)) {
+		dowarnx("could not parse CA paths");
+		goto out;
 	}
+
 	dodbg("replay nonce: %s", nonce);
 
 	/*
@@ -376,13 +466,13 @@ netproc(int certsock, int acctsock, const char *domain)
 		goto out;
 	}
 
+	/* Now wait for the acctproc to write back our digest. */
+
 	dodbg("reading response...");
-	
 	if (NULL == (reqsn = readstring(SUB, acctsock, "req"))) {
 		dowarnx("readstring: req");
 		goto out;
 	}
-
 	dodbg("read signed digest: %zu bytes", strlen(reqsn));
 
 	/*
@@ -411,6 +501,15 @@ out:
 	if (NULL != c)
 		curl_easy_cleanup(c);
 	curl_global_cleanup();
+	if (NULL != json.tok)
+		json_tokener_free(json.tok);
+	if (NULL != json.obj)
+		json_object_put(json.obj);
+	capaths_free(&paths);
+	if (EXIT_SUCCESS == rc)
+		dodbg("finished");
+	else
+		dodbg("finished (error)");
 	exit(rc);
 	/* NOTREACHED */
 }

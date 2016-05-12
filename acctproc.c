@@ -142,7 +142,7 @@ op_sign(int fd, RSA *r)
 	/* Nullify all the things. */
 	rc = 0;
 	pay = nonce = mod = exp = head = final =
-		prot = prot64 = pay64 = dig64 = NULL;
+		sign = prot = prot64 = pay64 = dig64 = NULL;
 	dig = NULL;
 	pkey = NULL;
 	ctx = NULL;
@@ -262,6 +262,7 @@ out:
 		EVP_MD_CTX_destroy(ctx);
 
 	free(pay);
+	free(sign);
 	free(pay64);
 	free(nonce);
 	free(exp);
