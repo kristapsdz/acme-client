@@ -1,0 +1,136 @@
+#include <sys/socket.h>
+
+#include <err.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include "extern.h"
+
+static int
+checkexit(pid_t pid, const char *name)
+{
+	int	 c;
+
+	if (-1 == waitpid(pid, &c, 0)) {
+		warn("waitpid");
+		return(0);
+	}
+
+	if ( ! WIFEXITED(c)) 
+		warnx("%s(%u): bad exit", name, pid);
+	else if (EXIT_SUCCESS != WEXITSTATUS(c))
+		warnx("%s(%u): bad exit code", name, pid);
+	else
+		return(1);
+
+	return(0);
+}
+
+int
+main(int argc, char *argv[])
+{
+	const char	*domain, *certdir, *acctkey;
+	int		 key_fds[2], acct_fds[2];
+	int		 c, rc1, rc2, rc3;
+	pid_t		 pid_net, pid_keys, pid_acct;
+	extern int	 verbose;
+
+	verbose = 0;
+	certdir = "/etc/ssl/letsencrypt";
+	acctkey = "/etc/letsencrypt/private/privkey.pem";
+
+	while (-1 != (c = getopt(argc, argv, "f:c:v"))) 
+		switch (c) {
+		case ('c'):
+			certdir = optarg;
+			break;
+		case ('f'):
+			acctkey = optarg;
+			break;
+		case ('v'):
+			verbose = 1;
+			break;
+		default:
+			goto usage;
+		}
+
+	argc -= optind;
+	argv += optind;
+	if (0 == argc)
+		goto usage;
+
+	domain = argv[0];
+	argc--;
+	argv++;
+
+	if (0 != getuid())
+		errx(EXIT_FAILURE, "must be run as root");
+
+	/* 
+	 * Open channels between our components. 
+	 * We exclusively use UNIX domain socketpairs.
+	 */
+	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, key_fds))
+		err(EXIT_FAILURE, "socketpair");
+	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, acct_fds))
+		err(EXIT_FAILURE, "socketpair");
+
+	/* Start with the network-touching process. */
+
+	if (-1 == (pid_net = fork()))
+		err(EXIT_FAILURE, "fork");
+
+	if (0 == pid_net) {
+		close(key_fds[0]);
+		close(acct_fds[0]);
+		c = netproc(key_fds[1], acct_fds[1]);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	}
+
+	close(key_fds[1]);
+	close(acct_fds[1]);
+
+	/* Now the key-touching component. */
+
+	if (-1 == (pid_keys = fork()))
+		err(EXIT_FAILURE, "fork");
+
+	if (0 == pid_keys) {
+		close(acct_fds[0]);
+		c = keyproc(key_fds[0], certdir, 
+			(const unsigned char *)domain);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	}
+
+	close(key_fds[0]);
+
+	/* Finally, the account-touching component. */
+
+	if (-1 == (pid_acct = fork()))
+		err(EXIT_FAILURE, "fork");
+
+	if (0 == pid_acct) {
+		c = acctproc(acct_fds[0], acctkey);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	}
+
+	/*
+	 * Collect our subprocesses.
+	 * Require that they both have exited cleanly.
+	 */
+	rc1 = checkexit(pid_keys, "keyproc");
+	rc2 = checkexit(pid_net, "netproc");
+	rc3 = checkexit(pid_acct, "acctproc");
+
+	return(rc1 && rc2 && rc3 ? EXIT_SUCCESS : EXIT_FAILURE);
+
+usage:
+	fprintf(stderr, "usage: %s "
+		"[-c certdir] "
+		"[-f accountkey] "
+		"domain\n", 
+		getprogname());
+	return(EXIT_FAILURE);
+}
