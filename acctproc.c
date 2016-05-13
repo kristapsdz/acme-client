@@ -152,10 +152,8 @@ op_thumbprint(int fd, RSA *r)
 	} else if (NULL == (dig64 = base64buf_url((char *)dig, digsz))) {
 		dowarnx("base64buf_url");
 		goto out;
-	} else if ( ! writestring(SUB, fd, "json", dig64)) {
-		dowarnx("writestring: json");
+	} else if ( ! writestr(SUB, fd, COMM_THUMB, dig64))
 		goto out;
-	}
 
 	rc = 1;
 out:
@@ -199,13 +197,12 @@ op_sign(int fd, RSA *r)
 	 * Read our payload and nonce from the requestor.
 	 * Then entangle these with our encoded modulus and exponent.
 	 */
-	if (NULL == (pay = readstring(SUB, fd, "payload"))) {
-		dowarnx("readstring");
+	if (NULL == (pay = readstr(SUB, fd, COMM_PAY)))
 		goto out;
-	} else if (NULL == (nonce = readstring(SUB, fd, "nonce"))) {
-		dowarnx("readstring");
+	else if (NULL == (nonce = readstr(SUB, fd, COMM_NONCE))) 
 		goto out;
-	} else if (NULL == (mod = bn2string(r->n))) {
+
+	if (NULL == (mod = bn2string(r->n))) {
 		dowarnx("bn2string");
 		goto out;
 	} else if (NULL == (exp = bn2string(r->e))) {
@@ -298,10 +295,8 @@ op_sign(int fd, RSA *r)
 	if (-1 == cc) {
 		dowarn("asprintf");
 		goto out;
-	} else if ( ! writestring(SUB, fd, "json", final)) {
-		dowarnx("writestring: json");
+	} else if ( ! writestr(SUB, fd, COMM_REQ, final))
 		goto out;
-	}
 
 	rc = 1;
 out:
@@ -431,7 +426,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	 * sign a message.
 	 */
 	for (;;) {
-		if (0 == (lval = readop(SUB, netsock, "acctop")))
+		if (0 == (lval = readop(SUB, netsock, COMM_ACCT)))
 			op = ACCT_STOP;
 		else if (LONG_MAX == lval)
 			op = ACCT__MAX;

@@ -478,24 +478,19 @@ sreq(int acctsock, CURL *c, const char *addr,
 	 * Send the nonce and request payload to the acctproc.
 	 * This will create the proper JSON object we need.
 	 */
-	if ( ! writeop(SUB, acctsock, "acctop", ACCT_SIGN)) {
-		dowarnx("writeop");
+	if ( ! writeop(SUB, acctsock, COMM_ACCT, ACCT_SIGN)) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestring(SUB, acctsock, "payload", req)) {
-		dowarnx("writestring: payload");
+	} else if ( ! writestr(SUB, acctsock, COMM_PAY, req)) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestring(SUB, acctsock, "nonce", nonce)) {
-		dowarnx("writestring: nonce");
+	} else if ( ! writestr(SUB, acctsock, COMM_NONCE, nonce)) {
 		free(nonce);
 		return(0);
 	}
 	free(nonce);
-	if (NULL == (reqsn = readstring(SUB, acctsock, "req"))) {
-		dowarnx("readstring: req");
+	if (NULL == (reqsn = readstr(SUB, acctsock, COMM_REQ)))
 		return(0);
-	}
 
 	dodbg("%s: signing request", addr);
 
@@ -538,7 +533,7 @@ netproc(int certsock, int acctsock,
 	struct json	 json;
 	struct capaths	 paths;
 	struct challenge chng;
-	long		 http;
+	long		 http, op;
 
 	rc = EXIT_FAILURE;
 
@@ -591,7 +586,7 @@ netproc(int certsock, int acctsock,
 		doerr("/: chdir");
 #endif
 
-	dodbg("started in jail: %s", home);
+	dodbg("%s: started in jail", home);
 	free(home);
 	home = NULL;
 
@@ -614,7 +609,7 @@ netproc(int certsock, int acctsock,
 	 * Grab the directory structure from the CA.
 	 * This initialises our contact with the CA, too.
 	 */
-	dodbg("%s: directory request", URL_CA);
+	dodbg("%s: requesting directories", URL_CA);
 
 	curl_easy_setopt(c, CURLOPT_URL, URL_CA);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
@@ -625,11 +620,17 @@ netproc(int certsock, int acctsock,
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
 		dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
 		goto out;
+	}
+
+	curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &http);
+	if (200 != http && 201 != http) {
+		dowarnx("%s: bad communication", URL_CA);
+		goto out;
 	} else if (NULL == json.obj) {
-		dowarnx("%s: proper JSON object not found", URL_CA);
+		dowarnx("%s: bad JSON", URL_CA);
 		goto out;
 	} else if ( ! capaths_parse(&json, &paths)) {
-		dowarnx("%s: could not parse CA paths", URL_CA);
+		dowarnx("%s: bad CA paths", URL_CA);
 		goto out;
 	}
 
@@ -648,10 +649,10 @@ netproc(int certsock, int acctsock,
 		} 
 		/* Send the request... */
 		if ( ! sreq(acctsock, c, paths.newreg, req, &http, &json)) {
-			dowarnx("sreq");
+			dowarnx("%s: bad communication", paths.newreg);
 			goto out;
 		} else if (200 != http && 201 != http) {
-			dowarnx("%s: bad return code: %ld", 
+			dowarnx("%s: bad HTTP: %ld", 
 				paths.newreg, http);
 			goto out;
 		}
@@ -675,7 +676,7 @@ netproc(int certsock, int acctsock,
 	} 
 	
 	if ( ! sreq(acctsock, c, paths.newauthz, req, &http, &json)) {
-		dowarnx("sreq");
+		dowarnx("%s: bad communication", paths.newauthz);
 		goto out;
 	} else if (200 != http && 201 != http) {
 		dowarnx("%s: bad HTTP: %ld", paths.newauthz, http);
@@ -691,13 +692,10 @@ netproc(int certsock, int acctsock,
 	 * We'll combine this to the challenge to create our response,
 	 * which will be orchestrated by the chngproc.
 	 */
-	if ( ! writeop(SUB, acctsock, "acctsock", ACCT_THUMBPRINT)) {
-		dowarnx("writeop");
+	if ( ! writeop(SUB, acctsock, COMM_ACCT, ACCT_THUMBPRINT))
 		goto out;
-	} else if (NULL == (thumb = readstring(SUB, acctsock, "thumb"))) {
-		dowarnx("readstring: thumb");
+	else if (NULL == (thumb = readstr(SUB, acctsock, COMM_THUMB)))
 		goto out;
-	}
 
 	dodbg("thumbprint: %s", thumb);
 
@@ -705,29 +703,37 @@ netproc(int certsock, int acctsock,
 	 * We now have our thumbprint and the challenge token.
 	 * Write it to the chngproc.
 	 */
-	if ( ! writeop(SUB, chngsock, "chngop", 1)) {
-		dowarnx("writeop");
+	if ( ! writeop(SUB, chngsock, COMM_CHNG, 1))
 		goto out;
-	} else if ( ! writestring(SUB, chngsock, "thumb", thumb)) {
-		dowarnx("writestring: thumb");
+	else if ( ! writestr(SUB, chngsock, COMM_THUMB, thumb))
 		goto out;
-	} else if ( ! writestring(SUB, chngsock, "tok", chng.token)) {
-		dowarnx("writestring: tok");
+	else if ( ! writestr(SUB, chngsock, COMM_TOK, chng.token))
 		goto out;
-	}
+
+	/* Read our acknowledgement that the challenge exists. */
+
+	if (0 == (op = readop(SUB, chngsock, COMM_CHNG_ACK)))
+		goto out;
+	else if (LONG_MAX == op)
+		goto out;
+
+	/* Write our acknowledgement that the challenge is over. */
+
+	if ( ! writeop(SUB, chngsock, COMM_CHNG_FIN, 1))
+		goto out;
 
 	/*
 	 * Now wait until we've received the certificate we want to send
 	 * to the letsencrypt server.
 	 * This will come from our key process.
 	 */
-	if (NULL == (cert = readstream(SUB, certsock, "cert"))) {
-		dowarnx("readstream: keyproc");
+	if (NULL == (cert = readstream(SUB, certsock, COMM_CERT)))
 		goto out;
-	}
+
 	close(certsock);
 	certsock = -1;
-	dodbg("read certificate: %zu bytes", strlen(cert));
+
+	dodbg("certificate: %zu bytes", strlen(cert));
 
 	rc = EXIT_SUCCESS;
 out:

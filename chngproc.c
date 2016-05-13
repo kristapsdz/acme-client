@@ -26,16 +26,6 @@ dowarn(const char *fmt, ...)
 }
 
 static void
-dowarnx(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovwarnx(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
 dodbg(const char *fmt, ...)
 {
 	va_list	 	 ap;
@@ -101,18 +91,21 @@ chngproc(int netsock, const char *root)
 		goto out;
 	}
 
-	if (0 == (op = readop(SUB, netsock, "chngop"))) 
+	/* Wait til we're triggered to start. */
+
+	if (0 == (op = readop(SUB, netsock, COMM_CHNG))) 
 		goto out;
 	else if (LONG_MAX == op)
 		goto out;
 
-	if (NULL == (thumb = readstring(SUB, netsock, "thumb"))) {
-		dowarnx("readstring: thumb");
+	/* Read the thumbprint and token. */
+
+	if (NULL == (thumb = readstr(SUB, netsock, COMM_THUMB)))
 		goto out;
-	} else if (NULL == (tok = readstring(SUB, netsock, "token"))) {
-		dowarnx("readstring: token");
+	else if (NULL == (tok = readstr(SUB, netsock, COMM_TOK)))
 		goto out;
-	}
+
+	/* Create our directories and challenge file. */
 
 	if (-1 == asprintf(&file, ".acme-challenges/%s", tok)) {
 		tok = NULL;
@@ -130,14 +123,40 @@ chngproc(int netsock, const char *root)
 	}
 	f = NULL;
 
-	if ( ! writeop(SUB, netsock, "chngreq", 1))
+	dodbg("%s/.acme-challenges/%s: created", root, tok);
+	fclose(f);
+	f = NULL;
+
+	/* Write our acknowledgement. */
+
+	if ( ! writeop(SUB, netsock, COMM_CHNG_ACK, 1))
 		goto out;
 
+	/* Read that we should clean up. */
+
+	if (0 == (op = readop(SUB, netsock, COMM_CHNG_FIN))) 
+		goto out;
+	else if (LONG_MAX == op)
+		goto out;
+
+	if (-1 == remove(file)) {
+		dowarn("%s", file);
+		goto out;
+	} else if (-1 == remove(".acme-challenges")) {
+		dowarn("%s", ".acme-challenges");
+		goto out;
+	}
+
+	dodbg("%s/.acme-challenges: cleaned", root);
 	rc = 1;
 	dodbg("finished");
 out:
 	if (NULL != f)
 		fclose(f);
+	if (NULL != file && -1 == remove(file) && ENOENT != errno)
+		dowarn("%s", file);
+	if (-1 == remove(".acme-challenges") && ENOENT != errno)
+		dowarn("%s", ".acme-challenges");
 	free(file);
 	free(thumb);
 	free(tok);

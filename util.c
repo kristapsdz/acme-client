@@ -10,6 +10,19 @@
 
 static	volatile sig_atomic_t sig;
 
+static	const char *const comms[COMM__MAX] = {
+	"req", /* COMM_REQ */
+	"thumbprint", /* COMM_THUMB */
+	"certficate", /* COMM_CERT */
+	"payload", /* COMM_PAY */
+	"nonce", /* COMM_NONCE */
+	"token", /* COMM_TOK */
+	"challenge", /* COMM_CHNG */
+	"challenge-ack", /* COMM_CHNG_ACK */
+	"challenge-fin", /* COMM_CHNG_FIN */
+	"account", /* COMM_SIGN */
+};
+
 static void
 sigpipe(int code)
 {
@@ -24,17 +37,17 @@ sigpipe(int code)
  * We return 0 on EOF and LONG_MAX on failure.
  */
 long
-readop(const char *sub, int fd, const char *name)
+readop(const char *sub, int fd, enum comm comm)
 {
 	ssize_t	 	 ssz;
 	long		 op;
 
 	ssz = read(fd, &op, sizeof(long));
 	if (ssz < 0) {
-		doxwarn(sub, "read: %s", name);
+		doxwarn(sub, "read: %s", comms[comm]);
 		return(LONG_MAX);
 	} else if (ssz && ssz != sizeof(long)) {
-		doxwarnx(sub, "short read: %s", name);
+		doxwarnx(sub, "short read: %s", comms[comm]);
 		return(LONG_MAX);
 	} else if (0 == ssz)
 		return(0);
@@ -43,7 +56,7 @@ readop(const char *sub, int fd, const char *name)
 }
 
 char *
-readstring(const char *sub, int fd, const char *name)
+readstr(const char *sub, int fd, enum comm comm)
 {
 	ssize_t		 ssz;
 	size_t		 sz;
@@ -52,15 +65,15 @@ readstring(const char *sub, int fd, const char *name)
 	p = NULL;
 
 	if ((ssz = read(fd, &sz, sizeof(size_t))) < 0)
-		doxwarn(sub, "read: %s length", name);
+		doxwarn(sub, "read: %s length", comms[comm]);
 	else if ((size_t)ssz != sizeof(size_t))
-		doxwarnx(sub, "short read: %s length", name);
+		doxwarnx(sub, "short read: %s length", comms[comm]);
 	else if (NULL == (p = calloc(1, sz + 1)))
 		doxwarn(sub, "malloc");
 	else if ((ssz = read(fd, p, sz)) < 0)
-		doxwarn(sub, "read: %s", name);
+		doxwarn(sub, "read: %s", comms[comm]);
 	else if ((size_t)ssz != sz)
-		doxwarnx(sub, "short read: %s", name);
+		doxwarnx(sub, "short read: %s", comms[comm]);
 	else
 		return(p);
 
@@ -74,7 +87,7 @@ readstring(const char *sub, int fd, const char *name)
  * return non-zero.
  */
 int
-writeop(const char *sub, int fd, const char *name, long op)
+writeop(const char *sub, int fd, enum comm comm, long op)
 {
 	ssize_t	 ssz;
 	sig_t	 sig;
@@ -85,9 +98,9 @@ writeop(const char *sub, int fd, const char *name, long op)
 	sig = signal(SIGPIPE, sigpipe);
 
 	if ((ssz = write(fd, &op, sizeof(long))) < 0) 
-		doxwarn(sub, "write: %s", name);
+		doxwarn(sub, "write: %s", comms[comm]);
 	else if ((size_t)ssz != sizeof(long))
-		doxwarnx(sub, "short write: %s", name);
+		doxwarnx(sub, "short write: %s", comms[comm]);
 	else
 		rc = 1;
 
@@ -98,7 +111,7 @@ writeop(const char *sub, int fd, const char *name, long op)
 }
 
 int
-writestring(const char *sub, int fd, const char *name, const char *v)
+writestr(const char *sub, int fd, enum comm comm, const char *v)
 {
 	size_t	 sz;
 	ssize_t	 ssz;
@@ -111,13 +124,13 @@ writestring(const char *sub, int fd, const char *name, const char *v)
 	sig = signal(SIGPIPE, sigpipe);
 
 	if ((ssz = write(fd, &sz, sizeof(size_t))) < 0) 
-		doxwarn(sub, "write: %s length", name);
+		doxwarn(sub, "write: %s length", comms[comm]);
 	else if ((size_t)ssz != sizeof(size_t))
-		doxwarnx(sub, "short write: %s length", name);
+		doxwarnx(sub, "short write: %s length", comms[comm]);
 	else if ((ssz = write(fd, v, sz)) < 0)
-		doxwarn(sub, "write: %s", name);
+		doxwarn(sub, "write: %s", comms[comm]);
 	else if ((size_t)ssz != sz)
-		doxwarnx(sub, "short write: %s", name);
+		doxwarnx(sub, "short write: %s", comms[comm]);
 	else
 		rc = 1;
 
@@ -128,7 +141,7 @@ writestring(const char *sub, int fd, const char *name, const char *v)
 }
 
 char *
-readstream(const char *sub, int fd, const char *name)
+readstream(const char *sub, int fd, enum comm comm)
 {
 	ssize_t		 ssz;
 	size_t		 sz;
@@ -151,11 +164,11 @@ readstream(const char *sub, int fd, const char *name)
 	}
 
 	if (ssz < 0) {
-		doxwarn(sub, "read: %s", name);
+		doxwarn(sub, "read: %s", comms[comm]);
 		free(p);
 		return(NULL);
 	} else if (0 == sz) {
-		doxwarnx(sub, "empty read: %s", name);
+		doxwarnx(sub, "empty read: %s", comms[comm]);
 		return(NULL);
 	}
 

@@ -46,7 +46,7 @@ main(int argc, char *argv[])
 	acctkey = "/etc/letsencrypt/private/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
-	while (-1 != (c = getopt(argc, argv, "nNf:c:v"))) 
+	while (-1 != (c = getopt(argc, argv, "nNf:c:vC:"))) 
 		switch (c) {
 		case ('n'):
 			newacct = 1;
@@ -165,6 +165,7 @@ main(int argc, char *argv[])
 usage:
 	fprintf(stderr, "usage: %s "
 		"[-vnN] "
+		"[-C challengedir] "
 		"[-c certdir] "
 		"[-f accountkey] "
 		"domain\n", 

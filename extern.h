@@ -8,6 +8,20 @@ enum	acctop {
 	ACCT__MAX
 };
 
+enum	comm {
+	COMM_REQ,
+	COMM_THUMB,
+	COMM_CERT,
+	COMM_PAY,
+	COMM_NONCE,
+	COMM_TOK,
+	COMM_CHNG,
+	COMM_CHNG_ACK,
+	COMM_CHNG_FIN,
+	COMM_ACCT,
+	COMM__MAX
+};
+
 __BEGIN_DECLS
 
 /*
@@ -38,11 +52,11 @@ void		 doxdbg(const char *, const char *, ...);
  * Read and write things from the wire.
  * The readers behave differently with respect to EOF.
  */
-char		*readstring(const char *, int, const char *);
-long		 readop(const char *, int, const char *);
-char		*readstream(const char *, int, const char *);
-int		 writestring(const char *, int, const char *, const char *);
-int		 writeop(const char *, int, const char *, long);
+long		 readop(const char *, int, enum comm);
+char		*readstr(const char *, int, enum comm);
+char		*readstream(const char *, int, enum comm);
+int		 writestr(const char *, int, enum comm, const char *);
+int		 writeop(const char *, int, enum comm, long);
 
 /*
  * Base64 and URL encoding.
