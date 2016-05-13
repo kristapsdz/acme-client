@@ -8,6 +8,9 @@
 
 #include "extern.h"
 
+/*
+ * Make sure that the given process exits properly.
+ */
 static int
 checkexit(pid_t pid, const char *name)
 {
@@ -31,16 +34,17 @@ checkexit(pid_t pid, const char *name)
 int
 main(int argc, char *argv[])
 {
-	const char	*domain, *certdir, *acctkey;
-	int		 key_fds[2], acct_fds[2];
-	int		 c, rc1, rc2, rc3, newacct;
-	pid_t		 pid_net, pid_keys, pid_acct;
+	const char	*domain, *certdir, *acctkey, *chngdir;
+	int		 key_fds[2], acct_fds[2], chng_fds[2];
+	int		 c, rc1, rc2, rc3, rc4, newacct;
+	pid_t		 pid_net, pid_keys, pid_acct, pid_chng;
 	extern int	 verbose;
 
 	newacct = 0;
 	verbose = 0;
 	certdir = "/etc/ssl/letsencrypt";
 	acctkey = "/etc/letsencrypt/private/privkey.pem";
+	chngdir = "/var/www/letsencrypt";
 
 	while (-1 != (c = getopt(argc, argv, "nNf:c:v"))) 
 		switch (c) {
@@ -49,6 +53,9 @@ main(int argc, char *argv[])
 			break;
 		case ('N'):
 			newacct = 2;
+			break;
+		case ('C'):
+			chngdir = optarg;
 			break;
 		case ('c'):
 			certdir = optarg;
@@ -83,6 +90,8 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "socketpair");
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, acct_fds))
 		err(EXIT_FAILURE, "socketpair");
+	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, chng_fds))
+		err(EXIT_FAILURE, "socketpair");
 
 	/* Start with the network-touching process. */
 
@@ -92,12 +101,15 @@ main(int argc, char *argv[])
 	if (0 == pid_net) {
 		close(key_fds[0]);
 		close(acct_fds[0]);
-		c = netproc(key_fds[1], acct_fds[1], domain, newacct);
+		close(chng_fds[0]);
+		c = netproc(key_fds[1], acct_fds[1], 
+			chng_fds[1], domain, newacct);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
 	close(key_fds[1]);
 	close(acct_fds[1]);
+	close(chng_fds[1]);
 
 	/* Now the key-touching component. */
 
@@ -106,6 +118,7 @@ main(int argc, char *argv[])
 
 	if (0 == pid_keys) {
 		close(acct_fds[0]);
+		close(chng_fds[0]);
 		c = keyproc(key_fds[0], certdir, 
 			(const unsigned char *)domain);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -119,11 +132,24 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pid_acct) {
+		close(chng_fds[0]);
 		c = acctproc(acct_fds[0], acctkey, newacct);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
 	close(acct_fds[0]);
+
+	/* Finally, the challenge-accepting component. */
+
+	if (-1 == (pid_chng = fork()))
+		err(EXIT_FAILURE, "fork");
+
+	if (0 == pid_chng) {
+		c = chngproc(chng_fds[0], chngdir);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	}
+
+	close(chng_fds[0]);
 
 	/*
 	 * Collect our subprocesses.
@@ -132,9 +158,10 @@ main(int argc, char *argv[])
 	rc1 = checkexit(pid_keys, "keyproc");
 	rc2 = checkexit(pid_net, "netproc");
 	rc3 = checkexit(pid_acct, "acctproc");
+	rc4 = checkexit(pid_chng, "chngproc");
 
-	return(rc1 && rc2 && rc3 ? EXIT_SUCCESS : EXIT_FAILURE);
-
+	return(rc1 && rc2 && rc3 && rc4 ? 
+		EXIT_SUCCESS : EXIT_FAILURE);
 usage:
 	fprintf(stderr, "usage: %s "
 		"[-vnN] "

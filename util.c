@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,21 +8,36 @@
 
 #include "extern.h"
 
-enum acctop
-readop(const char *sub, int fd)
+static	volatile sig_atomic_t sig;
+
+static void
+sigpipe(int code)
+{
+
+	(void)code;
+	sig = 1;
+}
+
+/*
+ * This will read a long-sized operation.
+ * Operations are usually enums, so this should be alright.
+ * We return 0 on EOF and LONG_MAX on failure.
+ */
+long
+readop(const char *sub, int fd, const char *name)
 {
 	ssize_t	 	 ssz;
-	enum acctop	 op;
+	long		 op;
 
-	ssz = read(fd, &op, sizeof(enum acctop));
+	ssz = read(fd, &op, sizeof(long));
 	if (ssz < 0) {
-		doxwarn(sub, "read: acctop");
-		return(ACCT__MAX);
-	} else if (ssz && ssz != sizeof(enum acctop)) {
-		doxwarnx(sub, "short read: acctop");
-		return(ACCT__MAX);
+		doxwarn(sub, "read: %s", name);
+		return(LONG_MAX);
+	} else if (ssz && ssz != sizeof(long)) {
+		doxwarnx(sub, "short read: %s", name);
+		return(LONG_MAX);
 	} else if (0 == ssz)
-		return(ACCT_STOP);
+		return(0);
 
 	return(op);
 }
@@ -52,19 +68,33 @@ readstring(const char *sub, int fd, const char *name)
 	return(NULL);
 }
 
+/*
+ * Wring a long-value to a communication pipe.
+ * Returns zero if the write failed or the pipe is not open, otherwise
+ * return non-zero.
+ */
 int
-writeop(const char *sub, int fd, enum acctop op)
+writeop(const char *sub, int fd, const char *name, long op)
 {
 	ssize_t	 ssz;
+	sig_t	 sig;
+	int	 rc;
 
-	if ((ssz = write(fd, &op, sizeof(enum acctop))) < 0) 
-		doxwarn(sub, "write: acctop");
-	else if ((size_t)ssz != sizeof(enum acctop))
-		doxwarnx(sub, "short write: acctop");
+	rc = 0;
+	/* Catch a closed pipe. */
+	sig = signal(SIGPIPE, sigpipe);
+
+	if ((ssz = write(fd, &op, sizeof(long))) < 0) 
+		doxwarn(sub, "write: %s", name);
+	else if ((size_t)ssz != sizeof(long))
+		doxwarnx(sub, "short write: %s", name);
 	else
-		return(1);
+		rc = 1;
 
-	return(0);
+	/* Reinstate signal handler. */
+	signal(SIGPIPE, sig);
+	sig = 0;
+	return(rc);
 }
 
 int
@@ -72,8 +102,13 @@ writestring(const char *sub, int fd, const char *name, const char *v)
 {
 	size_t	 sz;
 	ssize_t	 ssz;
+	int	 rc;
+	sig_t	 sig;
 
 	sz = strlen(v);
+	rc = 0;
+	/* Catch a closed pipe. */
+	sig = signal(SIGPIPE, sigpipe);
 
 	if ((ssz = write(fd, &sz, sizeof(size_t))) < 0) 
 		doxwarn(sub, "write: %s length", name);
@@ -84,9 +119,12 @@ writestring(const char *sub, int fd, const char *name, const char *v)
 	else if ((size_t)ssz != sz)
 		doxwarnx(sub, "short write: %s", name);
 	else
-		return(1);
+		rc = 1;
 
-	return(0);
+	/* Reinstate signal handler. */
+	signal(SIGPIPE, sig);
+	sig = 0;
+	return(rc);
 }
 
 char *

@@ -25,15 +25,34 @@
 
 #define	SUB "netproc"
 
+/*
+ * The ACME server always serves up JSON.
+ * This is used to parse the response as it comes over the wire.
+ */
 struct	json {
-	struct json_tokener	*tok;
-	struct json_object	*obj;
+	struct json_tokener	*tok; /* tokeniser */
+	struct json_object	*obj; /* result (NULL if pending) */
 };
 
+/*
+ * This contains the URI and token of an ACME-issued challenge.
+ * A challenge consists of a token, which we must present on the
+ * (presumably!) local machine to an ACME connection; and a URI, to
+ * which we must connect to verify the token.
+ */
+struct challenge {
+	char		*uri; /* uri on ACME server */
+	char		*token; /* token we must offer */
+};
+
+/*
+ * This consists of the services offered by the CA.
+ * They must all be filled in.
+ */
 struct	capaths {
-	char		*newauthz;
-	char		*newcert;
-	char		*newreg;
+	char		*newauthz; /* new authorisation */
+	char		*newcert; 
+	char		*newreg; /* new acme account */
 	char		*revokecert;
 };
 
@@ -79,7 +98,8 @@ dodbg(const char *fmt, ...)
 
 /*
  * Clean up the netproc() environment as created with netprepare().
- * Allows for errors and frees "dir" on exit.
+ * This will only have one file in it (within one directory).
+ * This allows for errors and frees "dir" on exit.
  */
 static void
 netcleanup(char *dir)
@@ -112,8 +132,11 @@ netcleanup(char *dir)
 }
 
 /*
- * Prepare netproc()'s jail environment.
- * We only need /etc/resolv.conf from the host.
+ * Prepare the file-system jail.
+ * This will create a temporary directory and fill it with the
+ * /etc/resolv.conf from the host.
+ * This file is used by the DNS resolver and is the only file necessary
+ * within the chroot.
  */
 static char *
 netprepare(void)
@@ -126,11 +149,6 @@ netprepare(void)
 	fd = fd2 = -1;
 	tmp = dir = NULL;
 
-	/*
-	 * Create our new home.
-	 * This will be in a temporary directory and will consist of
-	 * a copied /etc/resolv.conf.
-	 */
 	dir = strdup("/tmp/letskencrypt.XXXXXXXXXX");
 	if (NULL == dir) {
 		dowarn("strdup");
@@ -179,7 +197,6 @@ netprepare(void)
 			goto err;
 		}
 	}
-
 	if (ssz < 0) {
 		dowarn(PATH_RESOLV);
 		goto err;
@@ -201,9 +218,11 @@ err:
 
 /*
  * Pass an HTTP response body directly to the JSON parser.
+ * This will fail once the JSON object has been created (which is the
+ * correct operation).
  */
 static size_t 
-netbody(void *ptr, size_t sz, size_t nm, void *arg)
+jsonbody(void *ptr, size_t sz, size_t nm, void *arg)
 {
 	struct json	*json = arg;
 	enum json_tokener_error er;
@@ -251,45 +270,152 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 }
 
 /*
- * Extract a single string from the returned JSON object.
+ * Extract an array from the returned JSON object, making sure that it's
+ * the correct type.
+ * Returns NULL on failure.
+ */
+static json_object *
+json_getarray(json_object *parent, const char *name)
+{
+	json_object	*p;
+
+	if ( ! json_object_object_get_ex(parent, name, &p))
+		dowarnx("no JSON object: %s", name);
+	else if (json_type_array != json_object_get_type(p))
+		dowarnx("bad JSON object type: %s", name);
+	else
+		return(p);
+
+	return(NULL);
+}
+
+/*
+ * Extract a single string from the returned JSON object, making sure
+ * that it's the correct type.
+ * Returns NULL on failure.
  */
 static char *
-json_getstring(json_object *parent, const char *name)
+json_getstr(json_object *parent, const char *name)
 {
 	json_object	*p;
 	char		*cp;
 
-	/* Verify that the email is sane. */
-	if ( ! json_object_object_get_ex(parent, name, &p)) {
+	if ( ! json_object_object_get_ex(parent, name, &p))
 		dowarnx("no JSON object: %s", name);
-		return(NULL);
-	} else if (json_type_string != json_object_get_type(p)) {
+	else if (json_type_string != json_object_get_type(p))
 		dowarnx("bad JSON object type: %s", name);
-		return(NULL);
-	} else if (NULL == (cp = strdup(json_object_get_string(p)))) {
+	else if (NULL == (cp = strdup(json_object_get_string(p))))
 		dowarn("strdup");
-		return(NULL);
+	else
+		return(cp);
+
+	return(NULL);
+}
+
+/*
+ * Initialise the JSON object we're going to use multiple time in
+ * communicating with the ACME server.
+ */
+static int
+json_init(struct json *json)
+{
+
+	if (NULL == (json->tok = json_tokener_new())) {
+		dowarn("json_tokener_new");
+		return(0);
+	}
+	return(1);
+}
+
+/*
+ * Reset the JSON object between communications with the ACME server.
+ * This should be called prior to each invocation, and can be called
+ * multiple times around json_free and json_init.
+ */
+static void
+json_reset(struct json *json)
+{
+
+	json_tokener_reset(json->tok);
+	if (NULL != json->obj) {
+		json_object_put(json->obj);
+		json->obj = NULL;
+	}
+}
+
+/*
+ * Completely free the challeng response body.
+ */
+static void
+challenge_free(struct challenge *p)
+{
+
+	free(p->uri);
+	free(p->token);
+	p->uri = p->token = NULL;
+}
+
+/*
+ * Completely free the paths response body.
+ */
+static void
+json_free(struct json *json)
+{
+
+	if (NULL != json->tok)
+		json_tokener_free(json->tok);
+	if (NULL != json->obj)
+		json_object_put(json->obj);
+	json->tok = NULL;
+	json->obj = NULL;
+}
+
+/*
+ * Parse the response from a new-authz, which consists of challenge
+ * information, into a structure.
+ * We only care about the HTTP-01 response.
+ */
+static int
+challenge_parse(struct json *json, struct challenge *p)
+{
+	json_object	*array, *obj;
+	int		 sz, i, rc;
+	char		*type;
+
+	array = json_getarray(json->obj, "challenges");
+	sz = json_object_array_length(array);
+	for (i = 0; i < sz; i++) {
+		obj = json_object_array_get_idx(array, i);
+		type = json_getstr(obj, "type");
+		rc = strcmp(type, "http-01");
+		free(type);
+		if (rc)
+			continue;
+		p->uri = json_getstr(obj, "uri");
+		p->token = json_getstr(obj, "token");
+		return(NULL != p->uri &&
+		       NULL != p->token);
 	}
 
-	return(cp);
+	return(0);
 }
 
 /*
  * Extract the CA paths from the JSON response object.
  */
 static int
-capaths_parse(struct json *json, struct capaths *paths)
+capaths_parse(struct json *json, struct capaths *p)
 {
 
-	paths->newauthz = json_getstring(json->obj, "new-authz");
-	paths->newcert = json_getstring(json->obj, "new-cert");
-	paths->newreg = json_getstring(json->obj, "new-reg");
-	paths->revokecert = json_getstring(json->obj, "revoke-cert");
+	p->newauthz = json_getstr(json->obj, "new-authz");
+	p->newcert = json_getstr(json->obj, "new-cert");
+	p->newreg = json_getstr(json->obj, "new-reg");
+	p->revokecert = json_getstr(json->obj, "revoke-cert");
 
-	return(NULL != paths->newauthz &&
-	       NULL != paths->newcert &&
-	       NULL != paths->newreg &&
-	       NULL != paths->revokecert);
+	return(NULL != p->newauthz &&
+	       NULL != p->newcert &&
+	       NULL != p->newreg &&
+	       NULL != p->revokecert);
 }
 
 /*
@@ -308,10 +434,12 @@ capaths_free(struct capaths *p)
 /*
  * Create and send a signed communication to the ACME server.
  * We'll use the acctproc to sign the message for us.
+ * We'll unconditionally download any returned body (which is always
+ * JSON) into the json object.
  */
 static int
-sreq(int acctsock, CURL *c, 
-	const char *addr, const char *req, long *code)
+sreq(int acctsock, CURL *c, const char *addr, 
+	const char *req, long *code, struct json *json)
 {
 	char		*nonce, *reqsn;
 	CURLcode	 res;
@@ -350,7 +478,7 @@ sreq(int acctsock, CURL *c,
 	 * Send the nonce and request payload to the acctproc.
 	 * This will create the proper JSON object we need.
 	 */
-	if ( ! writeop(SUB, acctsock, ACCT_SIGN)) {
+	if ( ! writeop(SUB, acctsock, "acctop", ACCT_SIGN)) {
 		dowarnx("writeop");
 		free(nonce);
 		return(0);
@@ -369,16 +497,17 @@ sreq(int acctsock, CURL *c,
 		return(0);
 	}
 
-	dodbg("read signed digest: %zu bytes", strlen(reqsn));
+	dodbg("%s: signing request", addr);
 
-	dodbg("%s: signed request", addr);
-
+	json_reset(json);
 	curl_easy_reset(c);
 	curl_easy_setopt(c, CURLOPT_URL, addr);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
+	/*curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);*/
 	curl_easy_setopt(c, CURLOPT_POSTFIELDS, reqsn);
+	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
+	curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
 
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
 	      dowarnx("%s: %s", addr, curl_easy_strerror(res));
@@ -386,6 +515,7 @@ sreq(int acctsock, CURL *c,
 	      return(0);
 	}
 
+	dodbg("%s: done", addr);
 	curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, code);
 	free(reqsn);
 	return(1);
@@ -397,15 +527,17 @@ sreq(int acctsock, CURL *c,
  * account key information.
  */
 int
-netproc(int certsock, int acctsock, const char *domain, int newacct)
+netproc(int certsock, int acctsock, 
+	int chngsock, const char *domain, int newacct)
 {
 	pid_t		 pid;
 	int		 st, rc, cc;
-	char		*home, *cert, *req, *reqsn;
+	char		*home, *cert, *req, *reqsn, *thumb;
 	CURL		*c;
 	CURLcode	 res;
 	struct json	 json;
 	struct capaths	 paths;
+	struct challenge chng;
 	long		 http;
 
 	rc = EXIT_FAILURE;
@@ -466,14 +598,15 @@ netproc(int certsock, int acctsock, const char *domain, int newacct)
 	/* Zero all the things. */
 	memset(&json, 0, sizeof(struct json));
 	memset(&paths, 0, sizeof(struct capaths));
-	reqsn = req = cert = NULL;
+	memset(&chng, 0, sizeof(struct challenge));
+	reqsn = req = cert = thumb = NULL;
 	c = NULL;
 
 	if (NULL == (c = curl_easy_init())) {
-		doerr("curl_easy_init");
+		dowarn("curl_easy_init");
 		goto out;
-	} else if (NULL == (json.tok = json_tokener_new())) {
-		doerr("json_tokener_new");
+	} else if ( ! json_init(&json)) {
+		dowarnx("json_init");
 		goto out;
 	}
 
@@ -486,7 +619,7 @@ netproc(int certsock, int acctsock, const char *domain, int newacct)
 	curl_easy_setopt(c, CURLOPT_URL, URL_CA);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, netbody);
+	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
 	curl_easy_setopt(c, CURLOPT_WRITEDATA, &json);
 
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
@@ -514,7 +647,7 @@ netproc(int certsock, int acctsock, const char *domain, int newacct)
 			goto out;
 		} 
 		/* Send the request... */
-		if ( ! sreq(acctsock, c, paths.newreg, req, &http)) {
+		if ( ! sreq(acctsock, c, paths.newreg, req, &http, &json)) {
 			dowarnx("sreq");
 			goto out;
 		} else if (200 != http && 201 != http) {
@@ -528,20 +661,58 @@ netproc(int certsock, int acctsock, const char *domain, int newacct)
 	 * Set up to ask the acme server to authorise a domain.
 	 * First, we prepare the request itself.
 	 * Then we ask acctproc to sign it for us.
-	 * Then we send that to the request server.
+	 * Then we send that to the request server and receive from it
+	 * the challenge response.
 	 */
 	cc = asprintf(&req, 
     		"{\"resource\": \"new-authz\", "
-		"\"identifier\": {\"type\": \"dns\", \"value\": \"%s\"}}",
+		"\"identifier\": "
+		"{\"type\": \"dns\", \"value\": \"%s\"}}",
 		domain);
 	if (-1 == cc) {
 		dowarn("asprintf");
 		goto out;
-	} else if ( ! sreq(acctsock, c, paths.newauthz, req, &http)) {
+	} 
+	
+	if ( ! sreq(acctsock, c, paths.newauthz, req, &http, &json)) {
 		dowarnx("sreq");
 		goto out;
 	} else if (200 != http && 201 != http) {
-		dowarnx("%s: bad return code: %ld", paths.newauthz, http);
+		dowarnx("%s: bad HTTP: %ld", paths.newauthz, http);
+		goto out;
+	} else if ( ! challenge_parse(&json, &chng)) {
+		dowarnx("%s: bad challenge", paths.newauthz);
+		goto out;
+	}
+
+	/*
+	 * We now have our challenge.
+	 * We need to ask the acctproc for the thumbprint.
+	 * We'll combine this to the challenge to create our response,
+	 * which will be orchestrated by the chngproc.
+	 */
+	if ( ! writeop(SUB, acctsock, "acctsock", ACCT_THUMBPRINT)) {
+		dowarnx("writeop");
+		goto out;
+	} else if (NULL == (thumb = readstring(SUB, acctsock, "thumb"))) {
+		dowarnx("readstring: thumb");
+		goto out;
+	}
+
+	dodbg("thumbprint: %s", thumb);
+
+	/*
+	 * We now have our thumbprint and the challenge token.
+	 * Write it to the chngproc.
+	 */
+	if ( ! writeop(SUB, chngsock, "chngop", 1)) {
+		dowarnx("writeop");
+		goto out;
+	} else if ( ! writestring(SUB, chngsock, "thumb", thumb)) {
+		dowarnx("writestring: thumb");
+		goto out;
+	} else if ( ! writestring(SUB, chngsock, "tok", chng.token)) {
+		dowarnx("writestring: tok");
 		goto out;
 	}
 
@@ -550,7 +721,7 @@ netproc(int certsock, int acctsock, const char *domain, int newacct)
 	 * to the letsencrypt server.
 	 * This will come from our key process.
 	 */
-	if (NULL == (cert = readstream(SUB, certsock, "certificate"))) {
+	if (NULL == (cert = readstream(SUB, certsock, "cert"))) {
 		dowarnx("readstream: keyproc");
 		goto out;
 	}
@@ -564,16 +735,17 @@ out:
 		close(certsock);
 	if (-1 != acctsock)
 		close(acctsock);
+	if (-1 != chngsock)
+		close(chngsock);
 	free(cert);
 	free(req);
 	free(reqsn);
+	free(thumb);
 	if (NULL != c)
 		curl_easy_cleanup(c);
 	curl_global_cleanup();
-	if (NULL != json.tok)
-		json_tokener_free(json.tok);
-	if (NULL != json.obj)
-		json_object_put(json.obj);
+	json_free(&json);
+	challenge_free(&chng);
 	capaths_free(&paths);
 	if (EXIT_SUCCESS == rc)
 		dodbg("finished");

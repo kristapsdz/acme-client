@@ -86,43 +86,89 @@ bn2string(const BIGNUM *bn)
 	return(bbuf);
 }
 
-#if 0
-/*
- * Write a BIGNUM value in the format expected by JWK, which wants the
- * base64url encoding of their big-endian representations.
- * Reference: RFC 7517 - JSON Web Key (JWK).
- */
 static int
-writebn(int netsock, const BIGNUM *bn, const char *name)
+op_thumbprint(int fd, RSA *r)
 {
-	int	 rc;
-	char	*bbuf;
+	char		*exp, *mod, *thumb, *dig64;
+	int		 cc, rc;
+	unsigned int	 digsz;
+	unsigned char	*dig;
 
+	EVP_MD_CTX	*ctx;
+
+	/* Nullify all the things. */
 	rc = 0;
-	bbuf = bn2string(bn);
-	if ( ! writestring(SUB, netsock, name, bbuf))
-		dowarnx("writestring: %s", name);
-	else
-		rc = 1;
+	mod = exp = thumb = dig64 = NULL;
+	dig = NULL;
+	ctx = NULL;
 
-	free(bbuf);
+	if (NULL == (mod = bn2string(r->n))) {
+		dowarnx("bn2string");
+		goto out;
+	} else if (NULL == (exp = bn2string(r->e))) {
+		dowarnx("bn2string");
+		goto out;
+	}
+
+	/*
+	 * Construct the thumbprint.
+	 * NOTE: WHITESPACE IS IMPORTANT.
+	 */
+	cc = asprintf(&thumb, 
+		"{\"e\":\"%s\",\"kty\":\"RSA\",\"n\":\"%s\"}",
+		exp, mod);
+	if (-1 == cc) {
+		dowarn("asprintf");
+		thumb = NULL;
+		goto out;
+	}
+
+	/*
+	 * Create an envelope for the key an assign the RSA private key
+	 * parts to it (we'll use it for signing).
+	 * (The dup is because the EVP_PKEY_free will kill the RSA.)
+	 */
+	if (NULL == (dig = malloc(EVP_MAX_MD_SIZE))) {
+		dowarn("malloc");
+		goto out;
+	}
+
+	/*
+	 * Here we go: using our RSA key as merged into the envelope,
+	 * sign a SHA256 digest of our message.
+	 */
+	if (NULL == (ctx = EVP_MD_CTX_create())) {
+		dowarnx("EVP_MD_CTX_create");
+		goto out;
+	} else if ( ! EVP_DigestInit_ex(ctx, EVP_sha256(), NULL)) {
+		dowarnx("EVP_SignInit_ex");
+		goto out;
+	} else if ( ! EVP_DigestUpdate(ctx, thumb, strlen(thumb))) {
+		dowarnx("EVP_SignUpdate");
+		goto out;
+	} else if ( ! EVP_DigestFinal_ex(ctx, dig, &digsz)) {
+		dowarnx("EVP_SignFinal");
+		goto out;
+	} else if (NULL == (dig64 = base64buf_url((char *)dig, digsz))) {
+		dowarnx("base64buf_url");
+		goto out;
+	} else if ( ! writestring(SUB, fd, "json", dig64)) {
+		dowarnx("writestring: json");
+		goto out;
+	}
+
+	rc = 1;
+out:
+	if (NULL != ctx)
+		EVP_MD_CTX_destroy(ctx);
+
+	free(exp);
+	free(mod);
+	free(thumb);
+	free(dig);
+	free(dig64);
 	return(rc);
 }
-
-static int
-op_thumbprint(int fd, const RSA *r)
-{
-
-	if ( ! writebn(fd, r->n, "modulus"))
-		dowarnx("writebn: modulus");
-	else if ( ! writebn(fd, r->e, "exponent"))
-		dowarnx("writebn: exponent");
-	else
-		return(1);
-
-	return(0);
-}
-#endif
 
 /*
  * Operation to sign a message with the account key.
@@ -284,6 +330,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 {
 	FILE		*f;
 	RSA		*r;
+	long		 lval;
 	enum acctop	 op;
 	unsigned char	 rbuf[64];
 	BIGNUM		*bne;
@@ -296,7 +343,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	 * we're creating from scratch.
 	 * After this, we're going to go dark.
 	 */
-	if (NULL == (f = fopen(acctkey, newacct > 1 ? "w" : "r")))
+	if (NULL == (f = fopen(acctkey, newacct > 1 ? "wx" : "r")))
 		doerr("%s", acctkey);
 
 #ifdef __APPLE__
@@ -384,7 +431,14 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	 * sign a message.
 	 */
 	for (;;) {
-		if (ACCT_STOP == (op = readop(SUB, netsock)))
+		if (0 == (lval = readop(SUB, netsock, "acctop")))
+			op = ACCT_STOP;
+		else if (LONG_MAX == lval)
+			op = ACCT__MAX;
+		else
+			op = lval;
+
+		if (ACCT_STOP == op)
 			break;
 		else if (ACCT__MAX == op)
 			goto error;
@@ -395,6 +449,12 @@ acctproc(int netsock, const char *acctkey, int newacct)
 			if (op_sign(netsock, r))
 				break;
 			dowarnx("op_sign");
+			goto error;
+		case (ACCT_THUMBPRINT):
+			dodbg("creating thumbprint");
+			if (op_thumbprint(netsock, r))
+				break;
+			dowarnx("op_thumbprint");
 			goto error;
 		default:
 			abort();

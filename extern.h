@@ -4,18 +4,20 @@
 enum	acctop {
 	ACCT_STOP,
 	ACCT_SIGN,
+	ACCT_THUMBPRINT,
 	ACCT__MAX
 };
 
 __BEGIN_DECLS
 
 /*
- * Start with our three components.
+ * Start with our components.
  * These are all isolated and talk to each other using sockets.
  */
-int		 netproc(int, int, const char *, int);
+int		 netproc(int, int, int, const char *, int);
 int		 acctproc(int, const char *, int);
 int		 keyproc(int, const char *, const unsigned char *);
+int		 chngproc(int, const char *);
 
 /*
  * Warning and logging functions.
@@ -37,10 +39,10 @@ void		 doxdbg(const char *, const char *, ...);
  * The readers behave differently with respect to EOF.
  */
 char		*readstring(const char *, int, const char *);
-enum acctop	 readop(const char *, int);
+long		 readop(const char *, int, const char *);
 char		*readstream(const char *, int, const char *);
 int		 writestring(const char *, int, const char *, const char *);
-int		 writeop(const char *, int, enum acctop);
+int		 writeop(const char *, int, const char *, long);
 
 /*
  * Base64 and URL encoding.

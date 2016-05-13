@@ -1,4 +1,3 @@
-#include <err.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -127,7 +126,7 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 		RAND_seed(rbuf, sizeof(rbuf));
 	}
 
-	dodbg("reading private key: %s", path);
+	dodbg("%s: reading private key", path);
 
 	/* 
 	 * Parse our private key from an already-open steam.
@@ -141,7 +140,7 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	fclose(f);
 	f = NULL;
 
-	dodbg("creating certificate: %s", path);
+	dodbg("%s: creating certificate", path);
 
 	/*
 	 * We're going to merge this into an EVP.
@@ -185,8 +184,6 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 		goto error;
 	}
 
-	dodbg("serialising certificate: %s", path);
-	
 	/*
 	 * Finally, sign the X509 request using SHA256.
 	 * Then write it into the netproc()'s socket.
