@@ -6,7 +6,6 @@
 # include <sandbox.h>
 #endif
 #include <stdarg.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -22,6 +21,7 @@
 #else
 # define URL_CA "https://acme-staging.api.letsencrypt.org/directory"
 #endif
+#define URL_LICENSE "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf"
 
 #define	SUB "netproc"
 
@@ -75,41 +75,6 @@ dodbg(const char *fmt, ...)
 	va_start(ap, fmt);
 	dovdbg(SUB, fmt, ap);
 	va_end(ap);
-}
-
-static char *
-readstream(int certsock, const char *name)
-{
-	ssize_t		 ssz;
-	size_t		 sz;
-	char		 buf[BUFSIZ];
-	void		*pp;
-	char		*p;
-
-	p = NULL;
-	sz = 0;
-	while ((ssz = read(certsock, buf, sizeof(buf))) > 0) {
-		if (NULL == (pp = realloc(p, sz + ssz + 1))) {
-			dowarn("realloc");
-			free(p);
-			return(NULL);
-		}
-		p = pp;
-		memcpy(p + sz, buf, ssz);
-		sz += ssz;
-		p[sz] = '\0';
-	}
-
-	if (ssz < 0) {
-		dowarn("read: %s", name);
-		free(p);
-		return(NULL);
-	} else if (0 == sz) {
-		dowarnx("empty read: %s", name);
-		return(NULL);
-	}
-
-	return(p);
 }
 
 /*
@@ -235,7 +200,7 @@ err:
 }
 
 /*
- * Pass the response body directly to the JSON parser.
+ * Pass an HTTP response body directly to the JSON parser.
  */
 static size_t 
 netbody(void *ptr, size_t sz, size_t nm, void *arg)
@@ -248,8 +213,10 @@ netbody(void *ptr, size_t sz, size_t nm, void *arg)
 		return(0);
 	}
 
+	/* This will be non-NULL when we finish. */
 	json->obj = json_tokener_parse_ex(json->tok, ptr, nm * sz);
 	er = json_tokener_get_error(json->tok);
+
 	if (er == json_tokener_success || 
 	    er == json_tokener_continue)
 		return(sz * nm);
@@ -339,20 +306,107 @@ capaths_free(struct capaths *p)
 }
 
 /*
+ * Create and send a signed communication to the ACME server.
+ * We'll use the acctproc to sign the message for us.
+ */
+static int
+sreq(int acctsock, CURL *c, 
+	const char *addr, const char *req, long *code)
+{
+	char		*nonce, *reqsn;
+	CURLcode	 res;
+
+	dodbg("%s: nonce request", URL_CA);
+	nonce = NULL;
+
+	/*
+	 * Grab our nonce.
+	 * Do this before getting any of our account information.
+	 * We specifically do only a HEAD request because all we want to
+	 * do is grab a single field.
+	 * We'll also grab the JSON content of the message, which has a
+	 * directory of all the bits that we want.
+	 */
+	curl_easy_reset(c);
+	curl_easy_setopt(c, CURLOPT_URL, URL_CA);
+	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(c, CURLOPT_NOBODY, 1L);
+	curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, netheaders);
+	curl_easy_setopt(c, CURLOPT_HEADERDATA, &nonce);
+
+	if (CURLE_OK != (res = curl_easy_perform(c))) {
+		dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
+		free(nonce);
+		return(0);
+	} else if (NULL == nonce) {
+		dowarnx("%s: no replay nonce", URL_CA);
+		return(0);
+	}
+
+	dodbg("%s: replay nonce: %s", URL_CA, nonce);
+
+	/* 
+	 * Send the nonce and request payload to the acctproc.
+	 * This will create the proper JSON object we need.
+	 */
+	if ( ! writeop(SUB, acctsock, ACCT_SIGN)) {
+		dowarnx("writeop");
+		free(nonce);
+		return(0);
+	} else if ( ! writestring(SUB, acctsock, "payload", req)) {
+		dowarnx("writestring: payload");
+		free(nonce);
+		return(0);
+	} else if ( ! writestring(SUB, acctsock, "nonce", nonce)) {
+		dowarnx("writestring: nonce");
+		free(nonce);
+		return(0);
+	}
+	free(nonce);
+	if (NULL == (reqsn = readstring(SUB, acctsock, "req"))) {
+		dowarnx("readstring: req");
+		return(0);
+	}
+
+	dodbg("read signed digest: %zu bytes", strlen(reqsn));
+
+	dodbg("%s: signed request", addr);
+
+	curl_easy_reset(c);
+	curl_easy_setopt(c, CURLOPT_URL, addr);
+	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
+	curl_easy_setopt(c, CURLOPT_POSTFIELDS, reqsn);
+
+	if (CURLE_OK != (res = curl_easy_perform(c))) {
+	      dowarnx("%s: %s", addr, curl_easy_strerror(res));
+	      free(reqsn);
+	      return(0);
+	}
+
+	curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, code);
+	free(reqsn);
+	return(1);
+}
+
+/*
  * Here we communicate with the letsencrypt server.
  * For this, we'll need the certificate we want to upload and our
  * account key information.
  */
 int
-netproc(int certsock, int acctsock, const char *domain)
+netproc(int certsock, int acctsock, const char *domain, int newacct)
 {
 	pid_t		 pid;
 	int		 st, rc, cc;
-	char		*home, *cert, *nonce, *req, *reqsn;
+	char		*home, *cert, *req, *reqsn;
 	CURL		*c;
 	CURLcode	 res;
 	struct json	 json;
 	struct capaths	 paths;
+	long		 http;
 
 	rc = EXIT_FAILURE;
 
@@ -389,13 +443,16 @@ netproc(int certsock, int acctsock, const char *domain)
  	    SANDBOX_NAMED, NULL))
 		doerr("sandbox_init");
 #endif
+
 	/*
 	 * We're doing the work.
 	 * Begin by stuffing ourselves into the jail.
+	 */
+#ifndef __APPLE__
+	/*
 	 * This doesn't work on Apple: it uses a socket for DNS
 	 * resolution that lives in /var/run and not resolv.conf.
 	 */
-#ifndef __APPLE__
 	if (-1 == chroot(home))
 		doerr("%s: chroot", home);
 	else if (-1 == chdir("/"))
@@ -409,7 +466,7 @@ netproc(int certsock, int acctsock, const char *domain)
 	/* Zero all the things. */
 	memset(&json, 0, sizeof(struct json));
 	memset(&paths, 0, sizeof(struct capaths));
-	reqsn = req = nonce = cert = NULL;
+	reqsn = req = cert = NULL;
 	c = NULL;
 
 	if (NULL == (c = curl_easy_init())) {
@@ -421,39 +478,51 @@ netproc(int certsock, int acctsock, const char *domain)
 	}
 
 	/*
-	 * Grab our nonce.
-	 * Do this before getting any of our account information.
-	 * We specifically do only a HEAD request because all we want to
-	 * do is grab a single field.
-	 * We'll also grab the JSON content of the message, which has a
-	 * directory of all the bits that we want.
+	 * Grab the directory structure from the CA.
+	 * This initialises our contact with the CA, too.
 	 */
-	dodbg("connecting: %s", URL_CA);
+	dodbg("%s: directory request", URL_CA);
 
 	curl_easy_setopt(c, CURLOPT_URL, URL_CA);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
 	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, netbody);
 	curl_easy_setopt(c, CURLOPT_WRITEDATA, &json);
-	curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, netheaders);
-	curl_easy_setopt(c, CURLOPT_HEADERDATA, &nonce);
-	if (CURLE_OK != (res = curl_easy_perform(c))) {
-	      dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
-	      goto out;
-	}
 
-	if (NULL == nonce) {
-		dowarnx("replay nonce not found in headers");
+	if (CURLE_OK != (res = curl_easy_perform(c))) {
+		dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
 		goto out;
 	} else if (NULL == json.obj) {
-		dowarnx("proper JSON object not found");
+		dowarnx("%s: proper JSON object not found", URL_CA);
 		goto out;
 	} else if ( ! capaths_parse(&json, &paths)) {
-		dowarnx("could not parse CA paths");
+		dowarnx("%s: could not parse CA paths", URL_CA);
 		goto out;
 	}
 
-	dodbg("replay nonce: %s", nonce);
+	/*
+	 * If we're a new account, register the account with the ACME
+	 * server.
+	 * This will return an HTTP 201 on success, although we catch an
+	 * error 200 as well just in case.
+	 */
+	if (newacct) {
+		cc = asprintf(&req, "{\"resource\": \"new-reg\", "
+			"\"agreement\": \"%s\"}", URL_LICENSE);
+		if (-1 == cc) {
+			dowarn("asprintf");
+			goto out;
+		} 
+		/* Send the request... */
+		if ( ! sreq(acctsock, c, paths.newreg, req, &http)) {
+			dowarnx("sreq");
+			goto out;
+		} else if (200 != http && 201 != http) {
+			dowarnx("%s: bad return code: %ld", 
+				paths.newreg, http);
+			goto out;
+		}
+	}
 
 	/*
 	 * Set up to ask the acme server to authorise a domain.
@@ -468,39 +537,12 @@ netproc(int certsock, int acctsock, const char *domain)
 	if (-1 == cc) {
 		dowarn("asprintf");
 		goto out;
-	}
-
-	if ( ! writeop(SUB, acctsock, ACCT_SIGN)) {
-		dowarnx("writeop");
+	} else if ( ! sreq(acctsock, c, paths.newauthz, req, &http)) {
+		dowarnx("sreq");
 		goto out;
-	} else if ( ! writestring(SUB, acctsock, "payload", req)) {
-		dowarnx("writestring: payload");
+	} else if (200 != http && 201 != http) {
+		dowarnx("%s: bad return code: %ld", paths.newauthz, http);
 		goto out;
-	} else if ( ! writestring(SUB, acctsock, "nonce", nonce)) {
-		dowarnx("writestring: nonce");
-		goto out;
-	}
-
-	/* Now wait for the acctproc to write back our digest. */
-
-	dodbg("reading response...");
-	if (NULL == (reqsn = readstring(SUB, acctsock, "req"))) {
-		dowarnx("readstring: req");
-		goto out;
-	}
-	dodbg("read signed digest: %zu bytes", strlen(reqsn));
-
-	dodbg("connecting: %s", paths.newauthz);
-	curl_easy_reset(c);
-	curl_easy_setopt(c, CURLOPT_URL, paths.newauthz);
-	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
-	curl_easy_setopt(c, CURLOPT_POSTFIELDS, reqsn);
-
-	if (CURLE_OK != (res = curl_easy_perform(c))) {
-	      dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
-	      goto out;
 	}
 
 	/*
@@ -508,7 +550,7 @@ netproc(int certsock, int acctsock, const char *domain)
 	 * to the letsencrypt server.
 	 * This will come from our key process.
 	 */
-	if (NULL == (cert = readstream(certsock, "certificate"))) {
+	if (NULL == (cert = readstream(SUB, certsock, "certificate"))) {
 		dowarnx("readstream: keyproc");
 		goto out;
 	}
@@ -524,7 +566,6 @@ out:
 		close(acctsock);
 	free(cert);
 	free(req);
-	free(nonce);
 	free(reqsn);
 	if (NULL != c)
 		curl_easy_cleanup(c);

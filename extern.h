@@ -13,8 +13,8 @@ __BEGIN_DECLS
  * Start with our three components.
  * These are all isolated and talk to each other using sockets.
  */
-int		 netproc(int, int, const char *);
-int		 acctproc(int, const char *);
+int		 netproc(int, int, const char *, int);
+int		 acctproc(int, const char *, int);
 int		 keyproc(int, const char *, const unsigned char *);
 
 /*
@@ -38,6 +38,7 @@ void		 doxdbg(const char *, const char *, ...);
  */
 char		*readstring(const char *, int, const char *);
 enum acctop	 readop(const char *, int);
+char		*readstream(const char *, int, const char *);
 int		 writestring(const char *, int, const char *, const char *);
 int		 writeop(const char *, int, enum acctop);
 

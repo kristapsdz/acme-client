@@ -88,3 +88,38 @@ writestring(const char *sub, int fd, const char *name, const char *v)
 
 	return(0);
 }
+
+char *
+readstream(const char *sub, int fd, const char *name)
+{
+	ssize_t		 ssz;
+	size_t		 sz;
+	char		 buf[BUFSIZ];
+	void		*pp;
+	char		*p;
+
+	p = NULL;
+	sz = 0;
+	while ((ssz = read(fd, buf, sizeof(buf))) > 0) {
+		if (NULL == (pp = realloc(p, sz + ssz + 1))) {
+			doxwarn(sub, "realloc");
+			free(p);
+			return(NULL);
+		}
+		p = pp;
+		memcpy(p + sz, buf, ssz);
+		sz += ssz;
+		p[sz] = '\0';
+	}
+
+	if (ssz < 0) {
+		doxwarn(sub, "read: %s", name);
+		free(p);
+		return(NULL);
+	} else if (0 == sz) {
+		doxwarnx(sub, "empty read: %s", name);
+		return(NULL);
+	}
+
+	return(p);
+}

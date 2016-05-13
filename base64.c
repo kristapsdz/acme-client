@@ -97,7 +97,9 @@ base64buf_url(const char *data, size_t len)
 	base64buf(buf, data, len);
 
 	for (i = 0; i < sz; i++)
-		if ('+' == buf[i] || '/' == buf[i])
+		if ('+' == buf[i])
+			buf[i] = '-';
+		else if ('/' == buf[i])
 			buf[i] = '_';
 		else if ('=' == buf[i])
 			buf[i] = '\0';

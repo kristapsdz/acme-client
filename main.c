@@ -33,16 +33,23 @@ main(int argc, char *argv[])
 {
 	const char	*domain, *certdir, *acctkey;
 	int		 key_fds[2], acct_fds[2];
-	int		 c, rc1, rc2, rc3;
+	int		 c, rc1, rc2, rc3, newacct;
 	pid_t		 pid_net, pid_keys, pid_acct;
 	extern int	 verbose;
 
+	newacct = 0;
 	verbose = 0;
 	certdir = "/etc/ssl/letsencrypt";
 	acctkey = "/etc/letsencrypt/private/privkey.pem";
 
-	while (-1 != (c = getopt(argc, argv, "f:c:v"))) 
+	while (-1 != (c = getopt(argc, argv, "nNf:c:v"))) 
 		switch (c) {
+		case ('n'):
+			newacct = 1;
+			break;
+		case ('N'):
+			newacct = 2;
+			break;
 		case ('c'):
 			certdir = optarg;
 			break;
@@ -85,7 +92,7 @@ main(int argc, char *argv[])
 	if (0 == pid_net) {
 		close(key_fds[0]);
 		close(acct_fds[0]);
-		c = netproc(key_fds[1], acct_fds[1], domain);
+		c = netproc(key_fds[1], acct_fds[1], domain, newacct);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -112,7 +119,7 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pid_acct) {
-		c = acctproc(acct_fds[0], acctkey);
+		c = acctproc(acct_fds[0], acctkey, newacct);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -130,6 +137,7 @@ main(int argc, char *argv[])
 
 usage:
 	fprintf(stderr, "usage: %s "
+		"[-vnN] "
 		"[-c certdir] "
 		"[-f accountkey] "
 		"domain\n", 

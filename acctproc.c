@@ -1,3 +1,5 @@
+#include <sys/param.h>
+
 #include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -278,21 +280,23 @@ out:
 }
 
 int
-acctproc(int netsock, const char *acctkey)
+acctproc(int netsock, const char *acctkey, int newacct)
 {
 	FILE		*f;
 	RSA		*r;
 	enum acctop	 op;
 	unsigned char	 rbuf[64];
+	BIGNUM		*bne;
 
 	/* Do this before we chroot()? */
 	ERR_load_crypto_strings();
 
 	/* 
-	 * Next, open our private key file.
+	 * Next, open our private key file read-only or write-only if
+	 * we're creating from scratch.
 	 * After this, we're going to go dark.
 	 */
-	if (NULL == (f = fopen(acctkey, "r")))
+	if (NULL == (f = fopen(acctkey, newacct > 1 ? "w" : "r")))
 		doerr("%s", acctkey);
 
 #ifdef __APPLE__
@@ -324,6 +328,9 @@ acctproc(int netsock, const char *acctkey)
 		doerr("pledge");
 #endif
 
+	r = NULL;
+	bne = NULL;
+
 	/* 
 	 * Ok, now we're dark.
 	 * Seed our PRNG with data from arc4random().
@@ -331,22 +338,45 @@ acctproc(int netsock, const char *acctkey)
 	 * bytes (arbitrarily).
 	 */
 	while (0 == RAND_status()) {
+		dodbg("seeding");
 		arc4random_buf(rbuf, sizeof(rbuf));
 		RAND_seed(rbuf, sizeof(rbuf));
 	}
 
-	dodbg("parsing private key: %s", acctkey);
-
-	/* 
-	 * Parse our private key from an already-open steam.
-	 * From now on, use the "error" label for errors.
-	 */
-	r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
-	if (NULL == r) {
-		dowarnx("%s", acctkey);
-		goto error;
+	if (newacct > 1) {
+		if (NULL == (bne = BN_new())) {
+			dowarnx("BN_new");
+			goto error;
+		} else if ( ! BN_set_word(bne, RSA_F4)) {
+			dowarnx("BN_set_word");
+			goto error;
+		} else if (NULL == (r = RSA_new())) {
+			dowarnx("RSA_new");
+			goto error;
+		}
+		dodbg("%s: creating private key", acctkey);
+		if ( ! RSA_generate_key_ex(r, 4096, bne, NULL)) {
+			dowarnx("RSA_generate_key_ex");
+			goto error;
+		}
+		dodbg("%s: serialising private key", acctkey);
+		if ( ! PEM_write_RSAPrivateKey
+		    (f, r, NULL, 0, 0, NULL, NULL)) {
+			dowarnx("PEM_write_RSAPrivateKey");
+			goto error;
+		}
+		BN_free(bne);
+	} else {
+		dodbg("%s: parsing private key", acctkey);
+		r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
+		if (NULL == r) {
+			dowarnx("%s", acctkey);
+			goto error;
+		}
 	}
+
 	fclose(f);
+	f = NULL;
 
 	/*
 	 * Now we wait for requests from the network-facing process.
@@ -382,6 +412,8 @@ error:
 		fclose(f);
 	if (NULL != r)
 		RSA_free(r);
+	if (NULL != bne)
+		BN_free(bne);
 	ERR_free_strings();
 	close(netsock);
 	dodbg("finished (error)");
