@@ -28,15 +28,18 @@
 int
 main(int argc, char *argv[])
 {
-	const char	*domain, *certdir, *acctkey, *chngdir;
-	int		 key_fds[2], acct_fds[2], chng_fds[2], cert_fds[2];
-	pid_t		 pids[COMP__MAX];
-	int		 c, rc, newacct;
-	extern int	 verbose;
+	const char	 *domain, *certdir, *acctkey, *chngdir;
+	int		  key_fds[2], acct_fds[2], chng_fds[2], cert_fds[2];
+	pid_t		  pids[COMP__MAX];
+	int		  c, rc, newacct;
+	extern int	  verbose;
+	size_t		  i, altsz;
+	char		**alts;
 
+	alts = NULL;
 	newacct = 0;
 	verbose = 0;
-	certdir = "/etc/ssl/letsencrypt";
+	certdir = "/etc/letsencrypt/public";
 	acctkey = "/etc/letsencrypt/private/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
@@ -58,7 +61,7 @@ main(int argc, char *argv[])
 			acctkey = optarg;
 			break;
 		case ('v'):
-			verbose = 1;
+			verbose = verbose ? 2 : 1;
 			break;
 		default:
 			goto usage;
@@ -75,6 +78,11 @@ main(int argc, char *argv[])
 
 	if (0 != getuid())
 		errx(EXIT_FAILURE, "must be run as root");
+
+	altsz = argc;
+	alts = calloc(altsz, sizeof(char *));
+	for (i = 0; i < altsz; i++)
+		alts[i] = argv[i];
 
 	/* 
 	 * Open channels between our components. 
@@ -117,8 +125,8 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_KEY]) {
 		close(acct_fds[0]);
 		close(chng_fds[0]);
-		c = keyproc(key_fds[0], certdir, 
-			(const unsigned char *)domain);
+		c = keyproc(key_fds[0], certdir, domain,
+			(const char **)alts, altsz);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -171,6 +179,7 @@ main(int argc, char *argv[])
 	     checkexit(pids[COMP_ACCOUNT], COMP_ACCOUNT) +
 	     checkexit(pids[COMP_CHALLENGE], COMP_CHALLENGE);
 
+	free(alts);
 	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
 usage:
 	fprintf(stderr, "usage: %s "

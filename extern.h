@@ -92,7 +92,8 @@ __BEGIN_DECLS
 int		 certproc(int, const char *);
 int		 netproc(int, int, int, int, const char *, int);
 int		 acctproc(int, const char *, int);
-int		 keyproc(int, const char *, const unsigned char *);
+int		 keyproc(int, const char *, 
+			const char *, const char **, size_t);
 int		 chngproc(int, const char *);
 
 /*
@@ -104,6 +105,7 @@ void		 dowarnx(const char *, ...);
 void		 dowarn(const char *, ...);
 void		 doerr(const char *, ...);
 void		 dodbg(const char *, ...);
+const char 	*compname(enum comp);
 
 /*
  * Read and write things from the wire.

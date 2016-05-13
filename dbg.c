@@ -118,3 +118,10 @@ dodbg(const char *fmt, ...)
 	dovdbg(fmt, ap);
 	va_end(ap);
 }
+
+const char *
+compname(enum comp comp)
+{
+
+	return(comps[comp]);
+}

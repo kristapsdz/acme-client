@@ -91,7 +91,7 @@ certproc(int netsock, const char *certdir)
 	if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
 		goto error;
 
-	csrcp = csr;
+	csrcp = (unsigned char *)csr;
 	x = d2i_X509(NULL, (const unsigned char **)&csrcp, csrsz);
 	if (NULL == x) {
 		dowarn("d2i_X509");

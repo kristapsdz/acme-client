@@ -24,11 +24,32 @@
 #endif
 
 #include <openssl/pem.h>
+#include <openssl/err.h>
 #include <openssl/rsa.h>
 #include <openssl/rand.h>
-#include <openssl/engine.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 #include "extern.h"
+
+static int 
+add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
+{
+	X509_EXTENSION 	*ex;
+	char		*cp;
+
+	if (-1 == asprintf(&cp, "DNS:%s", value)) {
+		dowarn("asprintf");
+		return(0);
+	}
+	ex = X509V3_EXT_conf_nid(NULL, NULL, nid, cp);
+	if (NULL == ex) {
+		dowarnx("X509V3_EXT_conf_nid");
+		return(0);
+	}
+	sk_X509_EXTENSION_push(sk, ex);
+	return(1);
+}
 
 /*
  * Create an X509 certificate from the private RSA key we have on file.
@@ -37,18 +58,20 @@
  * jail and, on success, ship it to "netsock" as an X509 request.
  */
 int
-keyproc(int netsock, const char *certdir, const unsigned char *domain)
+keyproc(int netsock, const char *certdir, 
+	const char *domain, const char **alts, size_t altsz)
 {
-	char		*path, *der64;
+	char		*path, *der64, *der, *dercp;
 	FILE		*f;
+	size_t		 i;
 	RSA		*r;
 	EVP_PKEY	*evp;
 	X509_REQ	*x;
 	X509_NAME 	*name;
 	unsigned char	 rbuf[64];
 	int		 len, rc;
-	unsigned char	*der, *dercp;
 	extern enum comp proccomp;
+	STACK_OF(X509_EXTENSION) *exts;
 
 	proccomp = COMP_KEY;
 
@@ -97,9 +120,9 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	evp = NULL;
 	r = NULL;
 	name = NULL;
-	der = NULL;
-	der64 = NULL;
+	der = der64 = NULL;
 	rc = 0;
+	exts = NULL;
 
 	/* 
 	 * Ok, now we're dark.
@@ -151,18 +174,38 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 
 	/* 
 	 * Now specify the common name that we'll request.
-	 * TODO: SAN.
 	 */
 	if (NULL == (name = X509_NAME_new())) {
 		dowarnx("X509_NAME_new");
 		goto error;
 	} else if ( ! X509_NAME_add_entry_by_txt(name, "CN", 
-	           MBSTRING_ASC, domain, -1, -1, 0)) {
+	           MBSTRING_ASC, (unsigned char *)domain, -1, -1, 0)) {
 		dowarnx("X509_NAME_add_entry_by_txt: CN=%s", domain);
 		goto error;
 	} else if ( ! X509_REQ_set_subject_name(x, name)) {
 		dowarnx("X509_req_set_issuer_name");
 		goto error;
+	}
+
+	/* 
+	 * Now add the SAN extensions. 
+	 * Don't do this if we don't need to.
+	 * This was lifted more or less directly from demos/x509/mkreq.c
+	 * of the OpenSSL source code.
+	 */
+	if (altsz) {
+		if (NULL == (exts = sk_X509_EXTENSION_new_null())) {
+			dowarnx("sk_X509_EXTENSION_new_null");
+			goto error;
+		}
+		for (i = 0; i < altsz; i++)
+			add_ext(exts, NID_subject_alt_name, alts[i]);
+		if ( ! X509_REQ_add_extensions(x, exts)) {
+			dowarnx("X509_REQ_add_extensions");
+			goto error;
+		}
+		sk_X509_EXTENSION_pop_free
+			(exts, X509_EXTENSION_free);
 	}
 
 	/* Sign the X509 request using SHA256. */
@@ -180,7 +223,7 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	} else if (NULL == (der = dercp = malloc(len))) {
 		dowarn("malloc");
 		goto error;
-	} else if (len != i2d_X509_REQ(x, &dercp)) {
+	} else if (len != i2d_X509_REQ(x, (u_char **)&dercp)) {
 		dowarnx("i2d_X509");
 		goto error;
 	} else if (NULL == (der64 = base64buf_url(der, len))) {

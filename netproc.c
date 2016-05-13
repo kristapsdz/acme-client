@@ -224,7 +224,8 @@ nreq(CURL *c, const char *addr, long *code, struct json *json)
 	curl_easy_setopt(c, CURLOPT_URL, addr);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	/*curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);*/
+	if (verbose > 1)
+		curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
 	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
 	curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
 
@@ -302,6 +303,8 @@ sreq(int acctsock, CURL *c, const char *addr, const char *req,
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
 	curl_easy_setopt(c, CURLOPT_POSTFIELDS, reqsn);
+	if (verbose > 1)
+		curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
 	if (NULL != json) {
 		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
 		curl_easy_setopt(c, CURLOPT_WRITEDATA, json);

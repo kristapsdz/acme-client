@@ -227,9 +227,13 @@ jsonbody(void *ptr, size_t sz, size_t nm, void *arg)
 {
 	struct json	*json = arg;
 	enum json_tokener_error er;
+	extern int	 verbose;
 
 	if (NULL != json->obj)
 		return(0);
+
+	if (verbose > 1) 
+		dodbg("json: %.*s", (int)(nm * sz), ptr);
 
 	/* This will be non-NULL when we finish. */
 	json->obj = json_tokener_parse_ex(json->tok, ptr, nm * sz);
