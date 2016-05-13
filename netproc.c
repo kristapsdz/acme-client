@@ -397,6 +397,8 @@ challenge_parse(struct json *json, struct challenge *p)
 	char		*type;
 
 	array = json_getarray(json->obj, "challenges");
+	if (NULL == array)
+		return(0);
 	sz = json_object_array_length(array);
 	for (i = 0; i < sz; i++) {
 		obj = json_object_array_get_idx(array, i);
@@ -443,6 +445,31 @@ capaths_free(struct capaths *p)
 	free(p->newcert);
 	free(p->newreg);
 	free(p->revokecert);
+}
+
+static int
+nreq(CURL *c, const char *addr, long *code, struct json *json)
+{
+	CURLcode	 res;
+
+	dodbg("%s: getting request", addr);
+
+	json_reset(json);
+	curl_easy_reset(c);
+	curl_easy_setopt(c, CURLOPT_URL, addr);
+	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
+	/*curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);*/
+	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
+	curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
+
+	if (CURLE_OK != (res = curl_easy_perform(c))) {
+	      dowarnx("%s: %s", addr, curl_easy_strerror(res));
+	      return(0);
+	}
+
+	curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, code);
+	return(1);
 }
 
 /*
@@ -524,7 +551,6 @@ sreq(int acctsock, CURL *c, const char *addr,
 	      return(0);
 	}
 
-	dodbg("%s: done", addr);
 	curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, code);
 	free(reqsn);
 	return(1);
@@ -544,7 +570,6 @@ netproc(int certsock, int acctsock,
 	size_t		 retry;
 	char		*home, *cert, *req, *reqsn, *thumb;
 	CURL		*c;
-	CURLcode	 res;
 	struct json	 json;
 	struct capaths	 paths;
 	struct challenge chng;
@@ -626,19 +651,10 @@ netproc(int certsock, int acctsock,
 	 */
 	dodbg("%s: requesting directories", URL_CA);
 
-	curl_easy_setopt(c, CURLOPT_URL, URL_CA);
-	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
-	curl_easy_setopt(c, CURLOPT_WRITEDATA, &json);
-
-	if (CURLE_OK != (res = curl_easy_perform(c))) {
-		dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
+	if ( ! nreq(c, URL_CA, &http, &json)) {
+		dowarnx("%s: bad communication", URL_CA);
 		goto out;
-	}
-
-	curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &http);
-	if (200 != http && 201 != http) {
+	} else if (200 != http && 201 != http) {
 		dowarnx("%s: bad communication", URL_CA);
 		goto out;
 	} else if (NULL == json.obj) {
@@ -750,11 +766,11 @@ netproc(int certsock, int acctsock,
 	if ( ! sreq(acctsock, c, chng.uri, req, &http, &json)) {
 		dowarnx("%s: bad communication", chng.uri);
 		goto out;
-	} else if (200 != http && 201 != http) {
+	} else if (200 != http && 201 != http && 202 != http) {
 		dowarnx("%s: bad HTTP: %ld", chng.uri, http);
 		goto out;
-	} else if ( ! challenge_parse(&json, &chng)) {
-		dowarnx("%s: bad challenge", chng.uri);
+	} else if (-1 == (cc = response_parse(&json))) {
+		dowarnx("%s: bad response", chng.uri);
 		goto out;
 	}
 
@@ -762,11 +778,11 @@ netproc(int certsock, int acctsock,
 	 * We now wait on the ACME server.
 	 * Try it once every ten seconds.
 	 */
-	for (retry = 0, cc = 1; 1 == cc && retry < 10; retry++) {
-		if ( ! sreq(acctsock, c, chng.uri, req, &http, &json)) {
+	for (retry = 0; 1 == cc && retry < 10; retry++) {
+		if ( ! nreq(c, chng.uri, &http, &json)) {
 			dowarnx("%s: bad communication", chng.uri);
 			goto out;
-		} else if (200 != http && 201 != http) {
+		} else if (200 != http && 201 != http && 202 != http) {
 			dowarnx("%s: bad HTTP: %ld", chng.uri, http);
 			goto out;
 		} else if (-1 == (cc = response_parse(&json))) {

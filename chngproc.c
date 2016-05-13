@@ -40,11 +40,11 @@ chngproc(int netsock, const char *root)
 {
 	int		 rc;
 	long		 op;
-	char		*tok, *thumb, *file;
+	char		*tok, *thumb;
 	FILE		*f;
 
 	rc = 0;
-	file = thumb = tok = NULL;
+	thumb = tok = NULL;
 	f = NULL;
 
 #ifdef __APPLE__
@@ -81,16 +81,6 @@ chngproc(int netsock, const char *root)
 		goto out;
 	}
 #endif
-
-	/*
-	 * The root URI that the ACME server will access is
-	 * .acme-challenges, so make sure we already have that.
-	 */
-	if (-1 == mkdir(".acme-challenges", 0755) && EEXIST != errno) {
-		dowarn(".acme-challenges");
-		goto out;
-	}
-
 	/* Wait til we're triggered to start. */
 
 	if (0 == (op = readop(SUB, netsock, COMM_CHNG))) 
@@ -105,25 +95,20 @@ chngproc(int netsock, const char *root)
 	else if (NULL == (tok = readstr(SUB, netsock, COMM_TOK)))
 		goto out;
 
-	/* Create our directories and challenge file. */
+	/* Create our challenge file. */
 
-	if (-1 == asprintf(&file, ".acme-challenges/%s", tok)) {
-		tok = NULL;
-		dowarn("asprintf");
-		goto out;
-	} else if (NULL == (f = fopen(file, "w"))) {
-		dowarn("%s", file);
+	if (NULL == (f = fopen(tok, "wx"))) {
+		dowarn("%s", tok);
 		goto out;
 	} else if (-1 == fprintf(f, "%s.%s", tok, thumb)) {
-		dowarn("%s", file);
+		dowarn("%s", tok);
 		goto out;
 	} else if (-1 == fclose(f)) {
-		dowarn("%s", file);
+		dowarn("%s", tok);
 		goto out;
 	}
-	f = NULL;
 
-	dodbg("%s/.acme-challenges/%s: created", root, tok);
+	dodbg("%s/%s: created", root, tok);
 	fclose(f);
 	f = NULL;
 
@@ -139,25 +124,13 @@ chngproc(int netsock, const char *root)
 	else if (LONG_MAX == op)
 		goto out;
 
-	if (-1 == remove(file)) {
-		dowarn("%s", file);
-		goto out;
-	} else if (-1 == remove(".acme-challenges")) {
-		dowarn("%s", ".acme-challenges");
-		goto out;
-	}
-
-	dodbg("%s/.acme-challenges: cleaned", root);
+	dodbg("%s/%s: cleaning", root, tok);
 	rc = 1;
-	dodbg("finished");
 out:
 	if (NULL != f)
 		fclose(f);
-	if (NULL != file && -1 == remove(file) && ENOENT != errno)
-		dowarn("%s", file);
-	if (-1 == remove(".acme-challenges") && ENOENT != errno)
-		dowarn("%s", ".acme-challenges");
-	free(file);
+	if (NULL != tok && -1 == remove(tok) && ENOENT != errno)
+		dowarn("%s", tok);
 	free(thumb);
 	free(tok);
 	close(netsock);
