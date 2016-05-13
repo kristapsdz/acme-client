@@ -318,7 +318,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	 * we're creating from scratch.
 	 * After this, we're going to go dark.
 	 */
-	if (NULL == (f = fopen(acctkey, newacct > 1 ? "wx" : "r")))
+	if (NULL == (f = fopen(acctkey, newacct ? "wx" : "r")))
 		doerr("%s", acctkey);
 
 #ifdef __APPLE__
@@ -364,7 +364,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 		RAND_seed(rbuf, sizeof(rbuf));
 	}
 
-	if (newacct > 1) {
+	if (newacct) {
 		if (NULL == (bne = BN_new())) {
 			dowarnx("BN_new");
 			goto error;

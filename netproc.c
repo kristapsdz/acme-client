@@ -178,6 +178,8 @@ netbody(void *ptr, size_t sz, size_t nm, void *arg)
 	void		*pp;
 
 	nsz = sz * nm;
+	if (verbose > 1)
+		dodbg("received: [%.*s]", (int)nsz, ptr);
 	pp = realloc(buf->buf, buf->sz + nsz + 1);
 	if (NULL == pp) {
 		dowarn("realloc");
@@ -331,7 +333,8 @@ sreq(int acctsock, CURL *c, const char *addr, const char *req,
  */
 int
 netproc(int keysock, int acctsock, int chngsock, 
-	int certsock, const char *domain, int newacct)
+	int certsock, int newacct, const char *domain, 
+	const char **alts, size_t altsz)
 {
 	pid_t		 pid;
 	int		 st, rc, cc;

@@ -90,7 +90,8 @@ __BEGIN_DECLS
  * These are all isolated and talk to each other using sockets.
  */
 int		 certproc(int, const char *);
-int		 netproc(int, int, int, int, const char *, int);
+int		 netproc(int, int, int, int, int, 
+			const char *, const char **, size_t);
 int		 acctproc(int, const char *, int);
 int		 keyproc(int, const char *, 
 			const char *, const char **, size_t);

@@ -58,10 +58,10 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
  * jail and, on success, ship it to "netsock" as an X509 request.
  */
 int
-keyproc(int netsock, const char *certdir, 
+keyproc(int netsock, const char *keyfile, 
 	const char *domain, const char **alts, size_t altsz)
 {
-	char		*path, *der64, *der, *dercp;
+	char		*der64, *der, *dercp;
 	FILE		*f;
 	size_t		 i;
 	RSA		*r;
@@ -78,15 +78,12 @@ keyproc(int netsock, const char *certdir,
 	/* Do this before we chroot()? */
 	ERR_load_crypto_strings();
 
-	if (-1 == asprintf(&path, "%s/privkey.pem", certdir)) 
-		doerr("asprintf");
-
 	/* 
 	 * Next, open our private key file.
 	 * After this, we're going to go dark.
 	 */
-	if (NULL == (f = fopen(path, "r")))
-		doerr("%s", path);
+	if (NULL == (f = fopen(keyfile, "r")))
+		doerr("%s", keyfile);
 
 #ifdef __APPLE__
 	/*
@@ -141,7 +138,7 @@ keyproc(int netsock, const char *certdir,
 	 */
 	r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
 	if (NULL == r) {
-		dowarnx("%s", path);
+		dowarnx("%s", keyfile);
 		goto error;
 	}
 	fclose(f);
@@ -192,13 +189,14 @@ keyproc(int netsock, const char *certdir,
 	 * Don't do this if we don't need to.
 	 * This was lifted more or less directly from demos/x509/mkreq.c
 	 * of the OpenSSL source code.
+	 * (The zeroth altname is the domain name.)
 	 */
-	if (altsz) {
+	if (altsz > 1) {
 		if (NULL == (exts = sk_X509_EXTENSION_new_null())) {
 			dowarnx("sk_X509_EXTENSION_new_null");
 			goto error;
 		}
-		for (i = 0; i < altsz; i++)
+		for (i = 1; i < altsz; i++)
 			add_ext(exts, NID_subject_alt_name, alts[i]);
 		if ( ! X509_REQ_add_extensions(x, exts)) {
 			dowarnx("X509_REQ_add_extensions");

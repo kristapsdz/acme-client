@@ -28,31 +28,32 @@
 int
 main(int argc, char *argv[])
 {
-	const char	 *domain, *certdir, *acctkey, *chngdir;
+	const char	 *domain, *certdir, *acctkey, *chngdir, *keyfile;
 	int		  key_fds[2], acct_fds[2], chng_fds[2], cert_fds[2];
 	pid_t		  pids[COMP__MAX];
 	int		  c, rc, newacct;
 	extern int	  verbose;
 	size_t		  i, altsz;
-	char		**alts;
+	const char	**alts;
 
 	alts = NULL;
 	newacct = 0;
 	verbose = 0;
-	certdir = "/etc/letsencrypt/public";
-	acctkey = "/etc/letsencrypt/private/privkey.pem";
+	certdir = "/etc/ssl/letsencrypt";
+	keyfile = "/etc/ssl/letsencrypt/private/privkey.pem";
+	acctkey = "/etc/letsencrypt/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
-	while (-1 != (c = getopt(argc, argv, "nNf:c:vC:"))) 
+	while (-1 != (c = getopt(argc, argv, "nf:c:vC:k:"))) 
 		switch (c) {
 		case ('n'):
 			newacct = 1;
 			break;
-		case ('N'):
-			newacct = 2;
-			break;
 		case ('C'):
 			chngdir = optarg;
+			break;
+		case ('k'):
+			keyfile = optarg;
 			break;
 		case ('c'):
 			certdir = optarg;
@@ -79,10 +80,12 @@ main(int argc, char *argv[])
 	if (0 != getuid())
 		errx(EXIT_FAILURE, "must be run as root");
 
-	altsz = argc;
+	/* Set the zeroth altname as our domain. */
+	altsz = argc + 1;
 	alts = calloc(altsz, sizeof(char *));
+	alts[0] = domain;
 	for (i = 0; i < altsz; i++)
-		alts[i] = argv[i];
+		alts[i + 1] = argv[i];
 
 	/* 
 	 * Open channels between our components. 
@@ -108,7 +111,8 @@ main(int argc, char *argv[])
 		close(chng_fds[0]);
 		close(cert_fds[0]);
 		c = netproc(key_fds[1], acct_fds[1], 
-			chng_fds[1], cert_fds[1], domain, newacct);
+			chng_fds[1], cert_fds[1], newacct,
+			domain, (const char **)alts, altsz);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -125,7 +129,7 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_KEY]) {
 		close(acct_fds[0]);
 		close(chng_fds[0]);
-		c = keyproc(key_fds[0], certdir, domain,
+		c = keyproc(key_fds[0], keyfile, domain,
 			(const char **)alts, altsz);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
@@ -183,11 +187,11 @@ main(int argc, char *argv[])
 	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
 usage:
 	fprintf(stderr, "usage: %s "
-		"[-vnN] "
+		"[-vn] "
 		"[-C challengedir] "
 		"[-c certdir] "
 		"[-f accountkey] "
-		"domain\n", 
+		"domain [altnames...]\n", 
 		getprogname());
 	return(EXIT_FAILURE);
 }
