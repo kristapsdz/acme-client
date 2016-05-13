@@ -140,7 +140,6 @@ chngproc(int netsock, const char *root)
 	else if (LONG_MAX == op)
 		goto out;
 
-	dodbg("%s/%s: cleaning", root, tok);
 	rc = 1;
 out:
 	if (NULL != f)

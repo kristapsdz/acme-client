@@ -33,22 +33,22 @@
 #define SUB "keyproc"
 
 static void
+dowarn(const char *fmt, ...)
+{
+	va_list	 	 ap;
+
+	va_start(ap, fmt);
+	dovwarn(SUB, fmt, ap);
+	va_end(ap);
+}
+
+static void
 dowarnx(const char *fmt, ...)
 {
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
 	dovwarnx(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
-dodbg(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovdbg(SUB, fmt, ap);
 	va_end(ap);
 }
 
@@ -71,13 +71,15 @@ doerr(const char *fmt, ...)
 int
 keyproc(int netsock, const char *certdir, const unsigned char *domain)
 {
-	char		 *path;
-	FILE		 *f, *sockf;
-	RSA		 *r;
-	EVP_PKEY	 *evp;
-	X509_REQ	 *x;
-	X509_NAME 	 *name;
-	unsigned char	  rbuf[64];
+	char		*path, *der64;
+	FILE		*f;
+	RSA		*r;
+	EVP_PKEY	*evp;
+	X509_REQ	*x;
+	X509_NAME 	*name;
+	unsigned char	 rbuf[64];
+	int		 len, rc;
+	unsigned char	*der, *dercp;
 
 	/* Do this before we chroot()? */
 	ERR_load_crypto_strings();
@@ -112,9 +114,6 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	if (-1 == chdir("/"))
 		doerr("/: chdir");
 
-	if (NULL == (sockf = fdopen(netsock, "a")))
-		doerr("fdopen");
-
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	/* 
 	 * On OpenBSD, we won't use anything more than what we've
@@ -123,13 +122,13 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	if (-1 == pledge("stdio", NULL))
 		doerr("pledge");
 #endif
-
-	dodbg("starting");
-
 	x = NULL;
 	evp = NULL;
 	r = NULL;
 	name = NULL;
+	der = NULL;
+	der64 = NULL;
+	rc = 0;
 
 	/* 
 	 * Ok, now we're dark.
@@ -141,8 +140,6 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 		arc4random_buf(rbuf, sizeof(rbuf));
 		RAND_seed(rbuf, sizeof(rbuf));
 	}
-
-	dodbg("%s: reading private key", path);
 
 	/* 
 	 * Parse our private key from an already-open steam.
@@ -156,8 +153,6 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	fclose(f);
 	f = NULL;
 
-	dodbg("%s: creating certificate", path);
-
 	/*
 	 * We're going to merge this into an EVP.
 	 * Once these succeed, the RSA key will be free'd with the EVP.
@@ -169,7 +164,6 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 		dowarnx("EVP_PKEY_assign_RSA");
 		goto error;
 	} 
-
 	r = NULL;
 	
 	/* 
@@ -200,33 +194,36 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 		goto error;
 	}
 
-	/*
-	 * Finally, sign the X509 request using SHA256.
-	 * Then write it into the netproc()'s socket.
-	 */
+	/* Sign the X509 request using SHA256. */
+
 	if ( ! X509_REQ_sign(x, evp, EVP_sha256())) {
 		dowarnx("X509_sign");
 		goto error;
-	} else if ( ! PEM_write_X509_REQ(sockf, x)) {
-		dowarnx("PEM_write_X509_REQ");
-		goto error;
-	}
+	} 
 
-	/* 
-	 * Cleanup: we're finished here.
-	 */
-	fclose(sockf);
-	X509_REQ_free(x);
-	EVP_PKEY_free(evp);
-	X509_NAME_free(name);
-	ERR_free_strings();
-	dodbg("finished");
-	return(1);
+	/* Now, serialise to DER, then base64, then write. */
+
+	if ((len = i2d_X509_REQ(x, NULL)) < 0) {
+		dowarnx("i2d_X509");
+		goto error;
+	} else if (NULL == (der = dercp = malloc(len))) {
+		dowarn("malloc");
+		goto error;
+	} else if (len != i2d_X509_REQ(x, &dercp)) {
+		dowarnx("i2d_X509");
+		goto error;
+	} else if (NULL == (der64 = base64buf_url(der, len))) {
+		dowarnx("base64buf_url");
+		goto error;
+	} else if ( ! writestr(SUB, netsock, COMM_CERT, der64)) 
+		goto error;
+	
+	rc = 1;
 error:
 	if (NULL != f)
 		fclose(f);
-	fclose(sockf);
-	ERR_print_errors_fp(stderr);
+	free(der);
+	free(der64);
 	if (NULL != x)
 		X509_REQ_free(x);
 	if (NULL != r)
@@ -235,8 +232,9 @@ error:
 		X509_NAME_free(name);
 	if (NULL != evp)
 		EVP_PKEY_free(evp);
+	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
-	dodbg("finished (error)");
-	return(0);
+	close(netsock);
+	return(rc);
 }
 

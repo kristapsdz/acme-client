@@ -94,7 +94,6 @@ void		 doxdbg(const char *, const char *, ...);
  */
 long		 readop(const char *, int, enum comm);
 char		*readstr(const char *, int, enum comm);
-char		*readstream(const char *, int, enum comm);
 int		 writestr(const char *, int, enum comm, const char *);
 int		 writeop(const char *, int, enum comm, long);
 

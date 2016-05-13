@@ -156,39 +156,3 @@ writestr(const char *sub, int fd, enum comm comm, const char *v)
 	sig = 0;
 	return(rc);
 }
-
-char *
-readstream(const char *sub, int fd, enum comm comm)
-{
-	ssize_t		 ssz;
-	size_t		 sz;
-	char		 buf[BUFSIZ];
-	void		*pp;
-	char		*p;
-
-	p = NULL;
-	sz = 0;
-	while ((ssz = read(fd, buf, sizeof(buf))) > 0) {
-		if (NULL == (pp = realloc(p, sz + ssz + 1))) {
-			doxwarn(sub, "realloc");
-			free(p);
-			return(NULL);
-		}
-		p = pp;
-		memcpy(p + sz, buf, ssz);
-		sz += ssz;
-		p[sz] = '\0';
-	}
-
-	if (ssz < 0) {
-		doxwarn(sub, "read: %s", comms[comm]);
-		free(p);
-		return(NULL);
-	} else if (0 == sz) {
-		doxwarnx(sub, "empty read: %s", comms[comm]);
-		free(p);
-		return(NULL);
-	}
-
-	return(p);
-}

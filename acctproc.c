@@ -34,6 +34,7 @@
 #include "extern.h"
 
 #define SUB "acctproc"
+#define	KEY_BITS 4096
 
 static void
 dowarn(const char *fmt, ...)
@@ -397,7 +398,6 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	 * bytes (arbitrarily).
 	 */
 	while (0 == RAND_status()) {
-		dodbg("seeding");
 		arc4random_buf(rbuf, sizeof(rbuf));
 		RAND_seed(rbuf, sizeof(rbuf));
 	}
@@ -413,12 +413,11 @@ acctproc(int netsock, const char *acctkey, int newacct)
 			dowarnx("RSA_new");
 			goto error;
 		}
-		dodbg("%s: creating private key", acctkey);
-		if ( ! RSA_generate_key_ex(r, 4096, bne, NULL)) {
+		dodbg("%s: creating: %s bits", acctkey, KEY_BITS);
+		if ( ! RSA_generate_key_ex(r, KEY_BITS, bne, NULL)) {
 			dowarnx("RSA_generate_key_ex");
 			goto error;
 		}
-		dodbg("%s: serialising private key", acctkey);
 		if ( ! PEM_write_RSAPrivateKey
 		    (f, r, NULL, 0, 0, NULL, NULL)) {
 			dowarnx("PEM_write_RSAPrivateKey");
@@ -426,7 +425,6 @@ acctproc(int netsock, const char *acctkey, int newacct)
 		}
 		BN_free(bne);
 	} else {
-		dodbg("%s: parsing private key", acctkey);
 		r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
 		if (NULL == r) {
 			dowarnx("%s", acctkey);
@@ -457,13 +455,11 @@ acctproc(int netsock, const char *acctkey, int newacct)
 
 		switch (op) {
 		case (ACCT_SIGN):
-			dodbg("signing payload");
 			if (op_sign(netsock, r))
 				break;
 			dowarnx("op_sign");
 			goto error;
 		case (ACCT_THUMBPRINT):
-			dodbg("creating thumbprint");
 			if (op_thumbprint(netsock, r))
 				break;
 			dowarnx("op_thumbprint");
@@ -476,7 +472,6 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	RSA_free(r);
 	ERR_free_strings();
 	close(netsock);
-	dodbg("finished");
 	return(1);
 error:
 	ERR_print_errors_fp(stderr);
@@ -488,7 +483,6 @@ error:
 		BN_free(bne);
 	ERR_free_strings();
 	close(netsock);
-	dodbg("finished (error)");
 	return(0);
 }
 

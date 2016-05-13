@@ -40,7 +40,8 @@
 #define URL_LICENSE "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf"
 
 #define	SUB "netproc"
-
+#define	RETRY_DELAY 5
+#define RETRY_MAX 10
 
 static void
 doerr(const char *fmt, ...)
@@ -234,8 +235,6 @@ nreq(CURL *c, const char *addr, long *code, struct json *json)
 {
 	CURLcode	 res;
 
-	dodbg("%s: getting request", addr);
-
 	json_reset(json);
 	curl_easy_reset(c);
 	curl_easy_setopt(c, CURLOPT_URL, addr);
@@ -267,7 +266,6 @@ sreq(int acctsock, CURL *c, const char *addr,
 	char		*nonce, *reqsn;
 	CURLcode	 res;
 
-	dodbg("%s: nonce request", URL_CA);
 	nonce = NULL;
 
 	/*
@@ -295,8 +293,6 @@ sreq(int acctsock, CURL *c, const char *addr,
 		return(0);
 	}
 
-	dodbg("%s: replay nonce: %s", URL_CA, nonce);
-
 	/* 
 	 * Send the nonce and request payload to the acctproc.
 	 * This will create the proper JSON object we need.
@@ -315,17 +311,19 @@ sreq(int acctsock, CURL *c, const char *addr,
 	if (NULL == (reqsn = readstr(SUB, acctsock, COMM_REQ)))
 		return(0);
 
-	dodbg("%s: signing request", addr);
-
-	json_reset(json);
+	if (NULL != json)
+		json_reset(json);
 	curl_easy_reset(c);
 	curl_easy_setopt(c, CURLOPT_URL, addr);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	/*curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);*/
+	if (NULL == json)
+		curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
 	curl_easy_setopt(c, CURLOPT_POSTFIELDS, reqsn);
-	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
-	curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
+	if (NULL != json) {
+		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
+		curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
+	}
 
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
 	      dowarnx("%s: %s", addr, curl_easy_strerror(res));
@@ -408,7 +406,6 @@ netproc(int certsock, int acctsock,
 		doerr("/: chdir");
 #endif
 
-	dodbg("%s: started in jail", home);
 	free(home);
 	home = NULL;
 
@@ -451,6 +448,7 @@ netproc(int certsock, int acctsock,
 	 * error 200 as well just in case.
 	 */
 	if (newacct) {
+		dodbg("%s: new registration", paths.newreg);
 		cc = asprintf(&req, "{\"resource\": \"new-reg\", "
 			"\"agreement\": \"%s\"}", URL_LICENSE);
 		if (-1 == cc) {
@@ -467,6 +465,8 @@ netproc(int certsock, int acctsock,
 			goto out;
 		}
 	}
+
+	dodbg("%s: requesting authorisation", paths.newauthz);
 
 	/*
 	 * Set up to ask the acme server to authorise a domain.
@@ -508,8 +508,6 @@ netproc(int certsock, int acctsock,
 		goto out;
 	else if (NULL == (thumb = readstr(SUB, acctsock, COMM_THUMB)))
 		goto out;
-
-	dodbg("thumbprint: %s", thumb);
 
 	/*
 	 * We now have our thumbprint and the challenge token.
@@ -557,7 +555,8 @@ netproc(int certsock, int acctsock,
 	 * We now wait on the ACME server.
 	 * Try it once every ten seconds.
 	 */
-	for (retry = 0; 1 == cc && retry < 10; retry++) {
+	for (retry = 0; 1 == cc && retry < RETRY_MAX; retry++) {
+		dodbg("%s: checking challenge status", chng.uri);
 		if ( ! nreq(c, chng.uri, &http, json)) {
 			dowarnx("%s: bad communication", chng.uri);
 			goto out;
@@ -567,10 +566,8 @@ netproc(int certsock, int acctsock,
 		} else if (-1 == (cc = json_parse_response(json))) {
 			dowarnx("%s: bad response", chng.uri);
 			goto out;
-		} else if (1 == cc) {
-			dodbg("%s: sleeping til retry", chng.uri);
-			sleep(5);
-		}
+		} else if (1 == cc)
+			sleep(RETRY_DELAY);
 	}
 
 	/* Write our acknowledgement that the challenge is over. */
@@ -578,7 +575,7 @@ netproc(int certsock, int acctsock,
 	if ( ! writeop(SUB, chngsock, COMM_CHNG_FIN, 1))
 		goto out;
 
-	if (10 == retry) {
+	if (RETRY_MAX == retry) {
 		dowarnx("%s: timed out (%zu tries)", chng.uri, retry);
 		goto out;
 	}
@@ -588,13 +585,33 @@ netproc(int certsock, int acctsock,
 	 * to the letsencrypt server.
 	 * This will come from our key process.
 	 */
-	if (NULL == (cert = readstream(SUB, certsock, COMM_CERT)))
+	if (NULL == (cert = readstr(SUB, certsock, COMM_CERT)))
 		goto out;
+
+	dodbg("certificate: %zu bytes", strlen(cert));
 
 	close(certsock);
 	certsock = -1;
 
-	dodbg("certificate: %zu bytes", strlen(cert));
+	/*
+	 * Last but not least, we want to send the certificate to the CA
+	 * in order to sign it and retur it to us.
+	 */
+	cc = asprintf(&req, 
+		"{\"resource\": \"new-cert\", \"csr\": \"%s\"}", cert);
+	dodbg("cert = [%s]", cert);
+	if (-1 == cc) {
+		dowarn("asprintf");
+		goto out;
+	}
+
+	if ( ! sreq(acctsock, c, paths.newcert, req, &http, NULL)) {
+		dowarnx("%s: bad communication", paths.newcert);
+		goto out;
+	} else if (200 != http && 201 != http) {
+		dowarnx("%s: bad HTTP: %ld", paths.newcert, http);
+		goto out;
+	}
 
 	rc = EXIT_SUCCESS;
 out:
@@ -614,10 +631,6 @@ out:
 	json_free(json);
 	json_free_challenge(&chng);
 	json_free_capaths(&paths);
-	if (EXIT_SUCCESS == rc)
-		dodbg("finished");
-	else
-		dodbg("finished (error)");
 	exit(rc);
 	/* NOTREACHED */
 }
