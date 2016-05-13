@@ -43,6 +43,11 @@
 #define	RETRY_DELAY 5
 #define RETRY_MAX 10
 
+struct	buf {
+	char	*buf;
+	size_t	 sz;
+};
+
 static void
 doerr(const char *fmt, ...)
 {
@@ -206,6 +211,26 @@ err:
 	return(NULL);
 }
 
+static size_t 
+netbody(void *ptr, size_t sz, size_t nm, void *arg)
+{
+	struct buf	*buf = arg;
+	size_t		 nsz;
+	void		*pp;
+
+	nsz = sz * nm;
+	pp = realloc(buf->buf, buf->sz + nsz + 1);
+	if (NULL == pp) {
+		dowarn("realloc");
+		return(0);
+	}
+	buf->buf = pp;
+	memcpy(buf->buf + buf->sz, ptr, nsz);
+	buf->sz += nsz;
+	buf->buf[buf->sz] = '\0';
+	return(nsz);
+}
+
 /*
  * Look for, extract, and duplicate the Replay-Nonce header.
  */
@@ -260,8 +285,8 @@ nreq(CURL *c, const char *addr, long *code, struct json *json)
  * JSON) into the json object.
  */
 static int
-sreq(int acctsock, CURL *c, const char *addr, 
-	const char *req, long *code, struct json *json)
+sreq(int acctsock, CURL *c, const char *addr, const char *req, 
+	long *code, struct json *json, struct buf *buf)
 {
 	char		*nonce, *reqsn;
 	CURLcode	 res;
@@ -317,12 +342,13 @@ sreq(int acctsock, CURL *c, const char *addr,
 	curl_easy_setopt(c, CURLOPT_URL, addr);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	if (NULL == json)
-		curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
 	curl_easy_setopt(c, CURLOPT_POSTFIELDS, reqsn);
 	if (NULL != json) {
 		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
 		curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
+	} else if (NULL != buf) {
+		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, netbody);
+		curl_easy_setopt(c, CURLOPT_WRITEDATA, buf);
 	}
 
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
@@ -350,6 +376,7 @@ netproc(int certsock, int acctsock,
 	size_t		 retry;
 	char		*home, *cert, *req, *reqsn, *thumb;
 	CURL		*c;
+	struct buf	 buf;
 	struct json	*json;
 	struct capaths	 paths;
 	struct challenge chng;
@@ -412,6 +439,7 @@ netproc(int certsock, int acctsock,
 	/* Zero all the things. */
 	memset(&paths, 0, sizeof(struct capaths));
 	memset(&chng, 0, sizeof(struct challenge));
+	memset(&buf, 0, sizeof(struct buf));
 	reqsn = req = cert = thumb = NULL;
 	json = NULL;
 	c = NULL;
@@ -456,7 +484,7 @@ netproc(int certsock, int acctsock,
 			goto out;
 		} 
 		/* Send the request... */
-		if ( ! sreq(acctsock, c, paths.newreg, req, &http, json)) {
+		if ( ! sreq(acctsock, c, paths.newreg, req, &http, json, NULL)) {
 			dowarnx("%s: bad communication", paths.newreg);
 			goto out;
 		} else if (200 != http && 201 != http) {
@@ -485,7 +513,7 @@ netproc(int certsock, int acctsock,
 		goto out;
 	} 
 	
-	if ( ! sreq(acctsock, c, paths.newauthz, req, &http, json)) {
+	if ( ! sreq(acctsock, c, paths.newauthz, req, &http, json, NULL)) {
 		dowarnx("%s: bad communication", paths.newauthz);
 		goto out;
 	} else if (200 != http && 201 != http) {
@@ -540,7 +568,7 @@ netproc(int certsock, int acctsock,
 		goto out;
 	}
 
-	if ( ! sreq(acctsock, c, chng.uri, req, &http, json)) {
+	if ( ! sreq(acctsock, c, chng.uri, req, &http, json, NULL)) {
 		dowarnx("%s: bad communication", chng.uri);
 		goto out;
 	} else if (200 != http && 201 != http && 202 != http) {
@@ -588,10 +616,7 @@ netproc(int certsock, int acctsock,
 	if (NULL == (cert = readstr(SUB, certsock, COMM_CERT)))
 		goto out;
 
-	dodbg("certificate: %zu bytes", strlen(cert));
-
-	close(certsock);
-	certsock = -1;
+	dodbg("%s: submitting certificate", paths.newcert);
 
 	/*
 	 * Last but not least, we want to send the certificate to the CA
@@ -599,19 +624,22 @@ netproc(int certsock, int acctsock,
 	 */
 	cc = asprintf(&req, 
 		"{\"resource\": \"new-cert\", \"csr\": \"%s\"}", cert);
-	dodbg("cert = [%s]", cert);
 	if (-1 == cc) {
 		dowarn("asprintf");
 		goto out;
 	}
 
-	if ( ! sreq(acctsock, c, paths.newcert, req, &http, NULL)) {
+	if ( ! sreq(acctsock, c, paths.newcert, req, &http, NULL, &buf)) {
 		dowarnx("%s: bad communication", paths.newcert);
 		goto out;
 	} else if (200 != http && 201 != http) {
 		dowarnx("%s: bad HTTP: %ld", paths.newcert, http);
 		goto out;
-	}
+	} else if (0 == buf.sz || NULL == buf.buf) {
+		dowarnx("%s: empty response", paths.newcert);
+		goto out;
+	} else if ( ! writebuf(SUB, certsock, COMM_CSR, buf.buf, buf.sz))
+		goto out;
 
 	rc = EXIT_SUCCESS;
 out:
@@ -625,6 +653,7 @@ out:
 	free(req);
 	free(reqsn);
 	free(thumb);
+	free(buf.buf);
 	if (NULL != c)
 		curl_easy_cleanup(c);
 	curl_global_cleanup();

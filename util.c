@@ -30,7 +30,7 @@ static	volatile sig_atomic_t sig;
 static	const char *const comms[COMM__MAX] = {
 	"req", /* COMM_REQ */
 	"thumbprint", /* COMM_THUMB */
-	"certficate", /* COMM_CERT */
+	"cert", /* COMM_CERT */
 	"payload", /* COMM_PAY */
 	"nonce", /* COMM_NONCE */
 	"token", /* COMM_TOK */
@@ -38,6 +38,7 @@ static	const char *const comms[COMM__MAX] = {
 	"challenge-ack", /* COMM_CHNG_ACK */
 	"challenge-fin", /* COMM_CHNG_FIN */
 	"account", /* COMM_SIGN */
+	"csr", /* COMM_CSR */
 };
 
 static void
@@ -75,21 +76,28 @@ readop(const char *sub, int fd, enum comm comm)
 char *
 readstr(const char *sub, int fd, enum comm comm)
 {
+	size_t	 sz;
+
+	return(readbuf(sub, fd, comm, &sz));
+}
+
+char *
+readbuf(const char *sub, int fd, enum comm comm, size_t *sz)
+{
 	ssize_t		 ssz;
-	size_t		 sz;
 	char		*p;
 
 	p = NULL;
 
-	if ((ssz = read(fd, &sz, sizeof(size_t))) < 0)
+	if ((ssz = read(fd, sz, sizeof(size_t))) < 0)
 		doxwarn(sub, "read: %s length", comms[comm]);
 	else if ((size_t)ssz != sizeof(size_t))
 		doxwarnx(sub, "short read: %s length", comms[comm]);
-	else if (NULL == (p = calloc(1, sz + 1)))
+	else if (NULL == (p = calloc(1, *sz + 1)))
 		doxwarn(sub, "malloc");
-	else if ((ssz = read(fd, p, sz)) < 0)
+	else if ((ssz = read(fd, p, *sz)) < 0)
 		doxwarn(sub, "read: %s", comms[comm]);
-	else if ((size_t)ssz != sz)
+	else if ((size_t)ssz != *sz)
 		doxwarnx(sub, "short read: %s", comms[comm]);
 	else
 		return(p);
@@ -128,14 +136,12 @@ writeop(const char *sub, int fd, enum comm comm, long op)
 }
 
 int
-writestr(const char *sub, int fd, enum comm comm, const char *v)
+writebuf(const char *sub, int fd, enum comm comm, const void *v, size_t sz)
 {
-	size_t	 sz;
 	ssize_t	 ssz;
 	int	 rc;
 	void	(*sig)(int);
 
-	sz = strlen(v);
 	rc = 0;
 	/* Catch a closed pipe. */
 	sig = signal(SIGPIPE, sigpipe);
@@ -155,4 +161,11 @@ writestr(const char *sub, int fd, enum comm comm, const char *v)
 	signal(SIGPIPE, sig);
 	sig = 0;
 	return(rc);
+}
+
+int
+writestr(const char *sub, int fd, enum comm comm, const char *v)
+{
+
+	return(writebuf(sub, fd, comm, v, strlen(v)));
 }

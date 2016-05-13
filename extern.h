@@ -35,6 +35,7 @@ enum	comm {
 	COMM_CHNG_ACK,
 	COMM_CHNG_FIN,
 	COMM_ACCT,
+	COMM_CSR,
 	COMM__MAX
 };
 
@@ -93,7 +94,9 @@ void		 doxdbg(const char *, const char *, ...);
  * The readers behave differently with respect to EOF.
  */
 long		 readop(const char *, int, enum comm);
+char		*readbuf(const char *, int, enum comm, size_t *);
 char		*readstr(const char *, int, enum comm);
+int		 writebuf(const char *, int, enum comm, const void *, size_t);
 int		 writestr(const char *, int, enum comm, const char *);
 int		 writeop(const char *, int, enum comm, long);
 
@@ -101,6 +104,8 @@ int		 writeop(const char *, int, enum comm, long);
  * Base64 and URL encoding.
  * Returns a buffer or NULL on allocation error.
  */
+size_t		 base64buf(char *, const char *, size_t);
+size_t		 base64len(size_t);
 char		*base64buf_url(const char *, size_t);
 
 /*

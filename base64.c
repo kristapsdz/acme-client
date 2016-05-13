@@ -29,7 +29,7 @@ static const char b64[] =
  * Compute the maximum buffer required for a base64 encoded string of
  * length "len".
  */
-static size_t 
+size_t 
 base64len(size_t len)
 {
 
@@ -40,7 +40,7 @@ base64len(size_t len)
  * Base64 computation.
  * This is heavily "assert"-d because Coverity complains.
  */
-static size_t 
+size_t 
 base64buf(char *enc, const char *str, size_t len)
 {
 	size_t 	i, val;
