@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -89,8 +90,8 @@ readstr(const char *sub, int fd, enum comm comm)
 int
 writeop(const char *sub, int fd, enum comm comm, long op)
 {
+	void	(*sig)(int);
 	ssize_t	 ssz;
-	sig_t	 sig;
 	int	 rc;
 
 	rc = 0;
@@ -116,7 +117,7 @@ writestr(const char *sub, int fd, enum comm comm, const char *v)
 	size_t	 sz;
 	ssize_t	 ssz;
 	int	 rc;
-	sig_t	 sig;
+	void	(*sig)(int);
 
 	sz = strlen(v);
 	rc = 0;

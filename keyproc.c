@@ -8,8 +8,8 @@
 #endif
 
 #include <openssl/pem.h>
-#include <openssl/X509.h>
 #include <openssl/rsa.h>
+#include <openssl/rand.h>
 #include <openssl/engine.h>
 
 #include "extern.h"
@@ -99,7 +99,7 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	if (NULL == (sockf = fdopen(netsock, "a")))
 		doerr("fdopen");
 
-#ifdef __OpenBSD__
+#if defined(__OpenBSD__) && OpenBSD >= 201605
 	/* 
 	 * On OpenBSD, we won't use anything more than what we've
 	 * inherited from our open descriptors.

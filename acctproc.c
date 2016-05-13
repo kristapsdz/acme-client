@@ -12,6 +12,7 @@
 
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
+#include <openssl/rand.h>
 #include <openssl/engine.h>
 
 #include "extern.h"
@@ -361,7 +362,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	if (-1 == chdir("/"))
 		doerr("/: chdir");
 
-#ifdef __OpenBSD__
+#if defined(__OpenBSD__) && OpenBSD >= 201605
 	/* 
 	 * On OpenBSD, we won't use anything more than what we've
 	 * inherited from our open descriptors.
