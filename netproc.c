@@ -107,6 +107,9 @@ netcleanup(char *dir)
 {
 	char	*tmp;
 
+	if (NULL == dir)
+		return;
+
 	/* Start with the jail's resolv.conf. */
 	if (-1 == asprintf(&tmp, "%s" PATH_RESOLV, dir)) {
 		dowarn("asprintf");
@@ -153,10 +156,10 @@ netprepare(void)
 	dir = strdup("/tmp/letskencrypt.XXXXXXXXXX");
 	if (NULL == dir) {
 		dowarn("strdup");
-		return(NULL);
+		goto err;
 	} else if (NULL == mkdtemp(dir)) {
 		dowarn("mkdtemp");
-		return(NULL);
+		goto err;
 	}
 
 	/* Create the /etc directory. */

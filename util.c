@@ -170,6 +170,7 @@ readstream(const char *sub, int fd, enum comm comm)
 		return(NULL);
 	} else if (0 == sz) {
 		doxwarnx(sub, "empty read: %s", comms[comm]);
+		free(p);
 		return(NULL);
 	}
 
