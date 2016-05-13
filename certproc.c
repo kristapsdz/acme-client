@@ -14,10 +14,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#include <sys/stat.h>
-
-#include <errno.h>
-#include <limits.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,18 +27,16 @@
 #include "extern.h"
 
 int
-chngproc(int netsock, const char *root)
+certproc(int netsock, const char *certdir)
 {
+	char		*csr, *csr64;
+	size_t		 csrsz, csr64sz;
 	int		 rc;
-	long		 op;
-	char		*tok, *thumb;
-	FILE		*f;
 	extern enum comp proccomp;
 
-	proccomp = COMP_CHALLENGE;
+	proccomp = COMP_CERT;
+	csr = csr64 = NULL;
 	rc = 0;
-	thumb = tok = NULL;
-	f = NULL;
 
 #ifdef __APPLE__
 	/*
@@ -53,81 +48,45 @@ chngproc(int netsock, const char *root)
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL)) {
 		dowarn("sandbox_init");
-		goto out;
+		goto error;
 	}
 #endif
 	/*
 	 * Jails: start with file-system.
+	 * Go into the usual place.
 	 */
-	if (-1 == chroot(root)) {
-		dowarn("%s: chroot", root);
-		goto out;
+	if (-1 == chroot(certdir)) {
+		dowarn("%s: chroot", certdir);
+		goto error;
 	} else if (-1 == chdir("/")) {
 		dowarn("/: chdir");
-		goto out;
+		goto error;
 	}
 
 #if defined(__OpenBSD__) && OpenBSD >= 201605
-	/* 
-	 * On OpenBSD, we won't use anything more than what we've
-	 * inherited from our open descriptors.
-	 */
 	if (-1 == pledge("stdio cpath wpath", NULL)) {
 		dowarn("pledge");
-		goto out;
+		goto error;
 	}
 #endif
-	/* Wait til we're triggered to start. */
 
-	if (0 == (op = readop(netsock, COMM_CHNG))) 
-		goto out;
-	else if (LONG_MAX == op)
-		goto out;
+	if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
+		goto error;
 
-	/* Read the thumbprint and token. */
-
-	if (NULL == (thumb = readstr(netsock, COMM_THUMB)))
-		goto out;
-	else if (NULL == (tok = readstr(netsock, COMM_TOK)))
-		goto out;
-
-	/* Create our challenge file. */
-
-	if (NULL == (f = fopen(tok, "wx"))) {
-		dowarn("%s", tok);
-		goto out;
-	} else if (-1 == fprintf(f, "%s.%s", tok, thumb)) {
-		dowarn("%s", tok);
-		goto out;
-	} else if (-1 == fclose(f)) {
-		dowarn("%s", tok);
-		goto out;
+	csr64sz = base64len(csrsz);
+	if (NULL == (csr64 = malloc(csr64sz))) {
+		dowarn("malloc");
+		goto error;
 	}
 
-	dodbg("%s/%s: created", root, tok);
-	fclose(f);
-	f = NULL;
-
-	/* Write our acknowledgement. */
-
-	if ( ! writeop(netsock, COMM_CHNG_ACK, 1))
-		goto out;
-
-	/* Read that we should clean up. */
-
-	if (0 == (op = readop(netsock, COMM_CHNG_FIN))) 
-		goto out;
-	else if (LONG_MAX == op)
-		goto out;
+	base64buf(csr64, csr, csrsz);
+	fprintf(stderr, "%s", csr64);
 
 	rc = 1;
-out:
-	if (NULL != f)
-		fclose(f);
-	if (NULL != tok && -1 == remove(tok) && ENOENT != errno)
-		dowarn("%s", tok);
-	free(thumb);
-	free(tok);
+error:
+	free(csr);
+	free(csr64);
 	close(netsock);
 	return(rc);
 }
+

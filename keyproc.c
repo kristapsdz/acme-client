@@ -30,38 +30,6 @@
 
 #include "extern.h"
 
-#define SUB "keyproc"
-
-static void
-dowarn(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovwarn(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
-dowarnx(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovwarnx(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
-doerr(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	doverr(SUB, fmt, ap);
-	va_end(ap);
-}
-
 /*
  * Create an X509 certificate from the private RSA key we have on file.
  * To do this, we first open the RSA key file, then jail ourselves.
@@ -71,7 +39,7 @@ doerr(const char *fmt, ...)
 int
 keyproc(int netsock, const char *certdir, const unsigned char *domain)
 {
-	char		*path, *der64, *csr, *csr64;
+	char		*path, *der64;
 	FILE		*f;
 	RSA		*r;
 	EVP_PKEY	*evp;
@@ -79,8 +47,10 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	X509_NAME 	*name;
 	unsigned char	 rbuf[64];
 	int		 len, rc;
-	size_t		 csrsz, csr64sz;
 	unsigned char	*der, *dercp;
+	extern enum comp proccomp;
+
+	proccomp = COMP_KEY;
 
 	/* Do this before we chroot()? */
 	ERR_load_crypto_strings();
@@ -128,7 +98,7 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	r = NULL;
 	name = NULL;
 	der = NULL;
-	der64 = csr = csr64 = NULL;
+	der64 = NULL;
 	rc = 0;
 
 	/* 
@@ -216,20 +186,8 @@ keyproc(int netsock, const char *certdir, const unsigned char *domain)
 	} else if (NULL == (der64 = base64buf_url(der, len))) {
 		dowarnx("base64buf_url");
 		goto error;
-	} else if ( ! writestr(SUB, netsock, COMM_CERT, der64)) 
+	} else if ( ! writestr(netsock, COMM_CERT, der64)) 
 		goto error;
-
-	/* Now read back the signed certificate. */
-
-	if (NULL == (csr = readbuf(SUB, netsock, COMM_CSR, &csrsz)))
-		goto error;
-	csr64sz = base64len(csrsz);
-	if (NULL == (csr64 = malloc(csr64sz))) {
-		dowarn("malloc");
-		goto error;
-	}
-	base64buf(csr64, csr, csrsz);
-	fprintf(stderr, "%s", csr64);
 
 	rc = 1;
 error:
@@ -237,8 +195,6 @@ error:
 		fclose(f);
 	free(der);
 	free(der64);
-	free(csr);
-	free(csr64);
 	if (NULL != x)
 		X509_REQ_free(x);
 	if (NULL != r)

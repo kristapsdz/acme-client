@@ -14,6 +14,8 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#include <sys/wait.h>
+
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
@@ -41,6 +43,14 @@ static	const char *const comms[COMM__MAX] = {
 	"csr", /* COMM_CSR */
 };
 
+static	const char *const comps[COMP__MAX] = {
+	"netproc", /* COMP_NET */
+	"keyproc", /* COMP_KEY */
+	"certproc", /* COMP_CERT */
+	"acctproc", /* COMP_ACCOUNT */
+	"challengeproc", /* COMP_CHALLENGE */
+};
+
 static void
 sigpipe(int code)
 {
@@ -55,17 +65,17 @@ sigpipe(int code)
  * We return 0 on EOF and LONG_MAX on failure.
  */
 long
-readop(const char *sub, int fd, enum comm comm)
+readop(int fd, enum comm comm)
 {
 	ssize_t	 	 ssz;
 	long		 op;
 
 	ssz = read(fd, &op, sizeof(long));
 	if (ssz < 0) {
-		doxwarn(sub, "read: %s", comms[comm]);
+		dowarn("read: %s", comms[comm]);
 		return(LONG_MAX);
 	} else if (ssz && ssz != sizeof(long)) {
-		doxwarnx(sub, "short read: %s", comms[comm]);
+		dowarnx("short read: %s", comms[comm]);
 		return(LONG_MAX);
 	} else if (0 == ssz)
 		return(0);
@@ -74,15 +84,15 @@ readop(const char *sub, int fd, enum comm comm)
 }
 
 char *
-readstr(const char *sub, int fd, enum comm comm)
+readstr(int fd, enum comm comm)
 {
 	size_t	 sz;
 
-	return(readbuf(sub, fd, comm, &sz));
+	return(readbuf(fd, comm, &sz));
 }
 
 char *
-readbuf(const char *sub, int fd, enum comm comm, size_t *sz)
+readbuf(int fd, enum comm comm, size_t *sz)
 {
 	ssize_t		 ssz;
 	char		*p;
@@ -90,15 +100,15 @@ readbuf(const char *sub, int fd, enum comm comm, size_t *sz)
 	p = NULL;
 
 	if ((ssz = read(fd, sz, sizeof(size_t))) < 0)
-		doxwarn(sub, "read: %s length", comms[comm]);
+		dowarn("read: %s length", comms[comm]);
 	else if ((size_t)ssz != sizeof(size_t))
-		doxwarnx(sub, "short read: %s length", comms[comm]);
+		dowarnx("short read: %s length", comms[comm]);
 	else if (NULL == (p = calloc(1, *sz + 1)))
-		doxwarn(sub, "malloc");
+		dowarn("malloc");
 	else if ((ssz = read(fd, p, *sz)) < 0)
-		doxwarn(sub, "read: %s", comms[comm]);
+		dowarn("read: %s", comms[comm]);
 	else if ((size_t)ssz != *sz)
-		doxwarnx(sub, "short read: %s", comms[comm]);
+		dowarnx("short read: %s", comms[comm]);
 	else
 		return(p);
 
@@ -112,7 +122,7 @@ readbuf(const char *sub, int fd, enum comm comm, size_t *sz)
  * return non-zero.
  */
 int
-writeop(const char *sub, int fd, enum comm comm, long op)
+writeop(int fd, enum comm comm, long op)
 {
 	void	(*sig)(int);
 	ssize_t	 ssz;
@@ -123,9 +133,9 @@ writeop(const char *sub, int fd, enum comm comm, long op)
 	sig = signal(SIGPIPE, sigpipe);
 
 	if ((ssz = write(fd, &op, sizeof(long))) < 0) 
-		doxwarn(sub, "write: %s", comms[comm]);
+		dowarn("write: %s", comms[comm]);
 	else if ((size_t)ssz != sizeof(long))
-		doxwarnx(sub, "short write: %s", comms[comm]);
+		dowarnx("short write: %s", comms[comm]);
 	else
 		rc = 1;
 
@@ -136,7 +146,7 @@ writeop(const char *sub, int fd, enum comm comm, long op)
 }
 
 int
-writebuf(const char *sub, int fd, enum comm comm, const void *v, size_t sz)
+writebuf(int fd, enum comm comm, const void *v, size_t sz)
 {
 	ssize_t	 ssz;
 	int	 rc;
@@ -147,13 +157,13 @@ writebuf(const char *sub, int fd, enum comm comm, const void *v, size_t sz)
 	sig = signal(SIGPIPE, sigpipe);
 
 	if ((ssz = write(fd, &sz, sizeof(size_t))) < 0) 
-		doxwarn(sub, "write: %s length", comms[comm]);
+		dowarn("write: %s length", comms[comm]);
 	else if ((size_t)ssz != sizeof(size_t))
-		doxwarnx(sub, "short write: %s length", comms[comm]);
+		dowarnx("short write: %s length", comms[comm]);
 	else if ((ssz = write(fd, v, sz)) < 0)
-		doxwarn(sub, "write: %s", comms[comm]);
+		dowarn("write: %s", comms[comm]);
 	else if ((size_t)ssz != sz)
-		doxwarnx(sub, "short write: %s", comms[comm]);
+		dowarnx("short write: %s", comms[comm]);
 	else
 		rc = 1;
 
@@ -164,8 +174,31 @@ writebuf(const char *sub, int fd, enum comm comm, const void *v, size_t sz)
 }
 
 int
-writestr(const char *sub, int fd, enum comm comm, const char *v)
+writestr(int fd, enum comm comm, const char *v)
 {
 
-	return(writebuf(sub, fd, comm, v, strlen(v)));
+	return(writebuf(fd, comm, v, strlen(v)));
+}
+
+/*
+ * Make sure that the given process exits properly.
+ */
+int
+checkexit(pid_t pid, enum comp comp)
+{
+	int	 c;
+
+	if (-1 == waitpid(pid, &c, 0)) {
+		dowarn("waitpid");
+		return(0);
+	}
+
+	if ( ! WIFEXITED(c)) 
+		dowarnx("bad exit: %s(%u)", comps[comp], pid);
+	else if (EXIT_SUCCESS != WEXITSTATUS(c))
+		dowarnx("bad exit code: %s(%u)", comps[comp], pid);
+	else
+		return(1);
+
+	return(0);
 }

@@ -17,6 +17,9 @@
 #ifndef EXTERN_H
 #define EXTERN_H
 
+/*
+ * Requests to accounts (signing) infrastructure.
+ */
 enum	acctop {
 	ACCT_STOP,
 	ACCT_SIGN,
@@ -24,6 +27,23 @@ enum	acctop {
 	ACCT__MAX
 };
 
+/*
+ * Our components.
+ * Each one of these is in a separated, isolated process.
+ */
+enum	comp {
+	COMP_NET, /* network-facing (to ACME) */
+	COMP_KEY, /* handles domain keys */
+	COMP_CERT, /* handles domain certificates */
+	COMP_ACCOUNT, /* handles account key */
+	COMP_CHALLENGE, /* handles challenges */
+	COMP__MAX
+};
+
+/*
+ * Inter-process communication labels.
+ * This is purely for looking at debugging.
+ */
 enum	comm {
 	COMM_REQ,
 	COMM_THUMB,
@@ -69,7 +89,8 @@ __BEGIN_DECLS
  * Start with our components.
  * These are all isolated and talk to each other using sockets.
  */
-int		 netproc(int, int, int, const char *, int);
+int		 certproc(int, const char *);
+int		 netproc(int, int, int, int, const char *, int);
 int		 acctproc(int, const char *, int);
 int		 keyproc(int, const char *, const unsigned char *);
 int		 chngproc(int, const char *);
@@ -78,27 +99,24 @@ int		 chngproc(int, const char *);
  * Warning and logging functions.
  * They should be used instead of err.h because they print the process
  * component and pid.
- * XXX: or we could use setproctitle()...?  (Is that portable?)
  */
-void		 dovwarnx(const char *, const char *, va_list);
-void		 dovwarn(const char *, const char *, va_list);
-void		 doverr(const char *, const char *, va_list);
-void		 dovdbg(const char *, const char *, va_list);
-void		 doxwarnx(const char *, const char *, ...);
-void		 doxwarn(const char *, const char *, ...);
-void		 doxerr(const char *, const char *, ...);
-void		 doxdbg(const char *, const char *, ...);
+void		 dowarnx(const char *, ...);
+void		 dowarn(const char *, ...);
+void		 doerr(const char *, ...);
+void		 dodbg(const char *, ...);
 
 /*
  * Read and write things from the wire.
  * The readers behave differently with respect to EOF.
  */
-long		 readop(const char *, int, enum comm);
-char		*readbuf(const char *, int, enum comm, size_t *);
-char		*readstr(const char *, int, enum comm);
-int		 writebuf(const char *, int, enum comm, const void *, size_t);
-int		 writestr(const char *, int, enum comm, const char *);
-int		 writeop(const char *, int, enum comm, long);
+long		 readop(int, enum comm);
+char		*readbuf(int, enum comm, size_t *);
+char		*readstr(int, enum comm);
+int		 writebuf(int, enum comm, const void *, size_t);
+int		 writestr(int, enum comm, const char *);
+int		 writeop(int, enum comm, long);
+
+int		 checkexit(pid_t, enum comp);
 
 /*
  * Base64 and URL encoding.
@@ -126,6 +144,11 @@ int		 json_parse_capaths(struct json *, struct capaths *);
  * Should we print debugging messages?
  */
 int		 verbose;
+
+/*
+ * What component is the process within (COMP__MAX for none)?
+ */
+enum comp	 proccomp;
 
 __END_DECLS
 

@@ -23,85 +23,98 @@
 
 #include "extern.h"
 
-void
-dovdbg(const char *sub, const char *fmt, va_list ap)
+static	const char *const comps[COMP__MAX + 1] = {
+	"netproc", /* COMP_NET */
+	"keyproc", /* COMP_KEY */
+	"certproc", /* COMP_CERT */
+	"acctproc", /* COMP_ACCOUNT */
+	"challengeproc", /* COMP_CHALLENGE */
+	"master", /* COMP__MAX */
+};
+
+static void
+dovdbg(const char *fmt, va_list ap)
 {
 	extern int	 verbose;
+	extern enum comp proccomp;
 
 	if ( ! verbose)
 		return;
-	fprintf(stderr, "%s(%u): DEBUG: ", sub, getpid());
+	fprintf(stderr, "%s(%u): DEBUG: ", comps[proccomp], getpid());
 	vprintf(fmt, ap);
 	putchar('\n');
 }
 
-void
-dovwarnx(const char *sub, const char *fmt, va_list ap)
+static void
+dovwarnx(const char *fmt, va_list ap)
 {
+	extern enum comp proccomp;
 
-	fprintf(stderr, "%s(%u): WARN: ", sub, getpid());
+	fprintf(stderr, "%s(%u): WARN: ", comps[proccomp], getpid());
 	vfprintf(stderr, fmt, ap);
 	fputc('\n', stderr);
 }
 
-void
-doverr(const char *sub, const char *fmt, va_list ap)
+static void
+doverr(const char *fmt, va_list ap)
 {
 	int		 er = errno;
+	extern enum comp proccomp;
 
-	fprintf(stderr, "%s(%u): ERROR: ", sub, getpid());
+	fprintf(stderr, "%s(%u): ERROR: ", comps[proccomp], getpid());
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, ": %s\n", strerror(er));
 	exit(EXIT_FAILURE);
 	/* NOTREACHED */
 }
 
-void
-dovwarn(const char *sub, const char *fmt, va_list ap)
+static void
+dovwarn(const char *fmt, va_list ap)
 {
 	int		 er = errno;
+	extern enum comp proccomp;
 
-	fprintf(stderr, "%s(%u): WARN: ", sub, getpid());
+	fprintf(stderr, "%s(%u): WARN: ", comps[proccomp], getpid());
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, ": %s\n", strerror(er));
 }
 
 void
-doxerr(const char *sub, const char *fmt, ...)
+doerr(const char *fmt, ...)
 {
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	doverr(sub, fmt, ap);
+	doverr(fmt, ap);
 	va_end(ap);
 }
 
 void
-doxwarnx(const char *sub, const char *fmt, ...)
+dowarnx(const char *fmt, ...)
 {
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	dovwarnx(sub, fmt, ap);
+	dovwarnx(fmt, ap);
 	va_end(ap);
 }
 
 void
-doxwarn(const char *sub, const char *fmt, ...)
+dowarn(const char *fmt, ...)
 {
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	dovwarn(sub, fmt, ap);
+	dovwarn(fmt, ap);
 	va_end(ap);
 }
 
 void
-doxdbg(const char *sub, const char *fmt, ...)
+dodbg(const char *fmt, ...)
 {
 	va_list	 	 ap;
 
 	va_start(ap, fmt);
-	dovdbg(sub, fmt, ap);
+	dovdbg(fmt, ap);
 	va_end(ap);
 }

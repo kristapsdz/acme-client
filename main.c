@@ -15,7 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include <sys/socket.h>
-#include <sys/wait.h>
 
 #include <err.h>
 #include <stdarg.h>
@@ -26,36 +25,13 @@
 
 #include "extern.h"
 
-/*
- * Make sure that the given process exits properly.
- */
-static int
-checkexit(pid_t pid, const char *name)
-{
-	int	 c;
-
-	if (-1 == waitpid(pid, &c, 0)) {
-		warn("waitpid");
-		return(0);
-	}
-
-	if ( ! WIFEXITED(c)) 
-		warnx("%s(%u): bad exit", name, pid);
-	else if (EXIT_SUCCESS != WEXITSTATUS(c))
-		warnx("%s(%u): bad exit code", name, pid);
-	else
-		return(1);
-
-	return(0);
-}
-
 int
 main(int argc, char *argv[])
 {
 	const char	*domain, *certdir, *acctkey, *chngdir;
-	int		 key_fds[2], acct_fds[2], chng_fds[2];
-	int		 c, rc1, rc2, rc3, rc4, newacct;
-	pid_t		 pid_net, pid_keys, pid_acct, pid_chng;
+	int		 key_fds[2], acct_fds[2], chng_fds[2], cert_fds[2];
+	pid_t		 pids[COMP__MAX];
+	int		 c, rc, newacct;
 	extern int	 verbose;
 
 	newacct = 0;
@@ -110,31 +86,35 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "socketpair");
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, chng_fds))
 		err(EXIT_FAILURE, "socketpair");
+	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, cert_fds))
+		err(EXIT_FAILURE, "socketpair");
 
 	/* Start with the network-touching process. */
 
-	if (-1 == (pid_net = fork()))
+	if (-1 == (pids[COMP_NET] = fork()))
 		err(EXIT_FAILURE, "fork");
 
-	if (0 == pid_net) {
+	if (0 == pids[COMP_NET]) {
 		close(key_fds[0]);
 		close(acct_fds[0]);
 		close(chng_fds[0]);
+		close(cert_fds[0]);
 		c = netproc(key_fds[1], acct_fds[1], 
-			chng_fds[1], domain, newacct);
+			chng_fds[1], cert_fds[1], domain, newacct);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
 	close(key_fds[1]);
 	close(acct_fds[1]);
 	close(chng_fds[1]);
+	close(cert_fds[1]);
 
 	/* Now the key-touching component. */
 
-	if (-1 == (pid_keys = fork()))
+	if (-1 == (pids[COMP_KEY] = fork()))
 		err(EXIT_FAILURE, "fork");
 
-	if (0 == pid_keys) {
+	if (0 == pids[COMP_KEY]) {
 		close(acct_fds[0]);
 		close(chng_fds[0]);
 		c = keyproc(key_fds[0], certdir, 
@@ -146,10 +126,10 @@ main(int argc, char *argv[])
 
 	/* Finally, the account-touching component. */
 
-	if (-1 == (pid_acct = fork()))
+	if (-1 == (pids[COMP_ACCOUNT] = fork()))
 		err(EXIT_FAILURE, "fork");
 
-	if (0 == pid_acct) {
+	if (0 == pids[COMP_ACCOUNT]) {
 		close(chng_fds[0]);
 		c = acctproc(acct_fds[0], acctkey, newacct);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -159,27 +139,39 @@ main(int argc, char *argv[])
 
 	/* Finally, the challenge-accepting component. */
 
-	if (-1 == (pid_chng = fork()))
+	if (-1 == (pids[COMP_CHALLENGE] = fork()))
 		err(EXIT_FAILURE, "fork");
 
-	if (0 == pid_chng) {
+	if (0 == pids[COMP_CHALLENGE]) {
 		c = chngproc(chng_fds[0], chngdir);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
 	close(chng_fds[0]);
 
+	/* The certificate-handling component. */
+
+	if (-1 == (pids[COMP_CERT] = fork()))
+		err(EXIT_FAILURE, "fork");
+
+	if (0 == pids[COMP_CERT]) {
+		c = certproc(cert_fds[0], certdir);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	}
+
+	close(cert_fds[0]);
+
 	/*
 	 * Collect our subprocesses.
 	 * Require that they both have exited cleanly.
 	 */
-	rc1 = checkexit(pid_keys, "keyproc");
-	rc2 = checkexit(pid_net, "netproc");
-	rc3 = checkexit(pid_acct, "acctproc");
-	rc4 = checkexit(pid_chng, "chngproc");
+	rc = checkexit(pids[COMP_KEY], COMP_KEY) +
+	     checkexit(pids[COMP_CERT], COMP_CERT) +
+	     checkexit(pids[COMP_NET], COMP_NET) +
+	     checkexit(pids[COMP_ACCOUNT], COMP_ACCOUNT) +
+	     checkexit(pids[COMP_CHALLENGE], COMP_CHALLENGE);
 
-	return(rc1 && rc2 && rc3 && rc4 ? 
-		EXIT_SUCCESS : EXIT_FAILURE);
+	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
 usage:
 	fprintf(stderr, "usage: %s "
 		"[-vnN] "

@@ -39,7 +39,6 @@
 #endif
 #define URL_LICENSE "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf"
 
-#define	SUB "netproc"
 #define	RETRY_DELAY 5
 #define RETRY_MAX 10
 
@@ -47,46 +46,6 @@ struct	buf {
 	char	*buf;
 	size_t	 sz;
 };
-
-static void
-doerr(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	doverr(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
-dowarnx(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovwarnx(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
-dowarn(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovwarn(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
-dodbg(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovdbg(SUB, fmt, ap);
-	va_end(ap);
-}
 
 /*
  * Clean up the netproc() environment as created with netprepare().
@@ -322,18 +281,18 @@ sreq(int acctsock, CURL *c, const char *addr, const char *req,
 	 * Send the nonce and request payload to the acctproc.
 	 * This will create the proper JSON object we need.
 	 */
-	if ( ! writeop(SUB, acctsock, COMM_ACCT, ACCT_SIGN)) {
+	if ( ! writeop(acctsock, COMM_ACCT, ACCT_SIGN)) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestr(SUB, acctsock, COMM_PAY, req)) {
+	} else if ( ! writestr(acctsock, COMM_PAY, req)) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestr(SUB, acctsock, COMM_NONCE, nonce)) {
+	} else if ( ! writestr(acctsock, COMM_NONCE, nonce)) {
 		free(nonce);
 		return(0);
 	}
 	free(nonce);
-	if (NULL == (reqsn = readstr(SUB, acctsock, COMM_REQ)))
+	if (NULL == (reqsn = readstr(acctsock, COMM_REQ)))
 		return(0);
 
 	if (NULL != json)
@@ -368,8 +327,8 @@ sreq(int acctsock, CURL *c, const char *addr, const char *req,
  * account key information.
  */
 int
-netproc(int certsock, int acctsock, 
-	int chngsock, const char *domain, int newacct)
+netproc(int keysock, int acctsock, int chngsock, 
+	int certsock, const char *domain, int newacct)
 {
 	pid_t		 pid;
 	int		 st, rc, cc;
@@ -381,6 +340,9 @@ netproc(int certsock, int acctsock,
 	struct capaths	 paths;
 	struct challenge chng;
 	long		 http, op;
+	extern enum comp proccomp;
+
+	proccomp = COMP_NET;
 
 	rc = EXIT_FAILURE;
 
@@ -397,8 +359,15 @@ netproc(int certsock, int acctsock,
 		doerr("fork");
 
 	if (pid > 0) {
-		close(certsock);
+		/* 
+		 * XXX: we need to keep the privileges of this one open
+		 * so we can clear the environment of the child once it
+		 * has exited.
+		 */
+		close(keysock);
 		close(acctsock);
+		close(chngsock);
+		close(certsock);
 		if (-1 == waitpid(pid, &st, 0))
 			doerr("waitpid");
 		netcleanup(home);
@@ -532,25 +501,25 @@ netproc(int certsock, int acctsock,
 	 * We'll combine this to the challenge to create our response,
 	 * which will be orchestrated by the chngproc.
 	 */
-	if ( ! writeop(SUB, acctsock, COMM_ACCT, ACCT_THUMBPRINT))
+	if ( ! writeop(acctsock, COMM_ACCT, ACCT_THUMBPRINT))
 		goto out;
-	else if (NULL == (thumb = readstr(SUB, acctsock, COMM_THUMB)))
+	else if (NULL == (thumb = readstr(acctsock, COMM_THUMB)))
 		goto out;
 
 	/*
 	 * We now have our thumbprint and the challenge token.
 	 * Write it to the chngproc.
 	 */
-	if ( ! writeop(SUB, chngsock, COMM_CHNG, 1))
+	if ( ! writeop(chngsock, COMM_CHNG, 1))
 		goto out;
-	else if ( ! writestr(SUB, chngsock, COMM_THUMB, thumb))
+	else if ( ! writestr(chngsock, COMM_THUMB, thumb))
 		goto out;
-	else if ( ! writestr(SUB, chngsock, COMM_TOK, chng.token))
+	else if ( ! writestr(chngsock, COMM_TOK, chng.token))
 		goto out;
 
 	/* Read our acknowledgement that the challenge exists. */
 
-	if (0 == (op = readop(SUB, chngsock, COMM_CHNG_ACK)))
+	if (0 == (op = readop(chngsock, COMM_CHNG_ACK)))
 		goto out;
 	else if (LONG_MAX == op)
 		goto out;
@@ -600,7 +569,7 @@ netproc(int certsock, int acctsock,
 
 	/* Write our acknowledgement that the challenge is over. */
 
-	if ( ! writeop(SUB, chngsock, COMM_CHNG_FIN, 1))
+	if ( ! writeop(chngsock, COMM_CHNG_FIN, 1))
 		goto out;
 
 	if (RETRY_MAX == retry) {
@@ -613,8 +582,11 @@ netproc(int certsock, int acctsock,
 	 * to the letsencrypt server.
 	 * This will come from our key process.
 	 */
-	if (NULL == (cert = readstr(SUB, certsock, COMM_CERT)))
+	if (NULL == (cert = readstr(keysock, COMM_CERT)))
 		goto out;
+
+	close(keysock);
+	keysock = -1;
 
 	dodbg("%s: submitting certificate", paths.newcert);
 
@@ -638,13 +610,15 @@ netproc(int certsock, int acctsock,
 	} else if (0 == buf.sz || NULL == buf.buf) {
 		dowarnx("%s: empty response", paths.newcert);
 		goto out;
-	} else if ( ! writebuf(SUB, certsock, COMM_CSR, buf.buf, buf.sz))
+	} else if ( ! writebuf(certsock, COMM_CSR, buf.buf, buf.sz))
 		goto out;
 
 	rc = EXIT_SUCCESS;
 out:
 	if (-1 != certsock)
 		close(certsock);
+	if (-1 != keysock)
+		close(keysock);
 	if (-1 != acctsock)
 		close(acctsock);
 	if (-1 != chngsock)

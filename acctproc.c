@@ -33,48 +33,7 @@
 
 #include "extern.h"
 
-#define SUB "acctproc"
 #define	KEY_BITS 4096
-
-static void
-dowarn(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovwarn(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
-dowarnx(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovwarnx(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
-dodbg(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovdbg(SUB, fmt, ap);
-	va_end(ap);
-}
-
-static void
-doerr(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	doverr(SUB, fmt, ap);
-	va_end(ap);
-}
 
 static char *
 bn2string(const BIGNUM *bn)
@@ -170,7 +129,7 @@ op_thumbprint(int fd, RSA *r)
 	} else if (NULL == (dig64 = base64buf_url((char *)dig, digsz))) {
 		dowarnx("base64buf_url");
 		goto out;
-	} else if ( ! writestr(SUB, fd, COMM_THUMB, dig64))
+	} else if ( ! writestr(fd, COMM_THUMB, dig64))
 		goto out;
 
 	rc = 1;
@@ -215,9 +174,9 @@ op_sign(int fd, RSA *r)
 	 * Read our payload and nonce from the requestor.
 	 * Then entangle these with our encoded modulus and exponent.
 	 */
-	if (NULL == (pay = readstr(SUB, fd, COMM_PAY)))
+	if (NULL == (pay = readstr(fd, COMM_PAY)))
 		goto out;
-	else if (NULL == (nonce = readstr(SUB, fd, COMM_NONCE))) 
+	else if (NULL == (nonce = readstr(fd, COMM_NONCE))) 
 		goto out;
 
 	if (NULL == (mod = bn2string(r->n))) {
@@ -313,7 +272,7 @@ op_sign(int fd, RSA *r)
 	if (-1 == cc) {
 		dowarn("asprintf");
 		goto out;
-	} else if ( ! writestr(SUB, fd, COMM_REQ, final))
+	} else if ( ! writestr(fd, COMM_REQ, final))
 		goto out;
 
 	rc = 1;
@@ -347,6 +306,9 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	enum acctop	 op;
 	unsigned char	 rbuf[64];
 	BIGNUM		*bne;
+	extern enum comp proccomp;
+
+	proccomp = COMP_ACCOUNT;
 
 	/* Do this before we chroot()? */
 	ERR_load_crypto_strings();
@@ -441,7 +403,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	 * sign a message.
 	 */
 	for (;;) {
-		if (0 == (lval = readop(SUB, netsock, COMM_ACCT)))
+		if (0 == (lval = readop(netsock, COMM_ACCT)))
 			op = ACCT_STOP;
 		else if (LONG_MAX == lval)
 			op = ACCT__MAX;
