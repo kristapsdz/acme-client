@@ -436,13 +436,13 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	close(netsock);
 	return(1);
 error:
-	ERR_print_errors_fp(stderr);
 	if (NULL != f)
 		fclose(f);
 	if (NULL != r)
 		RSA_free(r);
 	if (NULL != bne)
 		BN_free(bne);
+	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
 	close(netsock);
 	return(0);

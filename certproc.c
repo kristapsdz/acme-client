@@ -14,6 +14,8 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#include <sys/stat.h>
+
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -24,19 +26,31 @@
 # include <sandbox.h>
 #endif
 
+#include <openssl/pem.h>
+#include <openssl/engine.h>
+
 #include "extern.h"
+
+#define	CERT_PEM "cert.pem"
+#define	CERT_PEM_BAK "cert.pem~"
 
 int
 certproc(int netsock, const char *certdir)
 {
-	char		*csr, *csr64;
-	size_t		 csrsz, csr64sz;
+	char		*csr;
+	unsigned char	*csrcp;
+	size_t		 csrsz;
 	int		 rc;
 	extern enum comp proccomp;
+	FILE		*f;
+	X509		*x;
 
 	proccomp = COMP_CERT;
-	csr = csr64 = NULL;
+	csr = NULL;
 	rc = 0;
+	f = NULL;
+	x = NULL;
+	ERR_load_crypto_strings();
 
 #ifdef __APPLE__
 	/*
@@ -70,22 +84,51 @@ certproc(int netsock, const char *certdir)
 	}
 #endif
 
+	/*
+	 * Wait until we receive the DER encoded (signed) certificate
+	 * from the network process.
+	 */
 	if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
 		goto error;
 
-	csr64sz = base64len(csrsz);
-	if (NULL == (csr64 = malloc(csr64sz))) {
-		dowarn("malloc");
+	csrcp = csr;
+	x = d2i_X509(NULL, (const unsigned char **)&csrcp, csrsz);
+	if (NULL == x) {
+		dowarn("d2i_X509");
 		goto error;
 	}
 
-	base64buf(csr64, csr, csrsz);
-	fprintf(stderr, "%s", csr64);
+	if (NULL == (f = fopen(CERT_PEM_BAK, "w"))) {
+		dowarn(CERT_PEM_BAK);
+		goto error;
+	} else if ( ! PEM_write_X509(f, x)) {
+		dowarnx("%s: PEM_write_X509", CERT_PEM_BAK);
+		goto error;
+	} else if (-1 == fclose(f)) {
+		dowarn(CERT_PEM_BAK);
+		goto error;
+	}
+	f = NULL;
+
+	if (-1 == rename(CERT_PEM_BAK, CERT_PEM)) {
+		dowarn(CERT_PEM);
+		goto error;
+	} else if (-1 == chmod(CERT_PEM, 0444)) {
+		dowarn(CERT_PEM);
+		goto error;
+	}
+
+	dodbg("%s: created", CERT_PEM);
 
 	rc = 1;
 error:
+	if (NULL != f)
+		fclose(f);
+	if (NULL != x)
+		X509_free(x);
 	free(csr);
-	free(csr64);
+	ERR_print_errors_fp(stderr);
+	ERR_free_strings();
 	close(netsock);
 	return(rc);
 }
