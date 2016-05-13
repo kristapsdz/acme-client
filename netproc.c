@@ -1,3 +1,19 @@
+/*	$Id$ */
+/*
+ * Copyright (c) 2016 Kristaps Dzonsons <kristaps@bsd.lv>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHORS DISCLAIM ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
 #include <sys/stat.h>
 #include <sys/wait.h>
 
@@ -12,7 +28,6 @@
 #include <unistd.h>
 
 #include <curl/curl.h>
-#include <json-c/json.h>
 
 #include "extern.h"
 
@@ -26,36 +41,6 @@
 
 #define	SUB "netproc"
 
-/*
- * The ACME server always serves up JSON.
- * This is used to parse the response as it comes over the wire.
- */
-struct	json {
-	struct json_tokener	*tok; /* tokeniser */
-	struct json_object	*obj; /* result (NULL if pending) */
-};
-
-/*
- * This contains the URI and token of an ACME-issued challenge.
- * A challenge consists of a token, which we must present on the
- * (presumably!) local machine to an ACME connection; and a URI, to
- * which we must connect to verify the token.
- */
-struct challenge {
-	char		*uri; /* uri on ACME server */
-	char		*token; /* token we must offer */
-};
-
-/*
- * This consists of the services offered by the CA.
- * They must all be filled in.
- */
-struct	capaths {
-	char		*newauthz; /* new authorisation */
-	char		*newcert; 
-	char		*newreg; /* new acme account */
-	char		*revokecert;
-};
 
 static void
 doerr(const char *fmt, ...)
@@ -221,35 +206,6 @@ err:
 }
 
 /*
- * Pass an HTTP response body directly to the JSON parser.
- * This will fail once the JSON object has been created (which is the
- * correct operation).
- */
-static size_t 
-jsonbody(void *ptr, size_t sz, size_t nm, void *arg)
-{
-	struct json	*json = arg;
-	enum json_tokener_error er;
-
-	if (NULL != json->obj) {
-		dowarnx("data after complete JSON");
-		return(0);
-	}
-
-	/* This will be non-NULL when we finish. */
-	json->obj = json_tokener_parse_ex(json->tok, ptr, nm * sz);
-	er = json_tokener_get_error(json->tok);
-
-	if (er == json_tokener_success || 
-	    er == json_tokener_continue)
-		return(sz * nm);
-
-	dowarnx("json_tokener_parse_ex: %s", 
-		json_tokener_error_desc(er));
-	return(0);
-}
-
-/*
  * Look for, extract, and duplicate the Replay-Nonce header.
  */
 static size_t 
@@ -271,183 +227,6 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 	}
 	(*noncep)[psz - 2] = '\0';
 	return(nsz);
-}
-
-/*
- * Extract an array from the returned JSON object, making sure that it's
- * the correct type.
- * Returns NULL on failure.
- */
-static json_object *
-json_getarray(json_object *parent, const char *name)
-{
-	json_object	*p;
-
-	if ( ! json_object_object_get_ex(parent, name, &p))
-		dowarnx("no JSON object: %s", name);
-	else if (json_type_array != json_object_get_type(p))
-		dowarnx("bad JSON object type: %s", name);
-	else
-		return(p);
-
-	return(NULL);
-}
-
-/*
- * Extract a single string from the returned JSON object, making sure
- * that it's the correct type.
- * Returns NULL on failure.
- */
-static char *
-json_getstr(json_object *parent, const char *name)
-{
-	json_object	*p;
-	char		*cp;
-
-	if ( ! json_object_object_get_ex(parent, name, &p))
-		dowarnx("no JSON object: %s", name);
-	else if (json_type_string != json_object_get_type(p))
-		dowarnx("bad JSON object type: %s", name);
-	else if (NULL == (cp = strdup(json_object_get_string(p))))
-		dowarn("strdup");
-	else
-		return(cp);
-
-	return(NULL);
-}
-
-/*
- * Initialise the JSON object we're going to use multiple time in
- * communicating with the ACME server.
- */
-static int
-json_init(struct json *json)
-{
-
-	if (NULL == (json->tok = json_tokener_new())) {
-		dowarn("json_tokener_new");
-		return(0);
-	}
-	return(1);
-}
-
-/*
- * Reset the JSON object between communications with the ACME server.
- * This should be called prior to each invocation, and can be called
- * multiple times around json_free and json_init.
- */
-static void
-json_reset(struct json *json)
-{
-
-	json_tokener_reset(json->tok);
-	if (NULL != json->obj) {
-		json_object_put(json->obj);
-		json->obj = NULL;
-	}
-}
-
-/*
- * Completely free the challeng response body.
- */
-static void
-challenge_free(struct challenge *p)
-{
-
-	free(p->uri);
-	free(p->token);
-	p->uri = p->token = NULL;
-}
-
-/*
- * Completely free the paths response body.
- */
-static void
-json_free(struct json *json)
-{
-
-	if (NULL != json->tok)
-		json_tokener_free(json->tok);
-	if (NULL != json->obj)
-		json_object_put(json->obj);
-	json->tok = NULL;
-	json->obj = NULL;
-}
-
-static int
-response_parse(struct json *json)
-{
-	char		*resp;
-	int		 rc;
-
-	if (NULL == (resp = json_getstr(json->obj, "status")))
-		return(-1);
-	rc = 0 == strcmp(resp, "pending");
-	free(resp);
-	return(rc);
-}
-
-/*
- * Parse the response from a new-authz, which consists of challenge
- * information, into a structure.
- * We only care about the HTTP-01 response.
- */
-static int
-challenge_parse(struct json *json, struct challenge *p)
-{
-	json_object	*array, *obj;
-	int		 sz, i, rc;
-	char		*type;
-
-	array = json_getarray(json->obj, "challenges");
-	if (NULL == array)
-		return(0);
-	sz = json_object_array_length(array);
-	for (i = 0; i < sz; i++) {
-		obj = json_object_array_get_idx(array, i);
-		type = json_getstr(obj, "type");
-		rc = strcmp(type, "http-01");
-		free(type);
-		if (rc)
-			continue;
-		p->uri = json_getstr(obj, "uri");
-		p->token = json_getstr(obj, "token");
-		return(NULL != p->uri &&
-		       NULL != p->token);
-	}
-
-	return(0);
-}
-
-/*
- * Extract the CA paths from the JSON response object.
- */
-static int
-capaths_parse(struct json *json, struct capaths *p)
-{
-
-	p->newauthz = json_getstr(json->obj, "new-authz");
-	p->newcert = json_getstr(json->obj, "new-cert");
-	p->newreg = json_getstr(json->obj, "new-reg");
-	p->revokecert = json_getstr(json->obj, "revoke-cert");
-
-	return(NULL != p->newauthz &&
-	       NULL != p->newcert &&
-	       NULL != p->newreg &&
-	       NULL != p->revokecert);
-}
-
-/*
- * Free up all of our CA-noted paths (which may all be NULL).
- */
-static void
-capaths_free(struct capaths *p)
-{
-
-	free(p->newauthz);
-	free(p->newcert);
-	free(p->newreg);
-	free(p->revokecert);
 }
 
 static int
@@ -573,7 +352,7 @@ netproc(int certsock, int acctsock,
 	size_t		 retry;
 	char		*home, *cert, *req, *reqsn, *thumb;
 	CURL		*c;
-	struct json	 json;
+	struct json	*json;
 	struct capaths	 paths;
 	struct challenge chng;
 	long		 http, op;
@@ -634,17 +413,17 @@ netproc(int certsock, int acctsock,
 	home = NULL;
 
 	/* Zero all the things. */
-	memset(&json, 0, sizeof(struct json));
 	memset(&paths, 0, sizeof(struct capaths));
 	memset(&chng, 0, sizeof(struct challenge));
 	reqsn = req = cert = thumb = NULL;
+	json = NULL;
 	c = NULL;
 
 	if (NULL == (c = curl_easy_init())) {
 		dowarn("curl_easy_init");
 		goto out;
-	} else if ( ! json_init(&json)) {
-		dowarnx("json_init");
+	} else if (NULL == (json = json_alloc())) {
+		dowarnx("json_alloc");
 		goto out;
 	}
 
@@ -654,16 +433,13 @@ netproc(int certsock, int acctsock,
 	 */
 	dodbg("%s: requesting directories", URL_CA);
 
-	if ( ! nreq(c, URL_CA, &http, &json)) {
+	if ( ! nreq(c, URL_CA, &http, json)) {
 		dowarnx("%s: bad communication", URL_CA);
 		goto out;
 	} else if (200 != http && 201 != http) {
 		dowarnx("%s: bad communication", URL_CA);
 		goto out;
-	} else if (NULL == json.obj) {
-		dowarnx("%s: bad JSON", URL_CA);
-		goto out;
-	} else if ( ! capaths_parse(&json, &paths)) {
+	} else if ( ! json_parse_capaths(json, &paths)) {
 		dowarnx("%s: bad CA paths", URL_CA);
 		goto out;
 	}
@@ -682,7 +458,7 @@ netproc(int certsock, int acctsock,
 			goto out;
 		} 
 		/* Send the request... */
-		if ( ! sreq(acctsock, c, paths.newreg, req, &http, &json)) {
+		if ( ! sreq(acctsock, c, paths.newreg, req, &http, json)) {
 			dowarnx("%s: bad communication", paths.newreg);
 			goto out;
 		} else if (200 != http && 201 != http) {
@@ -709,13 +485,13 @@ netproc(int certsock, int acctsock,
 		goto out;
 	} 
 	
-	if ( ! sreq(acctsock, c, paths.newauthz, req, &http, &json)) {
+	if ( ! sreq(acctsock, c, paths.newauthz, req, &http, json)) {
 		dowarnx("%s: bad communication", paths.newauthz);
 		goto out;
 	} else if (200 != http && 201 != http) {
 		dowarnx("%s: bad HTTP: %ld", paths.newauthz, http);
 		goto out;
-	} else if ( ! challenge_parse(&json, &chng)) {
+	} else if ( ! json_parse_challenge(json, &chng)) {
 		dowarnx("%s: bad challenge", paths.newauthz);
 		goto out;
 	}
@@ -766,13 +542,13 @@ netproc(int certsock, int acctsock,
 		goto out;
 	}
 
-	if ( ! sreq(acctsock, c, chng.uri, req, &http, &json)) {
+	if ( ! sreq(acctsock, c, chng.uri, req, &http, json)) {
 		dowarnx("%s: bad communication", chng.uri);
 		goto out;
 	} else if (200 != http && 201 != http && 202 != http) {
 		dowarnx("%s: bad HTTP: %ld", chng.uri, http);
 		goto out;
-	} else if (-1 == (cc = response_parse(&json))) {
+	} else if (-1 == (cc = json_parse_response(json))) {
 		dowarnx("%s: bad response", chng.uri);
 		goto out;
 	}
@@ -782,13 +558,13 @@ netproc(int certsock, int acctsock,
 	 * Try it once every ten seconds.
 	 */
 	for (retry = 0; 1 == cc && retry < 10; retry++) {
-		if ( ! nreq(c, chng.uri, &http, &json)) {
+		if ( ! nreq(c, chng.uri, &http, json)) {
 			dowarnx("%s: bad communication", chng.uri);
 			goto out;
 		} else if (200 != http && 201 != http && 202 != http) {
 			dowarnx("%s: bad HTTP: %ld", chng.uri, http);
 			goto out;
-		} else if (-1 == (cc = response_parse(&json))) {
+		} else if (-1 == (cc = json_parse_response(json))) {
 			dowarnx("%s: bad response", chng.uri);
 			goto out;
 		} else if (1 == cc) {
@@ -835,9 +611,9 @@ out:
 	if (NULL != c)
 		curl_easy_cleanup(c);
 	curl_global_cleanup();
-	json_free(&json);
-	challenge_free(&chng);
-	capaths_free(&paths);
+	json_free(json);
+	json_free_challenge(&chng);
+	json_free_capaths(&paths);
 	if (EXIT_SUCCESS == rc)
 		dodbg("finished");
 	else
