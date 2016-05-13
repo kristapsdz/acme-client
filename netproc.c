@@ -370,6 +370,19 @@ json_free(struct json *json)
 	json->obj = NULL;
 }
 
+static int
+response_parse(struct json *json)
+{
+	char		*resp;
+	int		 rc;
+
+	if (NULL == (resp = json_getstr(json->obj, "status")))
+		return(-1);
+	rc = 0 == strcmp(resp, "pending");
+	free(resp);
+	return(rc);
+}
+
 /*
  * Parse the response from a new-authz, which consists of challenge
  * information, into a structure.
@@ -527,6 +540,7 @@ netproc(int certsock, int acctsock,
 {
 	pid_t		 pid;
 	int		 st, rc, cc;
+	size_t		 retry;
 	char		*home, *cert, *req, *reqsn, *thumb;
 	CURL		*c;
 	CURLcode	 res;
@@ -685,6 +699,8 @@ netproc(int certsock, int acctsock,
 		dowarnx("%s: bad challenge", paths.newauthz);
 		goto out;
 	}
+	free(req);
+	req = NULL;
 
 	/*
 	 * We now have our challenge.
@@ -717,10 +733,59 @@ netproc(int certsock, int acctsock,
 	else if (LONG_MAX == op)
 		goto out;
 
+	/* 
+	 * Now that our challenge is in place (and the webserver, I
+	 * suppose, configured to handle it), we let the ACME server
+	 * know that we have the challenge ready.
+	 */
+	cc = asprintf(&req, "{\"resource\": \"challenge\", "
+		"\"keyAuthorization\": \"%s.%s\"}",
+		chng.token, thumb);
+	if (-1 == cc) {
+		dowarn("asprintf");
+		goto out;
+	}
+
+	if ( ! sreq(acctsock, c, chng.uri, req, &http, &json)) {
+		dowarnx("%s: bad communication", chng.uri);
+		goto out;
+	} else if (200 != http && 201 != http) {
+		dowarnx("%s: bad HTTP: %ld", chng.uri, http);
+		goto out;
+	} else if ( ! challenge_parse(&json, &chng)) {
+		dowarnx("%s: bad challenge", chng.uri);
+		goto out;
+	}
+
+	/*
+	 * We now wait on the ACME server.
+	 * Try it once every ten seconds.
+	 */
+	for (retry = 0, cc = 1; 1 == cc && retry < 10; retry++) {
+		if ( ! sreq(acctsock, c, chng.uri, req, &http, &json)) {
+			dowarnx("%s: bad communication", chng.uri);
+			goto out;
+		} else if (200 != http && 201 != http) {
+			dowarnx("%s: bad HTTP: %ld", chng.uri, http);
+			goto out;
+		} else if (-1 == (cc = response_parse(&json))) {
+			dowarnx("%s: bad response", chng.uri);
+			goto out;
+		} else if (1 == cc) {
+			dodbg("%s: sleeping til retry", chng.uri);
+			sleep(5);
+		}
+	}
+
 	/* Write our acknowledgement that the challenge is over. */
 
 	if ( ! writeop(SUB, chngsock, COMM_CHNG_FIN, 1))
 		goto out;
+
+	if (10 == retry) {
+		dowarnx("%s: timed out (%zu tries)", chng.uri, retry);
+		goto out;
+	}
 
 	/*
 	 * Now wait until we've received the certificate we want to send
