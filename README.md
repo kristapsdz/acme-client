@@ -12,17 +12,23 @@ See [letsencrypt.1](blob/master/letsencrypt.1) for complete documentation.
 To use letskencrypt, just download and run `make` and `make install` in
 the usual way.
 The software has been designed with [OpenBSD](http://www.openbsd.org) in
-mind, though it works (with reduced security) on Mac OS X too and
+mind, though it works with reduced security on Mac OS X and
 on Linux with even more reduced security.
-This is due to the inherent weaknesses or complexities, respectively, of
-these systems' sandboxing mechanisms.
+This is due to the weaknesses or complexities, respectively, of these
+systems' sandboxing mechanisms.
 
-I really don't recommend using any platform but OpenBSD.
+I can't recommend using any platform but OpenBSD.
+
+If you're running on Linux, youll need to edit the
+[Makefile](blob/master/Makefile) as noted.  I only tested this on
+Debian.
 
 The software has several compile-time dependencies:
-(OpenSSL)[https://openssl.org] or (LibreSSL)[http://www.libressl.org/], 
-(libcurl)[https://curl.haxx.se/libcurl/], and
-(json-c)[https://github.com/json-c/json-c].
+[OpenSSL](https://openssl.org) or [LibreSSL](http://www.libressl.org), 
+[libcurl](https://curl.haxx.se/libcurl), and
+[json-c](https://github.com/json-c/json-c).
+For Linux, you'll also need 
+[libbsd](https://libbsd.freedesktop.org).
 
 ## License
 
