@@ -37,7 +37,8 @@
 #else
 # define URL_CA "https://acme-staging.api.letsencrypt.org/directory"
 #endif
-#define URL_LICENSE "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf"
+#define URL_LICENSE "https://letsencrypt.org" \
+		    "/documents/LE-SA-v1.0.1-July-27-2015.pdf"
 
 #define	RETRY_DELAY 5
 #define RETRY_MAX 10
@@ -48,7 +49,7 @@ struct	buf {
 };
 
 /*
- * Clean up the netproc() environment as created with netprepare().
+ * Clean up the environment.
  * This will only have one file in it (within one directory).
  * This allows for errors and frees "dir" on exit.
  */
@@ -61,6 +62,7 @@ netcleanup(char *dir)
 		return;
 
 	/* Start with the jail's resolv.conf. */
+
 	if (-1 == asprintf(&tmp, "%s" PATH_RESOLV, dir)) {
 		dowarn("asprintf");
 		tmp = NULL;
@@ -70,6 +72,7 @@ netcleanup(char *dir)
 	free(tmp);
 
 	/* Now the etc directory containing the resolv. */
+
 	if (-1 == asprintf(&tmp, "%s/etc", dir)) {
 		dowarn("asprintf");
 		tmp = NULL;
@@ -79,6 +82,7 @@ netcleanup(char *dir)
 	free(tmp);
 
 	/* Finally, the jail itself. */
+
 	if (-1 == remove(dir) && ENOENT != errno)
 		dowarn("%s", dir);
 
@@ -91,6 +95,8 @@ netcleanup(char *dir)
  * /etc/resolv.conf from the host.
  * This file is used by the DNS resolver and is the only file necessary
  * within the chroot.
+ * This doesn't work with Mac OS X.
+ * Returns NULL on failure, else the new root.
  */
 static char *
 netprepare(void)
@@ -113,6 +119,7 @@ netprepare(void)
 	}
 
 	/* Create the /etc directory. */
+
 	if (-1 == asprintf(&tmp, "%s/etc", dir)) {
 		dowarn("asprintf");
 		goto err;
@@ -124,14 +131,14 @@ netprepare(void)
 	free(tmp);
 	tmp = NULL;
 
-	/* Open /etc/resolv.conf. */
+	/* Open /etc/resolv.conf and get ready. */
+
 	fd2 = open(PATH_RESOLV, O_RDONLY, 0);
 	if (-1 == fd2) {
 		dowarn(PATH_RESOLV);
 		goto err;
 	}
 
-	/* Create the new /etc/resolv.conf file. */
 	oflags = O_CREAT|O_TRUNC|O_WRONLY|O_APPEND;
 	if (-1 == asprintf(&tmp, "%s" PATH_RESOLV, dir)) {
 		dowarn("asprintf");
@@ -142,6 +149,7 @@ netprepare(void)
 	}
 
 	/* Copy via a static buffer. */
+
 	while ((ssz = read(fd2, dbuf, sizeof(dbuf))) > 0) {
 		if ((ssz2 = write(fd, dbuf, ssz)) < 0) {
 			dowarn("%s", tmp);
@@ -170,6 +178,10 @@ err:
 	return(NULL);
 }
 
+/*
+ * Handling non-JSON HTTP body contents.
+ * This is, for the time being, a DER-encoded key.
+ */
 static size_t 
 netbody(void *ptr, size_t sz, size_t nm, void *arg)
 {
@@ -194,6 +206,7 @@ netbody(void *ptr, size_t sz, size_t nm, void *arg)
 
 /*
  * Look for, extract, and duplicate the Replay-Nonce header.
+ * Ignore all other headers.
  */
 static size_t 
 netheaders(void *ptr, size_t sz, size_t nm, void *arg)
@@ -216,6 +229,10 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 	return(nsz);
 }
 
+/*
+ * Send a "regular" HTTP GET message to "addr".
+ * On non-zero return, stuffs the HTTP code into "code".
+ */
 static int
 nreq(CURL *c, const char *addr, long *code, struct json *json)
 {
@@ -242,12 +259,12 @@ nreq(CURL *c, const char *addr, long *code, struct json *json)
 
 /*
  * Create and send a signed communication to the ACME server.
- * We'll use the acctproc to sign the message for us.
- * We'll unconditionally download any returned body (which is always
- * JSON) into the json object.
+ * On non-zero return, stuffs the HTTP response into "code".
+ * If json is non-NULL, it's used to store any response body; if NULL
+ * and buf is non-NULL, buf is used as an opaque buffer.
  */
 static int
-sreq(int acctsock, CURL *c, const char *addr, const char *req, 
+sreq(int fd, CURL *c, const char *addr, const char *req, 
 	long *code, struct json *json, struct buf *buf)
 {
 	char		*nonce, *reqsn;
@@ -255,14 +272,8 @@ sreq(int acctsock, CURL *c, const char *addr, const char *req,
 
 	nonce = NULL;
 
-	/*
-	 * Grab our nonce.
-	 * Do this before getting any of our account information.
-	 * We specifically do only a HEAD request because all we want to
-	 * do is grab a single field.
-	 * We'll also grab the JSON content of the message, which has a
-	 * directory of all the bits that we want.
-	 */
+	/* Grab our nonce by querying the CA. */
+
 	curl_easy_reset(c);
 	curl_easy_setopt(c, CURLOPT_URL, URL_CA);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
@@ -284,22 +295,24 @@ sreq(int acctsock, CURL *c, const char *addr, const char *req,
 	 * Send the nonce and request payload to the acctproc.
 	 * This will create the proper JSON object we need.
 	 */
-	if ( ! writeop(acctsock, COMM_ACCT, ACCT_SIGN)) {
+
+	if ( ! writeop(fd, COMM_ACCT, ACCT_SIGN)) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestr(acctsock, COMM_PAY, req)) {
+	} else if ( ! writestr(fd, COMM_PAY, req)) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestr(acctsock, COMM_NONCE, nonce)) {
+	} else if ( ! writestr(fd, COMM_NONCE, nonce)) {
 		free(nonce);
 		return(0);
 	}
 	free(nonce);
-	if (NULL == (reqsn = readstr(acctsock, COMM_REQ)))
+	if (NULL == (reqsn = readstr(fd, COMM_REQ)))
 		return(0);
 
-	if (NULL != json)
-		json_reset(json);
+	/* Now send the signed payload to the CA. */
+
+	json_reset(json);
 	curl_easy_reset(c);
 	curl_easy_setopt(c, CURLOPT_URL, addr);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
@@ -327,32 +340,196 @@ sreq(int acctsock, CURL *c, const char *addr, const char *req,
 }
 
 /*
+ * Send to the CA that we want to authorise a new account.
+ * This only happens once for a new account key.
+ * Returns non-zero on success.
+ */
+static int
+donewreg(CURL *c, int fd, struct json *json, const struct capaths *p)
+{
+	int	 cc, rc;
+	char	*req;
+	long	 lc;
+
+	cc = asprintf(&req, "{\"resource\": \"new-reg\", "
+		"\"agreement\": \"%s\"}", URL_LICENSE);
+	if (-1 == cc) {
+		dowarn("asprintf");
+		return(0);
+	} 
+	
+	rc = 0;
+	dodbg("%s: new-reg", p->newreg);
+	if ( ! sreq(fd, c, p->newreg, req, &lc, json, NULL))
+		dowarnx("%s: bad comm", p->newreg);
+	else if (200 != lc && 201 != lc)
+		dowarnx("%s: bad HTTP: %ld", p->newreg, lc);
+	else
+		rc = 1;
+
+	free(req);
+	return(rc);
+}
+
+/*
+ * Request a challenge for the given domain name.
+ * This must happen for each name "alt".
+ * On non-zero exit, fills in "chng" with the challenge.
+ */
+static int
+dochngreq(CURL *c, int fd, struct json *json, 
+	const char *alt, struct chng *chng, const struct capaths *p)
+{
+	int	 cc, rc;
+	char	*req;
+	long	 lc;
+
+	cc = asprintf(&req, 
+		"{\"resource\": \"new-authz\", \"identifier\": "
+		"{\"type\": \"dns\", \"value\": \"%s\"}}", alt);
+	if (-1 == cc) {
+		dowarn("asprintf");
+		return(0);
+	} 
+
+	rc = 0;
+	dodbg("%s: req-auth: %s", p->newauthz, alt);
+	if ( ! sreq(fd, c, p->newauthz, req, &lc, json, NULL))
+		dowarnx("%s: bad comm", p->newauthz);
+	else if (200 != lc && 201 != lc)
+		dowarnx("%s: bad HTTP: %ld", p->newauthz, lc);
+	else if ( ! json_parse_challenge(json, chng)) 
+		dowarnx("%s: bad challenge", p->newauthz);
+	else
+		rc = 1;
+
+	free(req);
+	return(rc);
+}
+
+/*
+ * Note to the CA that a challenge response is in place.
+ */
+static int
+dochngresp(CURL *c, int fd, struct json *json, 
+	const struct chng *chng, const char *th)
+{
+	int	 cc, rc;
+	long	 lc;
+	char	*req;
+
+	cc = asprintf(&req, "{\"resource\": \"challenge\", "
+		"\"keyAuthorization\": \"%s.%s\"}", chng->token, th);
+	if (-1 == cc) {
+		dowarn("asprintf");
+		return(0);
+	}
+
+	rc = 0;
+	dodbg("%s: challenge", chng->uri);
+
+	if ( ! sreq(fd, c, chng->uri, req, &lc, json, NULL))
+		dowarnx("%s: bad comm", chng->uri);
+	else if (200 != lc && 201 != lc && 202 != lc) 
+		dowarnx("%s: bad HTTP: %ld", chng->uri, lc);
+	else if (-1 == (cc = json_parse_response(json))) 
+		dowarnx("%s: bad response", chng->uri);
+	else
+		rc = 1;
+
+	free(req);
+	return(rc);
+}
+
+/*
+ * Check with the CA whether a challenge has been processed.
+ * Note: we'll only do this a limited number of times, and pause for a
+ * time between checks, but this happens in the caller.
+ */
+static int
+dochngcheck(CURL *c, struct json *json, struct chng *chng)
+{
+	int	 cc;
+	long	 lc;
+
+	dodbg("%s: status", chng->uri);
+
+	if ( ! nreq(c, chng->uri, &lc, json)) {
+		dowarnx("%s: bad comm", chng->uri);
+		return(0);
+	} else if (200 != lc && 201 != lc && 202 != lc) {
+		dowarnx("%s: bad HTTP: %ld", chng->uri, lc);
+		return(0);
+	} else if (-1 == (cc = json_parse_response(json))) {
+		dowarnx("%s: bad response", chng->uri);
+		return(0);
+	} else if (0 == cc)
+		chng->status = 1;
+
+	return(1);
+}
+
+/*
+ * Submit our certificate to the CA.
+ * This, upon success, will return the signed CA.
+ */
+static int
+docert(CURL *c, int fd, const char *addr, 
+	struct buf *buf, const char *cert)
+{
+	char	*req;
+	int	 cc, rc;
+	long	 lc;
+
+	cc = asprintf(&req, "{\"resource\": \"new-cert\", "
+		"\"csr\": \"%s\"}", cert);
+	if (-1 == cc) {
+		dowarn("asprintf");
+		return(0);
+	}
+
+	rc = 0;
+	dodbg("%s: certificate", addr);
+
+	if ( ! sreq(fd, c, addr, req, &lc, NULL, buf))
+		dowarnx("%s: bad comm", addr);
+	else if (200 != lc && 201 != lc)
+		dowarnx("%s: bad HTTP: %ld", addr, lc);
+	else if (0 == buf->sz || NULL == buf->buf)
+		dowarnx("%s: empty response", addr);
+	else
+		rc = 1;
+
+	free(req);
+	return(rc);
+}
+
+/*
  * Here we communicate with the letsencrypt server.
  * For this, we'll need the certificate we want to upload and our
  * account key information.
  */
 int
-netproc(int keysock, int acctsock, int chngsock, 
-	int certsock, int newacct, const char *domain, 
-	const char **alts, size_t altsz)
+netproc(int kfd, int afd, int Cfd, int cfd, int newacct, 
+	const char *const *alts, size_t altsz)
 {
 	pid_t		 pid;
-	int		 st, rc, cc;
-	size_t		 retry;
+	int		 st, rc;
+	size_t		 i;
 	char		*home, *cert, *req, *reqsn, *thumb;
 	CURL		*c;
 	struct buf	 buf;
 	struct json	*json;
 	struct capaths	 paths;
-	struct challenge chng;
+	struct chng 	*chngs;
 	long		 http, op;
 	extern enum comp proccomp;
 
 	proccomp = COMP_NET;
-
 	rc = EXIT_FAILURE;
 
 	/* Prepare our file-system jail. */
+
 	if (NULL == (home = netprepare()))
 		return(0);
 
@@ -365,15 +542,11 @@ netproc(int keysock, int acctsock, int chngsock,
 		doerr("fork");
 
 	if (pid > 0) {
-		/* 
-		 * XXX: we need to keep the privileges of this one open
-		 * so we can clear the environment of the child once it
-		 * has exited.
-		 */
-		close(keysock);
-		close(acctsock);
-		close(chngsock);
-		close(certsock);
+		/* XXX: keep privileges to netcleanup(). */
+		close(kfd);
+		close(afd);
+		close(Cfd);
+		close(cfd);
 		if (-1 == waitpid(pid, &st, 0))
 			doerr("waitpid");
 		netcleanup(home);
@@ -382,26 +555,15 @@ netproc(int keysock, int acctsock, int chngsock,
 	}
 
 #ifdef __APPLE__
-	/*
-	 * Apple's sandbox doesn't help much here.
-	 * Ideally, we'd just use pure computation--but again (as in the
-	 * keyproc() case), we wouldn't be able to chroot.
-	 * So just mark that we can't scribble in our chroot.
-	 */
 	if (-1 == sandbox_init(kSBXProfileNoWrite, 
  	    SANDBOX_NAMED, NULL))
 		doerr("sandbox_init");
 #endif
-
 	/*
-	 * We're doing the work.
-	 * Begin by stuffing ourselves into the jail.
-	 */
-#ifndef __APPLE__
-	/*
-	 * This doesn't work on Apple: it uses a socket for DNS
+	 * The chroot() doesn't work on Apple: it uses a socket for DNS
 	 * resolution that lives in /var/run and not resolv.conf.
 	 */
+#ifndef __APPLE__
 	if (-1 == chroot(home))
 		doerr("%s: chroot", home);
 	else if (-1 == chdir("/"))
@@ -413,13 +575,19 @@ netproc(int keysock, int acctsock, int chngsock,
 
 	/* Zero all the things. */
 	memset(&paths, 0, sizeof(struct capaths));
-	memset(&chng, 0, sizeof(struct challenge));
 	memset(&buf, 0, sizeof(struct buf));
 	reqsn = req = cert = thumb = NULL;
 	json = NULL;
 	c = NULL;
+	chngs = NULL;
 
-	if (NULL == (c = curl_easy_init())) {
+	/* Allocate main state. */
+
+	chngs = calloc(altsz, sizeof(struct chng));
+	if (NULL == chngs) {
+		dowarn("calloc");
+		goto out;
+	} else if (NULL == (c = curl_easy_init())) {
 		dowarn("curl_easy_init");
 		goto out;
 	} else if (NULL == (json = json_alloc())) {
@@ -427,208 +595,117 @@ netproc(int keysock, int acctsock, int chngsock,
 		goto out;
 	}
 
-	/*
-	 * Grab the directory structure from the CA.
-	 * This initialises our contact with the CA, too.
-	 */
-	dodbg("%s: requesting directories", URL_CA);
+	/* Grab the directory structure from the CA. */
 
+	dodbg("%s: requesting directories", URL_CA);
 	if ( ! nreq(c, URL_CA, &http, json)) {
-		dowarnx("%s: bad communication", URL_CA);
+		dowarnx("%s: bad comm", URL_CA);
 		goto out;
 	} else if (200 != http && 201 != http) {
-		dowarnx("%s: bad communication", URL_CA);
+		dowarnx("%s: bad HTTP: %ld", URL_CA, http);
 		goto out;
 	} else if ( ! json_parse_capaths(json, &paths)) {
 		dowarnx("%s: bad CA paths", URL_CA);
 		goto out;
 	}
 
-	/*
-	 * If we're a new account, register the account with the ACME
-	 * server.
-	 * This will return an HTTP 201 on success, although we catch an
-	 * error 200 as well just in case.
-	 */
-	if (newacct) {
-		dodbg("%s: new registration", paths.newreg);
-		cc = asprintf(&req, "{\"resource\": \"new-reg\", "
-			"\"agreement\": \"%s\"}", URL_LICENSE);
-		if (-1 == cc) {
-			dowarn("asprintf");
-			goto out;
-		} 
-		/* Send the request... */
-		if ( ! sreq(acctsock, c, paths.newreg, req, &http, json, NULL)) {
-			dowarnx("%s: bad communication", paths.newreg);
-			goto out;
-		} else if (200 != http && 201 != http) {
-			dowarnx("%s: bad HTTP: %ld", 
-				paths.newreg, http);
-			goto out;
-		}
-	}
+	/* If new, register with the CA server. */
 
-	dodbg("%s: requesting authorisation", paths.newauthz);
+	if (newacct && ! donewreg(c, afd, json, &paths))
+		goto out;
+
+	/* Pre-authorise all domains with CA server. */
+
+	for (i = 0; i < altsz; i++)
+		if ( ! dochngreq(c, afd, json, 
+		    alts[i], &chngs[i], &paths))
+			goto out;
 
 	/*
-	 * Set up to ask the acme server to authorise a domain.
-	 * First, we prepare the request itself.
-	 * Then we ask acctproc to sign it for us.
-	 * Then we send that to the request server and receive from it
-	 * the challenge response.
-	 */
-	cc = asprintf(&req, 
-    		"{\"resource\": \"new-authz\", "
-		"\"identifier\": "
-		"{\"type\": \"dns\", \"value\": \"%s\"}}",
-		domain);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		goto out;
-	} 
-	
-	if ( ! sreq(acctsock, c, paths.newauthz, req, &http, json, NULL)) {
-		dowarnx("%s: bad communication", paths.newauthz);
-		goto out;
-	} else if (200 != http && 201 != http) {
-		dowarnx("%s: bad HTTP: %ld", paths.newauthz, http);
-		goto out;
-	} else if ( ! json_parse_challenge(json, &chng)) {
-		dowarnx("%s: bad challenge", paths.newauthz);
-		goto out;
-	}
-	free(req);
-	req = NULL;
-
-	/*
-	 * We now have our challenge.
+	 * We now have our challenges.
 	 * We need to ask the acctproc for the thumbprint.
 	 * We'll combine this to the challenge to create our response,
 	 * which will be orchestrated by the chngproc.
 	 */
-	if ( ! writeop(acctsock, COMM_ACCT, ACCT_THUMBPRINT))
+
+	if ( ! writeop(afd, COMM_ACCT, ACCT_THUMBPRINT))
 		goto out;
-	else if (NULL == (thumb = readstr(acctsock, COMM_THUMB)))
+	else if (NULL == (thumb = readstr(afd, COMM_THUMB)))
 		goto out;
 
 	/*
-	 * We now have our thumbprint and the challenge token.
-	 * Write it to the chngproc.
+	 * We'll now create the challenge area for each request.
+	 * Following that, we'll send to the CA that the challenge is
+	 * ready to be accessed.
 	 */
-	if ( ! writeop(chngsock, COMM_CHNG, 1))
-		goto out;
-	else if ( ! writestr(chngsock, COMM_THUMB, thumb))
-		goto out;
-	else if ( ! writestr(chngsock, COMM_TOK, chng.token))
-		goto out;
 
-	/* Read our acknowledgement that the challenge exists. */
+	for (i = 0; i < altsz; i++)
+		if ( ! writeop(Cfd, COMM_CHNG_OP, 1))
+			goto out;
+		else if ( ! writestr(Cfd, COMM_THUMB, thumb))
+			goto out;
+		else if ( ! writestr(Cfd, COMM_TOK, chngs[i].token))
+			goto out;
+		else if (0 == (op = readop(Cfd, COMM_CHNG_ACK)))
+			goto out;
+		else if (LONG_MAX == op)
+			goto out;
+		else if ( ! dochngresp(c, afd, json, &chngs[i], thumb))
+			goto out;
 
-	if (0 == (op = readop(chngsock, COMM_CHNG_ACK)))
-		goto out;
-	else if (LONG_MAX == op)
-		goto out;
+	/*
+	 * We now wait on the ACME server for each domain.
+	 * Connect to the server (assume it's the same server) once
+	 * every five seconds.
+	 */
+
+	for (i = 0; i < altsz; i++) {
+		if (1 == chngs[i].status)
+			continue;
+
+		if (chngs[i].retry++ >= RETRY_MAX) {
+			dowarnx("%s: too many tries", chngs[i].uri);
+			goto out;
+		}
+
+		/* Sleep before every attempt. */
+		sleep(RETRY_DELAY);
+		if ( ! dochngcheck(c, json, &chngs[i]))
+			goto out;
+	}
 
 	/* 
-	 * Now that our challenge is in place (and the webserver, I
-	 * suppose, configured to handle it), we let the ACME server
-	 * know that we have the challenge ready.
+	 * Write our acknowledgement that the challenges are over.
+	 * The challenge process will remove all of the files.
 	 */
-	cc = asprintf(&req, "{\"resource\": \"challenge\", "
-		"\"keyAuthorization\": \"%s.%s\"}",
-		chng.token, thumb);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		goto out;
-	}
 
-	if ( ! sreq(acctsock, c, chng.uri, req, &http, json, NULL)) {
-		dowarnx("%s: bad communication", chng.uri);
+	if ( ! writeop(Cfd, COMM_CHNG_OP, 0))
 		goto out;
-	} else if (200 != http && 201 != http && 202 != http) {
-		dowarnx("%s: bad HTTP: %ld", chng.uri, http);
-		goto out;
-	} else if (-1 == (cc = json_parse_response(json))) {
-		dowarnx("%s: bad response", chng.uri);
-		goto out;
-	}
-
-	/*
-	 * We now wait on the ACME server.
-	 * Try it once every ten seconds.
-	 */
-	for (retry = 0; 1 == cc && retry < RETRY_MAX; retry++) {
-		dodbg("%s: checking challenge status", chng.uri);
-		if ( ! nreq(c, chng.uri, &http, json)) {
-			dowarnx("%s: bad communication", chng.uri);
-			goto out;
-		} else if (200 != http && 201 != http && 202 != http) {
-			dowarnx("%s: bad HTTP: %ld", chng.uri, http);
-			goto out;
-		} else if (-1 == (cc = json_parse_response(json))) {
-			dowarnx("%s: bad response", chng.uri);
-			goto out;
-		} else if (1 == cc)
-			sleep(RETRY_DELAY);
-	}
-
-	/* Write our acknowledgement that the challenge is over. */
-
-	if ( ! writeop(chngsock, COMM_CHNG_FIN, 1))
-		goto out;
-
-	if (RETRY_MAX == retry) {
-		dowarnx("%s: timed out (%zu tries)", chng.uri, retry);
-		goto out;
-	}
 
 	/*
 	 * Now wait until we've received the certificate we want to send
-	 * to the letsencrypt server.
-	 * This will come from our key process.
+	 * to the letsencrypt server; and once we have it, we send it to
+	 * the CA for signing, download the signed copy, and ship that
+	 * into the certificate process for copying.
 	 */
-	if (NULL == (cert = readstr(keysock, COMM_CERT)))
-		goto out;
 
-	close(keysock);
-	keysock = -1;
-
-	dodbg("%s: submitting certificate", paths.newcert);
-
-	/*
-	 * Last but not least, we want to send the certificate to the CA
-	 * in order to sign it and retur it to us.
-	 */
-	cc = asprintf(&req, 
-		"{\"resource\": \"new-cert\", \"csr\": \"%s\"}", cert);
-	if (-1 == cc) {
-		dowarn("asprintf");
+	if (NULL == (cert = readstr(kfd, COMM_CERT)))
 		goto out;
-	}
-
-	if ( ! sreq(acctsock, c, paths.newcert, req, &http, NULL, &buf)) {
-		dowarnx("%s: bad communication", paths.newcert);
+	else if ( ! docert(c, afd, paths.newcert, &buf, cert)) 
 		goto out;
-	} else if (200 != http && 201 != http) {
-		dowarnx("%s: bad HTTP: %ld", paths.newcert, http);
-		goto out;
-	} else if (0 == buf.sz || NULL == buf.buf) {
-		dowarnx("%s: empty response", paths.newcert);
-		goto out;
-	} else if ( ! writebuf(certsock, COMM_CSR, buf.buf, buf.sz))
+	else if ( ! writebuf(cfd, COMM_CSR, buf.buf, buf.sz))
 		goto out;
 
 	rc = EXIT_SUCCESS;
 out:
-	if (-1 != certsock)
-		close(certsock);
-	if (-1 != keysock)
-		close(keysock);
-	if (-1 != acctsock)
-		close(acctsock);
-	if (-1 != chngsock)
-		close(chngsock);
+	if (-1 != cfd)
+		close(cfd);
+	if (-1 != kfd)
+		close(kfd);
+	if (-1 != afd)
+		close(afd);
+	if (-1 != Cfd)
+		close(Cfd);
 	free(cert);
 	free(req);
 	free(reqsn);
@@ -638,7 +715,9 @@ out:
 		curl_easy_cleanup(c);
 	curl_global_cleanup();
 	json_free(json);
-	json_free_challenge(&chng);
+	for (i = 0; i < altsz; i++)
+		json_free_challenge(&chngs[i]);
+	free(chngs);
 	json_free_capaths(&paths);
 	exit(rc);
 	/* NOTREACHED */

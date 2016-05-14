@@ -32,16 +32,21 @@
 int
 chngproc(int netsock, const char *root)
 {
-	int		 rc;
-	long		 op;
-	char		*tok, *thumb;
-	FILE		*f;
-	extern enum comp proccomp;
+	int		  rc;
+	long		  op;
+	char		 *tok, *thumb;
+	char		**fs;
+	size_t		  i, fsz;
+	void		 *pp;
+	FILE		 *f;
+	extern enum comp  proccomp;
 
 	proccomp = COMP_CHALLENGE;
 	rc = 0;
 	thumb = tok = NULL;
 	f = NULL;
+	fs = NULL;
+	fsz = 0;
 
 #ifdef __APPLE__
 	/*
@@ -77,55 +82,75 @@ chngproc(int netsock, const char *root)
 		goto out;
 	}
 #endif
-	/* Wait til we're triggered to start. */
+	/* 
+	 * Loop while we wait to get a thumbprint and token.
+	 * We'll get this for each SAN request.
+	 */
+	for (;;) {
+		if (0 == (op = readop(netsock, COMM_CHNG_OP))) 
+			break;
+		else if (LONG_MAX == op)
+			goto out;
 
-	if (0 == (op = readop(netsock, COMM_CHNG))) 
-		goto out;
-	else if (LONG_MAX == op)
-		goto out;
+		/* 
+		 * Read the thumbprint and token.
+		 * The token is the filename, so store that in a vector
+		 * of tokens that we'll later clean up.
+		 */
 
-	/* Read the thumbprint and token. */
+		if (NULL == (thumb = readstr(netsock, COMM_THUMB)))
+			goto out;
+		else if (NULL == (tok = readstr(netsock, COMM_TOK)))
+			goto out;
 
-	if (NULL == (thumb = readstr(netsock, COMM_THUMB)))
-		goto out;
-	else if (NULL == (tok = readstr(netsock, COMM_TOK)))
-		goto out;
+		/* Vector appending... */
 
-	/* Create our challenge file. */
+		pp = realloc(fs, (fsz + 1) * sizeof(char *));
+		if (NULL == pp) {
+			dowarn("realloc");
+			goto out;
+		}
+		fs = pp;
+		fs[fsz] = tok;
+		tok = NULL;
+		fsz++;
 
-	if (NULL == (f = fopen(tok, "wx"))) {
-		dowarn("%s", tok);
-		goto out;
-	} else if (-1 == fprintf(f, "%s.%s", tok, thumb)) {
-		dowarn("%s", tok);
-		goto out;
-	} else if (-1 == fclose(f)) {
-		dowarn("%s", tok);
-		goto out;
+		/* Create and write to our challenge file. */
+
+		if (NULL == (f = fopen(fs[fsz - 1], "wx"))) {
+			dowarn("%s", fs[fsz - 1]);
+			goto out;
+		} if (-1 == fprintf(f, "%s.%s", fs[fsz - 1], thumb)) {
+			dowarn("%s", fs[fsz - 1]);
+			goto out;
+		} else if (-1 == fclose(f)) {
+			dowarn("%s", fs[fsz - 1]);
+			goto out;
+		}
+
+		free(thumb);
+		thumb = NULL;
+
+		dodbg("%s/%s: created", root, fs[fsz - 1]);
+		fclose(f);
+		f = NULL;
+
+		/* Write our acknowledgement. */
+
+		if ( ! writeop(netsock, COMM_CHNG_ACK, 1))
+			goto out;
 	}
-
-	dodbg("%s/%s: created", root, tok);
-	fclose(f);
-	f = NULL;
-
-	/* Write our acknowledgement. */
-
-	if ( ! writeop(netsock, COMM_CHNG_ACK, 1))
-		goto out;
-
-	/* Read that we should clean up. */
-
-	if (0 == (op = readop(netsock, COMM_CHNG_FIN))) 
-		goto out;
-	else if (LONG_MAX == op)
-		goto out;
 
 	rc = 1;
 out:
 	if (NULL != f)
 		fclose(f);
-	if (NULL != tok && -1 == remove(tok) && ENOENT != errno)
-		dowarn("%s", tok);
+	for (i = 0; i < fsz; i++) {
+		if (-1 == remove(fs[i]) && ENOENT != errno)
+			dowarn("%s", fs[i]);
+		free(fs[i]);
+	}
+	free(fs);
 	free(thumb);
 	free(tok);
 	close(netsock);

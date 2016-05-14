@@ -92,11 +92,14 @@ json_alloc(void)
  * Reset the JSON object between communications with the ACME server.
  * This should be called prior to each invocation, and can be called
  * multiple times around json_free and json_alloc.
+ * It's ok for p to be NULL.
  */
 void
 json_reset(struct json *p)
 {
 
+	if (NULL == p)
+		return;
 	json_tokener_reset(p->tok);
 	if (NULL != p->obj) {
 		json_object_put(p->obj);
@@ -108,7 +111,7 @@ json_reset(struct json *p)
  * Completely free the challeng response body.
  */
 void
-json_free_challenge(struct challenge *p)
+json_free_challenge(struct chng *p)
 {
 
 	free(p->uri);
@@ -153,7 +156,7 @@ json_parse_response(struct json *json)
  * We only care about the HTTP-01 response.
  */
 int
-json_parse_challenge(struct json *json, struct challenge *p)
+json_parse_challenge(struct json *json, struct chng *p)
 {
 	json_object	*array, *obj;
 	int		 sz, i, rc;
