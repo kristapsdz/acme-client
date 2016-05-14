@@ -303,10 +303,8 @@ acctproc(int netsock, const char *acctkey,
 	enum acctop	 op;
 	unsigned char	 rbuf[64];
 	BIGNUM		*bne;
-	extern enum comp proccomp;
 	int		 rc;
 
-	proccomp = COMP_ACCOUNT;
 	f = NULL;
 	r = NULL;
 	bne = NULL;

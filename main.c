@@ -42,6 +42,7 @@ main(int argc, char *argv[])
 	pid_t		  pids[COMP__MAX];
 	int		  c, rc, newacct;
 	extern int	  verbose;
+	extern enum comp  proccomp;
 	size_t		  i, altsz;
 	const char	**alts;
 	struct passwd	 *passent;
@@ -137,6 +138,7 @@ main(int argc, char *argv[])
 		close(acct_fds[0]);
 		close(chng_fds[0]);
 		close(cert_fds[0]);
+		proccomp = COMP_NET;
 		c = netproc(key_fds[1], acct_fds[1], 
 			chng_fds[1], cert_fds[1], newacct,
 			nobody_uid, nobody_gid,
@@ -158,6 +160,7 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_KEY]) {
 		close(acct_fds[0]);
 		close(chng_fds[0]);
+		proccomp = COMP_KEY;
 		c = keyproc(key_fds[0], keyfile, 
 			nobody_uid, nobody_gid, 
 			(const char **)alts, altsz);
@@ -175,6 +178,7 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_ACCOUNT]) {
 		free(alts);
 		close(chng_fds[0]);
+		proccomp = COMP_ACCOUNT;
 		c = acctproc(acct_fds[0], acctkey, 
 			newacct, nobody_uid, nobody_gid);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -189,6 +193,7 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_CHALLENGE]) {
 		free(alts);
+		proccomp = COMP_CHALLENGE;
 		c = chngproc(chng_fds[0], chngdir);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
@@ -202,6 +207,7 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_CERT]) {
 		free(alts);
+		proccomp = COMP_CERT;
 		c = certproc(cert_fds[0], certdir);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
