@@ -196,8 +196,7 @@ netbody(void *ptr, size_t sz, size_t nm, void *arg)
 	void		*pp;
 
 	nsz = sz * nm;
-	if (verbose > 1)
-		dodbg("received: [%.*s]", (int)nsz, ptr);
+	doddbg("received: [%.*s]", (int)nsz, ptr);
 	pp = realloc(buf->buf, buf->sz + nsz + 1);
 	if (NULL == pp) {
 		dowarn("realloc");
@@ -353,20 +352,16 @@ sreq(int fd, CURL *c, const char *addr, const char *req,
 static int
 donewreg(CURL *c, int fd, struct json *json, const struct capaths *p)
 {
-	int	 cc, rc;
+	int	 rc;
 	char	*req;
 	long	 lc;
 
-	cc = asprintf(&req, "{\"resource\": \"new-reg\", "
-		"\"agreement\": \"%s\"}", URL_LICENSE);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		return(0);
-	} 
-	
 	rc = 0;
 	dodbg("%s: new-reg", p->newreg);
-	if ( ! sreq(fd, c, p->newreg, req, &lc, json, NULL))
+
+	if (NULL == (req = json_fmt_newreg(URL_LICENSE)))
+		dowarnx("json_fmt_newreg");
+	else if ( ! sreq(fd, c, p->newreg, req, &lc, json, NULL))
 		dowarnx("%s: bad comm", p->newreg);
 	else if (200 != lc && 201 != lc)
 		dowarnx("%s: bad HTTP: %ld", p->newreg, lc);
@@ -386,21 +381,16 @@ static int
 dochngreq(CURL *c, int fd, struct json *json, 
 	const char *alt, struct chng *chng, const struct capaths *p)
 {
-	int	 cc, rc;
+	int	 rc;
 	char	*req;
 	long	 lc;
 
-	cc = asprintf(&req, 
-		"{\"resource\": \"new-authz\", \"identifier\": "
-		"{\"type\": \"dns\", \"value\": \"%s\"}}", alt);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		return(0);
-	} 
-
 	rc = 0;
 	dodbg("%s: req-auth: %s", p->newauthz, alt);
-	if ( ! sreq(fd, c, p->newauthz, req, &lc, json, NULL))
+
+	if (NULL == (req = json_fmt_newauthz(alt)))
+		dowarnx("json_fmt_newauthz");
+	else if ( ! sreq(fd, c, p->newauthz, req, &lc, json, NULL))
 		dowarnx("%s: bad comm", p->newauthz);
 	else if (200 != lc && 201 != lc)
 		dowarnx("%s: bad HTTP: %ld", p->newauthz, lc);
@@ -420,26 +410,19 @@ static int
 dochngresp(CURL *c, int fd, struct json *json, 
 	const struct chng *chng, const char *th)
 {
-	int	 cc, rc;
+	int	 rc;
 	long	 lc;
 	char	*req;
-
-	cc = asprintf(&req, "{\"resource\": \"challenge\", "
-		"\"keyAuthorization\": \"%s.%s\"}", chng->token, th);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		return(0);
-	}
 
 	rc = 0;
 	dodbg("%s: challenge", chng->uri);
 
-	if ( ! sreq(fd, c, chng->uri, req, &lc, json, NULL))
+	if (NULL == (req = json_fmt_challenge(chng->token, th)))
+		dowarnx("json_fmt_challenge");
+	else if ( ! sreq(fd, c, chng->uri, req, &lc, json, NULL))
 		dowarnx("%s: bad comm", chng->uri);
 	else if (200 != lc && 201 != lc && 202 != lc) 
 		dowarnx("%s: bad HTTP: %ld", chng->uri, lc);
-	else if (-1 == (cc = json_parse_response(json))) 
-		dowarnx("%s: bad response", chng->uri);
 	else
 		rc = 1;
 
@@ -484,20 +467,15 @@ docert(CURL *c, int fd, const char *addr,
 	struct buf *buf, const char *cert)
 {
 	char	*req;
-	int	 cc, rc;
+	int	 rc;
 	long	 lc;
-
-	cc = asprintf(&req, "{\"resource\": \"new-cert\", "
-		"\"csr\": \"%s\"}", cert);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		return(0);
-	}
 
 	rc = 0;
 	dodbg("%s: certificate", addr);
 
-	if ( ! sreq(fd, c, addr, req, &lc, NULL, buf))
+	if (NULL == (req = json_fmt_newcert(cert)))
+		dowarnx("json_fmt_newcert");
+	else if ( ! sreq(fd, c, addr, req, &lc, NULL, buf))
 		dowarnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc)
 		dowarnx("%s: bad HTTP: %ld", addr, lc);
@@ -652,13 +630,13 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	 */
 
 	for (i = 0; i < altsz; i++)
-		if ( ! writeop(Cfd, COMM_CHNG_OP, 1))
+		if ( ! writeop(Cfd, COMM_CHNG_OP, CHNG_SYN))
 			goto out;
 		else if ( ! writestr(Cfd, COMM_THUMB, thumb))
 			goto out;
 		else if ( ! writestr(Cfd, COMM_TOK, chngs[i].token))
 			goto out;
-		else if (0 == (op = readop(Cfd, COMM_CHNG_ACK)))
+		else if (CHNG_ACK != (op = readop(Cfd, COMM_CHNG_ACK)))
 			goto out;
 		else if (LONG_MAX == op)
 			goto out;
@@ -691,7 +669,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	 * The challenge process will remove all of the files.
 	 */
 
-	if ( ! writeop(Cfd, COMM_CHNG_OP, 0))
+	if ( ! writeop(Cfd, COMM_CHNG_OP, CHNG_STOP))
 		goto out;
 
 	/*

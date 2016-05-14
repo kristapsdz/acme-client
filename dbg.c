@@ -33,6 +33,19 @@ static	const char *const comps[COMP__MAX + 1] = {
 };
 
 static void
+dovddbg(const char *fmt, va_list ap)
+{
+	extern int	 verbose;
+	extern enum comp proccomp;
+
+	if (verbose < 2)
+		return;
+	fprintf(stderr, "%s(%u): TRACE: ", comps[proccomp], getpid());
+	vprintf(fmt, ap);
+	putchar('\n');
+}
+
+static void
 dovdbg(const char *fmt, va_list ap)
 {
 	extern int	 verbose;
@@ -129,6 +142,16 @@ dowarn(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	dovwarn(fmt, ap);
+	va_end(ap);
+}
+
+void
+doddbg(const char *fmt, ...)
+{
+	va_list	 	 ap;
+
+	va_start(ap, fmt);
+	dovddbg(fmt, ap);
 	va_end(ap);
 }
 
