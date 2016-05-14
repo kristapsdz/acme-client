@@ -50,11 +50,8 @@ certproc(int netsock, const char *certdir)
 	rc = 0;
 	f = NULL;
 	x = NULL;
-	ERR_load_crypto_strings();
 
-	/*
-	 * File-system and sandbox jailing.
-	 */
+	/* File-system and sandbox jailing. */
 
 #ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
@@ -70,6 +67,11 @@ certproc(int netsock, const char *certdir)
 		dowarn("/: chdir");
 		goto error;
 	}
+
+	/* Pre-pledge due to file access attempts. */
+
+	ERR_load_crypto_strings();
+
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio cpath wpath", NULL)) {
 		dowarn("pledge");

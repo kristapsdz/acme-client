@@ -64,7 +64,7 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
  * jail and, on success, ship it to "netsock" as an X509 request.
  */
 int
-keyproc(int netsock, const char *keyfile, const char *domain, 
+keyproc(int netsock, const char *keyfile, 
 	uid_t uid, gid_t gid, const char **alts, size_t altsz)
 {
 	char		*der64, *der, *dercp;
@@ -80,38 +80,6 @@ keyproc(int netsock, const char *keyfile, const char *domain,
 	STACK_OF(X509_EXTENSION) *exts;
 
 	proccomp = COMP_KEY;
-
-	/* Do this before we chroot()? */
-	ERR_load_crypto_strings();
-
-	/* 
-	 * Next, open our private key file.
-	 * After this, we're going to go dark.
-	 */
-	if (NULL == (f = fopen(keyfile, "r")))
-		doerr("%s", keyfile);
-
-	/*
-	 * File-system, user, and sandbox jail.
-	 */
-
-#ifdef __APPLE__
-	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
- 	    SANDBOX_NAMED, NULL))
-		doerr("sandbox_init");
-#endif
-	if (-1 == chroot(PATH_VAR_EMPTY))
-		doerr("%s: chroot", PATH_VAR_EMPTY);
-	if (-1 == chdir("/"))
-		doerr("/: chdir");
-
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio", NULL))
-		doerr("pledge");
-#endif
-	if ( ! dropprivs(uid, gid))
-		doerrx("dropprivs");
-
 	x = NULL;
 	evp = NULL;
 	r = NULL;
@@ -120,21 +88,61 @@ keyproc(int netsock, const char *keyfile, const char *domain,
 	rc = 0;
 	exts = NULL;
 
+	/* Begin by opening our key file. */
+
+	if (NULL == (f = fopen(keyfile, "r"))) {
+		dowarn("%s", keyfile);
+		goto error;
+	}
+
+	/* File-system, user, and sandbox jail. */
+
+#ifdef __APPLE__
+	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
+ 	    SANDBOX_NAMED, NULL)) {
+		dowarn("sandbox_init"); 
+		goto error;
+	}
+#endif
+	if (-1 == chroot(PATH_VAR_EMPTY)) {
+		dowarn("%s: chroot", PATH_VAR_EMPTY);
+		goto error;
+	} else if (-1 == chdir("/")) {
+		dowarn("/: chdir");
+		goto error;
+	}
+
+	/* Pre-pledge due to file access attempts. */
+
+	ERR_load_crypto_strings();
+
+#if defined(__OpenBSD__) && OpenBSD >= 201605
+	if (-1 == pledge("stdio", NULL)) {
+		dowarn("pledge");
+		goto error;
+	}
+#endif
+	if ( ! dropprivs(uid, gid))
+		goto error;
+
 	/* 
 	 * Ok, now we're dark.
 	 * Seed our PRNG with data from arc4random().
 	 * Do this until we're told it's ok and use increments of 64
 	 * bytes (arbitrarily).
 	 */
+
 	while (0 == RAND_status()) {
 		arc4random_buf(rbuf, sizeof(rbuf));
 		RAND_seed(rbuf, sizeof(rbuf));
 	}
 
 	/* 
-	 * Parse our private key from an already-open steam.
-	 * From now on, use the "error" label for errors.
+	 * Parse our private key from an already-open steam. 
+	 * Then merge the key into a abstract EVP, at which point the
+	 * memory is managed by the EVP.
 	 */
+
 	r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
 	if (NULL == r) {
 		dowarnx("%s", keyfile);
@@ -143,10 +151,6 @@ keyproc(int netsock, const char *keyfile, const char *domain,
 	fclose(f);
 	f = NULL;
 
-	/*
-	 * We're going to merge this into an EVP.
-	 * Once these succeed, the RSA key will be free'd with the EVP.
-	 */
 	if (NULL == (evp = EVP_PKEY_new())) {
 		dowarnx("EVP_PKEY_new");
 		goto error;
@@ -160,6 +164,7 @@ keyproc(int netsock, const char *keyfile, const char *domain,
 	 * Generate our certificate from the EVP public key.
 	 * Then set it as the X509 requester's key.
 	 */
+
 	if (NULL == (x = X509_REQ_new())) {
 		dowarnx("X509_new");
 		goto error;
@@ -168,15 +173,14 @@ keyproc(int netsock, const char *keyfile, const char *domain,
 		goto error;
 	}
 
-	/* 
-	 * Now specify the common name that we'll request.
-	 */
+	/* Now specify the common name that we'll request. */
+
 	if (NULL == (name = X509_NAME_new())) {
 		dowarnx("X509_NAME_new");
 		goto error;
 	} else if ( ! X509_NAME_add_entry_by_txt(name, "CN", 
-	           MBSTRING_ASC, (unsigned char *)domain, -1, -1, 0)) {
-		dowarnx("X509_NAME_add_entry_by_txt: CN=%s", domain);
+	           MBSTRING_ASC, (unsigned char *)alts[0], -1, -1, 0)) {
+		dowarnx("X509_NAME_add_entry_by_txt: CN=%s", alts[0]);
 		goto error;
 	} else if ( ! X509_REQ_set_subject_name(x, name)) {
 		dowarnx("X509_req_set_issuer_name");
@@ -190,6 +194,7 @@ keyproc(int netsock, const char *keyfile, const char *domain,
 	 * of the OpenSSL source code.
 	 * (The zeroth altname is the domain name.)
 	 */
+
 	if (altsz > 1) {
 		if (NULL == (exts = sk_X509_EXTENSION_new_null())) {
 			dowarnx("sk_X509_EXTENSION_new_null");
