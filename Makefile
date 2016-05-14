@@ -3,11 +3,11 @@ CFLAGS += -g -W -Wall -Wno-deprecated-declarations `curl-config --cflags`
 OBJS = netproc.o main.o keyproc.o acctproc.o dbg.o base64.o util.o chngproc.o json.o certproc.o
 
 # On non-Linux (Mac OS X, BSD):
-#LIBJSON = -ljson-c
+LIBJSON = -ljson-c
 
 # On Linux:
-LIBJSON = -ljson
-LIBBSD = -lbsd
+#LIBJSON = -ljson
+#LIBBSD = -lbsd
 
 letskencrypt: $(OBJS)
 	$(CC) -o $@ $(OBJS) -lssl -lcrypto `curl-config --libs` $(LIBJSON) $(LIBBSD)
