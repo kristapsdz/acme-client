@@ -187,6 +187,9 @@ It communicates with all other process using pipes.
 This process is jailed in a temporary directory in
 .Pa /tmp
 that consists only of files needed for DNS resolution.
+It drops user privileges to the
+.Dq nobody
+user.
 .It Certificate process.
 Manages public certificate files.
 This process is jailed in the certificate directory and can only create
@@ -201,6 +204,9 @@ This is used for creating the X509 request.
 After opening the private key file, this is jailed in
 .Pa /var/empty
 and sandboxed to do nothing at all.
+It drops user privileges to the
+.Dq nobody
+user.
 .It Account key process.
 Reads and parses the RSA private key for the account.
 This is responsible for signing messages submitted by the network
@@ -210,6 +216,9 @@ digests used by the challenge process.
 After opening the private key file, this is jailed in
 .Pa /var/empty
 and sandboxed to do nothing at all.
+It drops user privileges to the
+.Dq nobody
+user.
 .It Challenge process.
 This process creates and deletes challenge files.
 It is jailed in the challenge directory and sandboxed to do nothing but
@@ -243,6 +252,8 @@ of full-computation to no-network because the sandbox cannot be enacted
 within a
 .Xr chroot 2 .
 In summary, running this on Mac OS X is not advised.
-.\" .Sh BUGS
+.Sh BUGS
+The challenge and certificate processes retain their privileges, as I'm
+not sure which credentials to use otherwise.
 .\" .Sh SECURITY CONSIDERATIONS
 .\" Not used in OpenBSD.
