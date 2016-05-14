@@ -554,20 +554,24 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 		       EXIT_SUCCESS == WEXITSTATUS(st));
 	}
 
+	/*
+	 * File-system, user, and sandbox jail.
+	 */
+
 #ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoWrite, 
  	    SANDBOX_NAMED, NULL))
 		doerr("sandbox_init");
 #endif
-	/*
-	 * The chroot() doesn't work on Apple: it uses a socket for DNS
-	 * resolution that lives in /var/run and not resolv.conf.
-	 */
 #ifndef __APPLE__
 	if (-1 == chroot(home))
 		doerr("%s: chroot", home);
 	else if (-1 == chdir("/"))
 		doerr("/: chdir");
+#endif
+#if defined(__OpenBSD__) && OpenBSD >= 201605
+	if (-1 == pledge("stdio dns", NULL))
+		doerr("pledge");
 #endif
 	if ( ! dropprivs(uid, gid))
 		doerrx("dropprivs");

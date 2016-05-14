@@ -48,22 +48,17 @@ chngproc(int netsock, const char *root)
 	fs = NULL;
 	fsz = 0;
 
-#ifdef __APPLE__
 	/*
-	 * We would use "pure computation", which is correct, but then
-	 * we wouldn't be able to chroot().
-	 * This call also can't happen after the chroot(), so we're
-	 * stuck with a weaker sandbox.
+	 * File-system and sandbox jailing.
 	 */
+
+#ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL)) {
 		dowarn("sandbox_init");
 		goto out;
 	}
 #endif
-	/*
-	 * Jails: start with file-system.
-	 */
 	if (-1 == chroot(root)) {
 		dowarn("%s: chroot", root);
 		goto out;
@@ -71,17 +66,13 @@ chngproc(int netsock, const char *root)
 		dowarn("/: chdir");
 		goto out;
 	}
-
 #if defined(__OpenBSD__) && OpenBSD >= 201605
-	/* 
-	 * On OpenBSD, we won't use anything more than what we've
-	 * inherited from our open descriptors.
-	 */
 	if (-1 == pledge("stdio cpath wpath", NULL)) {
 		dowarn("pledge");
 		goto out;
 	}
 #endif
+
 	/* 
 	 * Loop while we wait to get a thumbprint and token.
 	 * We'll get this for each SAN request.

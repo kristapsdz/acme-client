@@ -298,7 +298,8 @@ out:
 }
 
 int
-acctproc(int netsock, const char *acctkey, int newacct)
+acctproc(int netsock, const char *acctkey, 
+	int newacct, uid_t uid, gid_t gid)
 {
 	FILE		*f;
 	RSA		*r;
@@ -321,34 +322,25 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	if (NULL == (f = fopen(acctkey, newacct ? "wx" : "r")))
 		doerr("%s", acctkey);
 
-#ifdef __APPLE__
 	/*
-	 * We would use "pure computation", which is correct, but then
-	 * we wouldn't be able to chroot().
-	 * This call also can't happen after the chroot(), so we're
-	 * stuck with a weaker sandbox.
+	 * File-system, user, and sandbox jailing.
 	 */
+
+#ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL))
 		doerr("sandbox_init");
 #endif
-	/*
-	 * Jails: start with file-system.
-	 * Go into the usual place.
-	 */
-	if (-1 == chroot("/var/empty"))
-		doerr("%s: chroot", "/var/empty");
+	if (-1 == chroot(PATH_VAR_EMPTY))
+		doerr("%s: chroot", PATH_VAR_EMPTY);
 	if (-1 == chdir("/"))
 		doerr("/: chdir");
-
 #if defined(__OpenBSD__) && OpenBSD >= 201605
-	/* 
-	 * On OpenBSD, we won't use anything more than what we've
-	 * inherited from our open descriptors.
-	 */
 	if (-1 == pledge("stdio", NULL))
 		doerr("pledge");
 #endif
+	if ( ! dropprivs(uid, gid))
+		doerrx("dropprivs");
 
 	r = NULL;
 	bne = NULL;

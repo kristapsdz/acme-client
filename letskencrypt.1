@@ -238,6 +238,11 @@ On Mac OS X, the network process is not put into a
 .Xr chroot 2
 jail.
 This is due to limitations in how DNS resolution occurs on this system.
+Moreover, the sandbox for several components must be weakened from that
+of full-computation to no-network because the sandbox cannot be enacted
+within a
+.Xr chroot 2 .
+In summary, running this on Mac OS X is not advised.
 .\" .Sh BUGS
 .\" .Sh SECURITY CONSIDERATIONS
 .\" Not used in OpenBSD.

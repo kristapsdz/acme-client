@@ -58,8 +58,8 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
  * jail and, on success, ship it to "netsock" as an X509 request.
  */
 int
-keyproc(int netsock, const char *keyfile, 
-	const char *domain, const char **alts, size_t altsz)
+keyproc(int netsock, const char *keyfile, const char *domain, 
+	uid_t uid, gid_t gid, const char **alts, size_t altsz)
 {
 	char		*der64, *der, *dercp;
 	FILE		*f;
@@ -85,34 +85,27 @@ keyproc(int netsock, const char *keyfile,
 	if (NULL == (f = fopen(keyfile, "r")))
 		doerr("%s", keyfile);
 
-#ifdef __APPLE__
 	/*
-	 * We would use "pure computation", which is correct, but then
-	 * we wouldn't be able to chroot().
-	 * This call also can't happen after the chroot(), so we're
-	 * stuck with a weaker sandbox.
+	 * File-system, user, and sandbox jail.
 	 */
+
+#ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL))
 		doerr("sandbox_init");
 #endif
-	/*
-	 * Jails: start with file-system.
-	 * Go into the usual place.
-	 */
-	if (-1 == chroot("/var/empty"))
-		doerr("%s: chroot", "/var/empty");
+	if (-1 == chroot(PATH_VAR_EMPTY))
+		doerr("%s: chroot", PATH_VAR_EMPTY);
 	if (-1 == chdir("/"))
 		doerr("/: chdir");
 
 #if defined(__OpenBSD__) && OpenBSD >= 201605
-	/* 
-	 * On OpenBSD, we won't use anything more than what we've
-	 * inherited from our open descriptors.
-	 */
 	if (-1 == pledge("stdio", NULL))
 		doerr("pledge");
 #endif
+	if ( ! dropprivs(uid, gid))
+		doerrx("dropprivs");
+
 	x = NULL;
 	evp = NULL;
 	r = NULL;
