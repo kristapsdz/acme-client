@@ -45,14 +45,6 @@ static	const char *const comms[COMM__MAX] = {
 	"csr", /* COMM_CSR */
 };
 
-static	const char *const comps[COMP__MAX] = {
-	"netproc", /* COMP_NET */
-	"keyproc", /* COMP_KEY */
-	"certproc", /* COMP_CERT */
-	"acctproc", /* COMP_ACCOUNT */
-	"challengeproc", /* COMP_CHALLENGE */
-};
-
 static void
 sigpipe(int code)
 {
@@ -203,6 +195,44 @@ checkexit(pid_t pid, enum comp comp)
 		return(1);
 
 	return(0);
+}
+
+/*
+ * The usual way to read a stream of bytes: copy into a static buffer,
+ * grow a vector, copy into the vector.
+ * Returns NULL on error, otherwise returns a nil-terminated string.
+ * This sees EOF as being the end of the string.
+ */
+char *
+readstream(int fd, enum comm comm)
+{
+	char	 buf[BUFSIZ];
+	char	*p;
+	void	*pp;
+	ssize_t	 ssz;
+	size_t	 sz;
+
+	sz = 0;
+	p = NULL;
+
+	while ((ssz = read(fd, buf, sizeof(buf))) > 0) {
+		pp = realloc(p, sz + (size_t)ssz + 1);
+		if (NULL == pp) {
+			dowarn("realloc");
+			free(p);
+			return(NULL);
+		}
+		p = pp;
+		memcpy(p + sz, buf, (size_t)ssz);
+		sz += ssz;
+		p[sz] = '\0';
+	}
+	if (ssz < 0) {
+		dowarn("read: %s", comms[comm]);
+		free(p);
+		return(NULL);
+	} 
+	return(p);
 }
 
 int

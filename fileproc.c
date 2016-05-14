@@ -26,25 +26,21 @@
 # include <sandbox.h>
 #endif
 
-#include <openssl/pem.h>
-#include <openssl/engine.h>
-
 #include "extern.h"
 
+#define	CERT_PEM "cert.pem"
+#define	CERT_PEM_BAK "cert.pem~"
+
 int
-certproc(int netsock, int filesock, uid_t uid, gid_t gid)
+fileproc(int certsock, const char *certdir)
 {
 	char		*csr;
-	unsigned char	*csrcp;
-	size_t		 csrsz;
 	int		 rc;
 	FILE		*f;
-	X509		*x;
 
 	csr = NULL;
 	rc = 0;
 	f = NULL;
-	x = NULL;
 
 	/* File-system and sandbox jailing. */
 
@@ -55,69 +51,68 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 		goto error;
 	}
 #endif
-	if (-1 == chroot(PATH_VAR_EMPTY)) {
-		dowarn("%s: chroot", PATH_VAR_EMPTY);
+
+	if (-1 == chroot(certdir)) {
+		dowarn("%s: chroot", certdir);
 		goto error;
 	} else if (-1 == chdir("/")) {
 		dowarn("/: chdir");
 		goto error;
 	}
 
-	/* Pre-pledge due to file access attempts. */
-
-	ERR_load_crypto_strings();
-
 #if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio", NULL)) {
+	if (-1 == pledge("stdio cpath wpath", NULL)) {
 		dowarn("pledge");
 		goto error;
 	}
 #endif
-	if ( ! dropprivs(uid, gid))
-		doerrx("dropprivs");
 
 	/*
 	 * Wait until we receive the DER encoded (signed) certificate
 	 * from the network process.
 	 */
 
-	if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
+	if (NULL == (csr = readstream(certsock, COMM_CSR)))
 		goto error;
 
-	csrcp = (unsigned char *)csr;
-	x = d2i_X509(NULL, (const unsigned char **)&csrcp, csrsz);
-	if (NULL == x) {
-		dowarn("d2i_X509");
+	/*
+	 * Create the PEM-encoded file in a backup location, overwriting
+	 * anything that previously was there.
+	 */
+
+	if (NULL == (f = fopen(CERT_PEM_BAK, "w"))) {
+		dowarn(CERT_PEM_BAK);
 		goto error;
-	}
-
-	/* TODO: write the issuer back to the netproc. */
-
-	/* Write the certificate to the file socket. */
-
-	if (NULL == (f = fdopen(filesock, "a"))) {
-		dowarn("fdopen");
-		goto error;
-	} else if ( ! PEM_write_X509(f, x)) {
-		dowarnx("PEM_write_X509");
+	} else if (-1 == fprintf(f, "%s", csr)) {
+		dowarnx(CERT_PEM_BAK);
 		goto error;
 	} else if (-1 == fclose(f)) {
-		dowarn("fclose");
+		dowarn(CERT_PEM_BAK);
 		goto error;
 	}
 	f = NULL;
+
+	/*
+	 * Atomically (?) rename the backup file, wiping out anything in
+	 * the real file, and set its permissions appropriately.
+	 */
+
+	if (-1 == rename(CERT_PEM_BAK, CERT_PEM)) {
+		dowarn(CERT_PEM);
+		goto error;
+	} else if (-1 == chmod(CERT_PEM, 0444)) {
+		dowarn(CERT_PEM);
+		goto error;
+	}
+
+	dodbg("%s: created", CERT_PEM);
 
 	rc = 1;
 error:
 	if (NULL != f)
 		fclose(f);
-	if (NULL != x)
-		X509_free(x);
 	free(csr);
-	ERR_print_errors_fp(stderr);
-	ERR_free_strings();
-	close(netsock);
-	close(filesock);
+	close(certsock);
 	return(rc);
 }
 

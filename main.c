@@ -37,8 +37,10 @@
 int
 main(int argc, char *argv[])
 {
-	const char	 *domain, *certdir, *acctkey, *chngdir, *keyfile;
-	int		  key_fds[2], acct_fds[2], chng_fds[2], cert_fds[2];
+	const char	 *domain, *certdir, *acctkey, 
+	     		 *chngdir, *keyfile;
+	int		  key_fds[2], acct_fds[2], chng_fds[2], 
+			  cert_fds[2], file_fds[2];
 	pid_t		  pids[COMP__MAX];
 	int		  c, rc, newacct;
 	extern int	  verbose;
@@ -127,6 +129,8 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "socketpair");
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, cert_fds))
 		err(EXIT_FAILURE, "socketpair");
+	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, file_fds))
+		err(EXIT_FAILURE, "socketpair");
 
 	/* Start with the network-touching process. */
 
@@ -138,6 +142,8 @@ main(int argc, char *argv[])
 		close(acct_fds[0]);
 		close(chng_fds[0]);
 		close(cert_fds[0]);
+		close(file_fds[0]);
+		close(file_fds[1]);
 		proccomp = COMP_NET;
 		c = netproc(key_fds[1], acct_fds[1], 
 			chng_fds[1], cert_fds[1], newacct,
@@ -160,6 +166,8 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_KEY]) {
 		close(acct_fds[0]);
 		close(chng_fds[0]);
+		close(file_fds[0]);
+		close(file_fds[1]);
 		proccomp = COMP_KEY;
 		c = keyproc(key_fds[0], keyfile, 
 			nobody_uid, nobody_gid, 
@@ -178,6 +186,8 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_ACCOUNT]) {
 		free(alts);
 		close(chng_fds[0]);
+		close(file_fds[0]);
+		close(file_fds[1]);
 		proccomp = COMP_ACCOUNT;
 		c = acctproc(acct_fds[0], acctkey, 
 			newacct, nobody_uid, nobody_gid);
@@ -193,6 +203,8 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_CHALLENGE]) {
 		free(alts);
+		close(file_fds[0]);
+		close(file_fds[1]);
 		proccomp = COMP_CHALLENGE;
 		c = chngproc(chng_fds[0], chngdir);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -207,12 +219,29 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_CERT]) {
 		free(alts);
+		close(file_fds[1]);
 		proccomp = COMP_CERT;
-		c = certproc(cert_fds[0], certdir);
+		c = certproc(cert_fds[0], file_fds[0],
+			nobody_uid, nobody_gid);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
 	close(cert_fds[0]);
+	close(file_fds[0]);
+
+	/* The certificate-handling component. */
+
+	if (-1 == (pids[COMP_FILE] = fork()))
+		err(EXIT_FAILURE, "fork");
+
+	if (0 == pids[COMP_FILE]) {
+		free(alts);
+		proccomp = COMP_FILE;
+		c = fileproc(file_fds[1], certdir);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	}
+
+	close(file_fds[1]);
 
 	/*
 	 * Now we jail ourselves: we won't do anything after this point

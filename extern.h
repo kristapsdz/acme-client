@@ -49,6 +49,7 @@ enum	comp {
 	COMP_CERT, /* handles domain certificates */
 	COMP_ACCOUNT, /* handles account key */
 	COMP_CHALLENGE, /* handles challenges */
+	COMP_FILE, /* handles writing certs */
 	COMP__MAX
 };
 
@@ -102,7 +103,8 @@ __BEGIN_DECLS
  * Start with our components.
  * These are all isolated and talk to each other using sockets.
  */
-int		 certproc(int, const char *);
+int		 fileproc(int, const char *);
+int		 certproc(int, int, uid_t, gid_t);
 int		 netproc(int, int, int, int, int, uid_t, gid_t, 
 			const char *const *, size_t);
 int		 acctproc(int, const char *, int, uid_t, gid_t);
@@ -130,6 +132,7 @@ const char 	*compname(enum comp);
 long		 readop(int, enum comm);
 char		*readbuf(int, enum comm, size_t *);
 char		*readstr(int, enum comm);
+char		*readstream(int, enum comm);
 int		 writebuf(int, enum comm, const void *, size_t);
 int		 writestr(int, enum comm, const char *);
 int		 writeop(int, enum comm, long);

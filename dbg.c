@@ -29,6 +29,7 @@ static	const char *const comps[COMP__MAX + 1] = {
 	"certproc", /* COMP_CERT */
 	"acctproc", /* COMP_ACCOUNT */
 	"challengeproc", /* COMP_CHALLENGE */
+	"fileproc", /* COMP_FILE */
 	"master", /* COMP__MAX */
 };
 
