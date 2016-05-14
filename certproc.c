@@ -39,6 +39,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	size_t		 csrsz;
 	int		 rc;
 	FILE		*f;
+	X509_NAME	*issuer;
 	X509		*x;
 
 	csr = NULL;

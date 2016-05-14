@@ -520,6 +520,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	 * We need to do this because somebody needs to clean up the
 	 * jail, and we can't do that if we're already in it.
 	 */
+
 	if (-1 == (pid = fork())) 
 		doerr("fork");
 
@@ -536,9 +537,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 		       EXIT_SUCCESS == WEXITSTATUS(st));
 	}
 
-	/*
-	 * File-system, user, and sandbox jail.
-	 */
+	/* File-system, user, and sandbox jail. */
 
 #ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoWrite, 
