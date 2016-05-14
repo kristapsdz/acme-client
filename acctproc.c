@@ -83,7 +83,7 @@ static int
 op_thumbprint(int fd, RSA *r)
 {
 	char		*exp, *mod, *thumb, *dig64;
-	int		 cc, rc;
+	int		 rc;
 	unsigned int	 digsz;
 	unsigned char	*dig;
 
@@ -102,17 +102,10 @@ op_thumbprint(int fd, RSA *r)
 		goto out;
 	}
 
-	/*
-	 * Construct the thumbprint input itself.
-	 * NOTE: WHITESPACE IS IMPORTANT.
-	 */
+	/* Construct the thumbprint input itself. */
 
-	cc = asprintf(&thumb, 
-		"{\"e\":\"%s\",\"kty\":\"RSA\",\"n\":\"%s\"}",
-		exp, mod);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		thumb = NULL;
+	if (NULL == (thumb = json_fmt_thumb(exp, mod))) {
+		dowarnx("json_fmt_thumb");
 		goto out;
 	}
 
@@ -164,7 +157,7 @@ op_sign(int fd, RSA *r)
 {
 	char		*exp, *mod, *nonce, *pay,
 			*pay64, *prot, *prot64, *head, 
-			*sign, *dig64, *final;
+			*sign, *dig64, *fin;
 	int		 cc, rc;
 	unsigned int	 digsz;
 	unsigned char	*dig;
@@ -173,7 +166,7 @@ op_sign(int fd, RSA *r)
 	EVP_PKEY	*pkey;
 
 	rc = 0;
-	pay = nonce = mod = exp = head = final =
+	pay = nonce = mod = exp = head = fin =
 		sign = prot = prot64 = pay64 = dig64 = NULL;
 	dig = NULL;
 	pkey = NULL;
@@ -205,24 +198,15 @@ op_sign(int fd, RSA *r)
 
 	/* Construct the public header. */
 
-	cc = asprintf(&head, "{\"alg\": \"RS256\", "
-		"\"jwk\": {\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}}",
-		exp, mod);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		head = NULL;
+	if (NULL == (head = json_fmt_header(exp, mod))) {
+		dowarnx("json_fmt_header");
 		goto out;
 	}
 
 	/* Now the header combined with the nonce, then base64. */
 
-	cc = asprintf(&prot, "{"
-		"\"alg\": \"RS256\", "
-		"\"jwk\": {\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}, "
-		"\"nonce\": \"%s\"}", exp, mod, nonce);
-	if (-1 == cc) {
-		dowarn("asprintf");
-		prot = NULL;
+	if (NULL == (prot = json_fmt_protected(exp, mod, nonce))) {
+		dowarnx("json_fmt_protected");
 		goto out;
 	} else if (NULL == (prot64 = base64buf_url(prot, strlen(prot)))) {
 		dowarnx("base64buf_url");
@@ -281,15 +265,10 @@ op_sign(int fd, RSA *r)
 
 	/* Write back in the correct JSON format. */
 
-	cc = asprintf(&final, 
-		"{\"header\": %s, \"protected\": \"%s\", "
-		"\"payload\": \"%s\", \"signature\": \"%s\"}",
-			head, prot64, pay64, dig64);
-
-	if (-1 == cc) {
-		dowarn("asprintf");
+	if (NULL == (fin = json_fmt_signed(head, prot64, pay64, dig64))) {
+		dowarnx("json_fmt_signed");
 		goto out;
-	} else if ( ! writestr(fd, COMM_REQ, final))
+	} else if ( ! writestr(fd, COMM_REQ, fin))
 		goto out;
 
 	rc = 1;
@@ -310,7 +289,7 @@ out:
 	free(prot64);
 	free(dig);
 	free(dig64);
-	free(final);
+	free(fin);
 	return(rc);
 }
 

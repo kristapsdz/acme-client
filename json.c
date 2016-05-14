@@ -257,6 +257,9 @@ jsonbody(void *ptr, size_t sz, size_t nm, void *arg)
 	return(0);
 }
 
+/*
+ * Format the "new-reg" resource request.
+ */
 char *
 json_fmt_newreg(const char *license)
 {
@@ -274,6 +277,9 @@ json_fmt_newreg(const char *license)
 	return(p);
 }
 
+/*
+ * Format the "new-authz" resource request.
+ */
 char *
 json_fmt_newauthz(const char *domain)
 {
@@ -292,6 +298,9 @@ json_fmt_newauthz(const char *domain)
 	return(p);
 }
 
+/*
+ * Format the "challenge" resource request.
+ */
 char *
 json_fmt_challenge(const char *token, const char *thumb)
 {
@@ -309,6 +318,9 @@ json_fmt_challenge(const char *token, const char *thumb)
 	return(p);
 }
 
+/*
+ * Format the "new-cert" resource request.
+ */
 char *
 json_fmt_newcert(const char *cert)
 {
@@ -319,6 +331,96 @@ json_fmt_newcert(const char *cert)
 		"\"resource\": \"new-cert\", "
 		"\"csr\": \"%s\""
 		"}", cert);
+	if (-1 == c) {
+		dowarn("asprintf");
+		p = NULL;
+	}
+	return(p);
+}
+
+/*
+ * Header component of json_fmt_signed().
+ */
+char *
+json_fmt_header(const char *exp, const char *mod)
+{
+	int	 c;
+	char	*p;
+
+	c = asprintf(&p, "{"
+		"\"alg\": \"RS256\", "
+		"\"jwk\": "
+		"{\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}"
+		"}", exp, mod);
+	if (-1 == c) {
+		dowarn("asprintf");
+		p = NULL;
+	}
+	return(p);
+}
+
+/*
+ * Protected component of json_fmt_signed().
+ */
+char *
+json_fmt_protected(const char *exp, const char *mod, const char *nce)
+{
+	int	 c;
+	char	*p;
+
+	c = asprintf(&p, "{"
+		"\"alg\": \"RS256\", "
+		"\"jwk\": "
+		"{\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}, "
+		"\"nonce\": \"%s\""
+		"}", exp, mod, nce);
+	if (-1 == c) {
+		dowarn("asprintf");
+		p = NULL;
+	}
+	return(p);
+}
+
+/*
+ * Signed message contents for the CA server.
+ */
+char *
+json_fmt_signed(const char *header, const char *protected, 
+	const char *payload, const char *digest)
+{
+	int	 c;
+	char	*p;
+
+	c = asprintf(&p, "{"
+		"\"header\": %s, "
+		"\"protected\": \"%s\", "
+		"\"payload\": \"%s\", "
+		"\"signature\": \"%s\""
+		"}", header, protected, payload, digest);
+	if (-1 == c) {
+		dowarn("asprintf");
+		p = NULL;
+	} 
+	return(p);
+}
+
+/*
+ * Produce thumbprint input.
+ * This isn't technically a JSON string--it's the input we'll use for
+ * hashing and digesting.
+ * However, it's in the form of a JSON string, so do it here.
+ */
+char *
+json_fmt_thumb(const char *exp, const char *mod)
+{
+	int	 c;
+	char	*p;
+
+	/*NOTE: WHITESPACE IS IMPORTANT. */
+
+	c = asprintf(&p, 
+		"{\"e\":\"%s\",\"kty\":\"RSA\",\"n\":\"%s\"}",
+		exp, mod);
 	if (-1 == c) {
 		dowarn("asprintf");
 		p = NULL;
