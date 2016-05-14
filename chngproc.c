@@ -41,9 +41,7 @@ chngproc(int netsock, const char *root)
 	size_t		  i, fsz;
 	void		 *pp;
 	FILE		 *f;
-	extern enum comp  proccomp;
 
-	proccomp = COMP_CHALLENGE;
 	rc = 0;
 	thumb = tok = NULL;
 	f = NULL;

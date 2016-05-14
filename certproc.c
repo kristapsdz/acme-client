@@ -41,11 +41,9 @@ certproc(int netsock, const char *certdir)
 	unsigned char	*csrcp;
 	size_t		 csrsz;
 	int		 rc;
-	extern enum comp proccomp;
 	FILE		*f;
 	X509		*x;
 
-	proccomp = COMP_CERT;
 	csr = NULL;
 	rc = 0;
 	f = NULL;

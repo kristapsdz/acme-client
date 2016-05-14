@@ -76,10 +76,8 @@ keyproc(int netsock, const char *keyfile,
 	X509_NAME 	*name;
 	unsigned char	 rbuf[64];
 	int		 len, rc;
-	extern enum comp proccomp;
 	STACK_OF(X509_EXTENSION) *exts;
 
-	proccomp = COMP_KEY;
 	x = NULL;
 	evp = NULL;
 	r = NULL;

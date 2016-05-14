@@ -507,9 +507,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	struct capaths	 paths;
 	struct chng 	*chngs;
 	long		 http, op;
-	extern enum comp proccomp;
 
-	proccomp = COMP_NET;
 	rc = EXIT_FAILURE;
 
 	/* Prepare our file-system jail. */
