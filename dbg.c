@@ -56,6 +56,19 @@ dovwarnx(const char *fmt, va_list ap)
 }
 
 static void
+doverrx(const char *fmt, va_list ap)
+{
+	extern enum comp proccomp;
+
+	fprintf(stderr, "%s(%u): ERROR: ", comps[proccomp], getpid());
+	vfprintf(stderr, fmt, ap);
+	fputc('\n', stderr);
+	exit(EXIT_FAILURE);
+	/* NOTREACHED */
+}
+
+
+static void
 doverr(const char *fmt, va_list ap)
 {
 	int		 er = errno;
@@ -77,6 +90,16 @@ dovwarn(const char *fmt, va_list ap)
 	fprintf(stderr, "%s(%u): WARN: ", comps[proccomp], getpid());
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, ": %s\n", strerror(er));
+}
+
+void
+doerrx(const char *fmt, ...)
+{
+	va_list	 	 ap;
+
+	va_start(ap, fmt);
+	doverrx(fmt, ap);
+	va_end(ap);
 }
 
 void

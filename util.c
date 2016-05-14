@@ -201,3 +201,35 @@ checkexit(pid_t pid, enum comp comp)
 
 	return(0);
 }
+
+int
+dropprivs(uid_t uid, gid_t gid)
+{
+
+#if defined(__OpenBSD__)
+	if (setgroups(1, &gid) ||
+	    setresgid(gid, gid, gid) ||
+	    setresuid(uid, uid, uid)) {
+		dowarn("cannot drop privileges");
+		return(0);
+	}
+#else
+	if (setgroups(1, &gid) ||
+	    setegid(gid) || setgid(gid) ||
+	    seteuid(uid) || setuid(uid)) {
+		dowarn("cannot drop privileges");
+		return(0);
+	}
+#endif
+
+	if (getgid() != gid || getegid() != gid) {
+		dowarnx("failed to drop gid");
+		return(0);
+	}
+	if (getuid() != uid || geteuid() != uid) {
+		dowarnx("failed to drop uid");
+		return(0);
+	}
+
+	return(1);
+}

@@ -511,7 +511,7 @@ docert(CURL *c, int fd, const char *addr,
  */
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int newacct, 
-	const char *const *alts, size_t altsz)
+	uid_t uid, gid_t gid, const char *const *alts, size_t altsz)
 {
 	pid_t		 pid;
 	int		 st, rc;
@@ -569,6 +569,8 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	else if (-1 == chdir("/"))
 		doerr("/: chdir");
 #endif
+	if ( ! dropprivs(uid, gid))
+		doerrx("dropprivs");
 
 	free(home);
 	home = NULL;

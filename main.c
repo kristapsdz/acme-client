@@ -17,6 +17,7 @@
 #include <sys/socket.h>
 
 #include <err.h>
+#include <pwd.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,8 @@
 #include <unistd.h>
 
 #include "extern.h"
+
+#define NOBODY_USER "nobody"
 
 int
 main(int argc, char *argv[])
@@ -35,6 +38,9 @@ main(int argc, char *argv[])
 	extern int	  verbose;
 	size_t		  i, altsz;
 	const char	**alts;
+	struct passwd	 *passent;
+	uid_t		  nobody_uid;
+	gid_t		  nobody_gid;
 
 	alts = NULL;
 	newacct = 0;
@@ -80,7 +86,20 @@ main(int argc, char *argv[])
 	if (0 != getuid())
 		errx(EXIT_FAILURE, "must be run as root");
 
+	/*
+	 * Look up our privilege-separated users.
+	 * We care about "nobody" for key and network operations and the
+	 * web user for the challenge operations.
+	 */
+
+	passent = getpwnam(NOBODY_USER);
+	if (NULL == passent)
+		errx(EXIT_FAILURE, "unknown user: %s", NOBODY_USER);
+	nobody_uid = passent->pw_uid;
+	nobody_gid = passent->pw_gid;
+
 	/* Set the zeroth altname as our domain. */
+
 	altsz = argc + 1;
 	alts = calloc(altsz, sizeof(char *));
 	alts[0] = domain;
@@ -90,7 +109,9 @@ main(int argc, char *argv[])
 	/* 
 	 * Open channels between our components. 
 	 * We exclusively use UNIX domain socketpairs.
+	 * FIXME: make these non-blocking!
 	 */
+
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, key_fds))
 		err(EXIT_FAILURE, "socketpair");
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, acct_fds))
@@ -112,6 +133,7 @@ main(int argc, char *argv[])
 		close(cert_fds[0]);
 		c = netproc(key_fds[1], acct_fds[1], 
 			chng_fds[1], cert_fds[1], newacct,
+			nobody_uid, nobody_gid,
 			(const char *const *)alts, altsz);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
