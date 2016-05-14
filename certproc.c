@@ -52,23 +52,17 @@ certproc(int netsock, const char *certdir)
 	x = NULL;
 	ERR_load_crypto_strings();
 
-#ifdef __APPLE__
 	/*
-	 * We would use "pure computation", which is correct, but then
-	 * we wouldn't be able to chroot().
-	 * This call also can't happen after the chroot(), so we're
-	 * stuck with a weaker sandbox.
+	 * File-system and sandbox jailing.
 	 */
+
+#ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL)) {
 		dowarn("sandbox_init");
 		goto error;
 	}
 #endif
-	/*
-	 * Jails: start with file-system.
-	 * Go into the usual place.
-	 */
 	if (-1 == chroot(certdir)) {
 		dowarn("%s: chroot", certdir);
 		goto error;
@@ -76,7 +70,6 @@ certproc(int netsock, const char *certdir)
 		dowarn("/: chdir");
 		goto error;
 	}
-
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio cpath wpath", NULL)) {
 		dowarn("pledge");
@@ -88,6 +81,7 @@ certproc(int netsock, const char *certdir)
 	 * Wait until we receive the DER encoded (signed) certificate
 	 * from the network process.
 	 */
+
 	if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
 		goto error;
 
@@ -97,6 +91,11 @@ certproc(int netsock, const char *certdir)
 		dowarn("d2i_X509");
 		goto error;
 	}
+
+	/*
+	 * Create the PEM-encoded file in a backup location, overwriting
+	 * anything that previously was there.
+	 */
 
 	if (NULL == (f = fopen(CERT_PEM_BAK, "w"))) {
 		dowarn(CERT_PEM_BAK);
@@ -109,6 +108,11 @@ certproc(int netsock, const char *certdir)
 		goto error;
 	}
 	f = NULL;
+
+	/*
+	 * Atomically (?) rename the backup file, wiping out anything in
+	 * the real file, and set its permissions appropriately.
+	 */
 
 	if (-1 == rename(CERT_PEM_BAK, CERT_PEM)) {
 		dowarn(CERT_PEM);

@@ -18,6 +18,9 @@
 
 #include <err.h>
 #include <pwd.h>
+#ifdef __APPLE__
+# include <sandbox.h>
+#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -153,6 +156,7 @@ main(int argc, char *argv[])
 		close(acct_fds[0]);
 		close(chng_fds[0]);
 		c = keyproc(key_fds[0], keyfile, domain,
+			nobody_uid, nobody_gid, 
 			(const char **)alts, altsz);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -160,7 +164,7 @@ main(int argc, char *argv[])
 
 	close(key_fds[0]);
 
-	/* Finally, the account-touching component. */
+	/* The account-touching component. */
 
 	if (-1 == (pids[COMP_ACCOUNT] = fork()))
 		err(EXIT_FAILURE, "fork");
@@ -168,13 +172,14 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_ACCOUNT]) {
 		free(alts);
 		close(chng_fds[0]);
-		c = acctproc(acct_fds[0], acctkey, newacct);
+		c = acctproc(acct_fds[0], acctkey, 
+			nobody_uid, nobody_gid, newacct);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
 	close(acct_fds[0]);
 
-	/* Finally, the challenge-accepting component. */
+	/* The challenge-accepting component. */
 
 	if (-1 == (pids[COMP_CHALLENGE] = fork()))
 		err(EXIT_FAILURE, "fork");
@@ -201,9 +206,32 @@ main(int argc, char *argv[])
 	close(cert_fds[0]);
 
 	/*
+	 * Now we jail ourselves: we won't do anything after this point
+	 * except wait for the components to finish.
+	 * We use sandboxing, file-system, and user.
+	 */
+
+#ifdef __APPLE__
+	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
+ 	    SANDBOX_NAMED, NULL))
+		doerr("sandbox_init");
+#endif
+	if (-1 == chroot(PATH_VAR_EMPTY))
+		doerr("%s: chroot", PATH_VAR_EMPTY);
+	if (-1 == chdir("/"))
+		doerr("/: chdir");
+	if ( ! dropprivs(nobody_uid, nobody_gid))
+		doerrx("dropprivs");
+#if defined(__OpenBSD__) && OpenBSD >= 201605
+	if (-1 == pledge("stdio", NULL))
+		doerr("pledge");
+#endif
+
+	/*
 	 * Collect our subprocesses.
 	 * Require that they both have exited cleanly.
 	 */
+
 	rc = checkexit(pids[COMP_KEY], COMP_KEY) +
 	     checkexit(pids[COMP_CERT], COMP_CERT) +
 	     checkexit(pids[COMP_NET], COMP_NET) +
