@@ -173,7 +173,7 @@ main(int argc, char *argv[])
 		free(alts);
 		close(chng_fds[0]);
 		c = acctproc(acct_fds[0], acctkey, 
-			nobody_uid, nobody_gid, newacct);
+			newacct, nobody_uid, nobody_gid);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
