@@ -91,7 +91,7 @@ __BEGIN_DECLS
  * These are all isolated and talk to each other using sockets.
  */
 int		 certproc(int, const char *);
-int		 netproc(int, int, int, int, int, 
+int		 netproc(int, int, int, int, int, uid_t, gid_t, 
 			const char *const *, size_t);
 int		 acctproc(int, const char *, int);
 int		 keyproc(int, const char *, 
@@ -106,6 +106,7 @@ int		 chngproc(int, const char *);
 void		 dowarnx(const char *, ...);
 void		 dowarn(const char *, ...);
 void		 doerr(const char *, ...);
+void		 doerrx(const char *, ...);
 void		 dodbg(const char *, ...);
 const char 	*compname(enum comp);
 
@@ -143,6 +144,8 @@ void		 json_free_challenge(struct chng *);
 int		 json_parse_challenge(struct json *, struct chng *);
 void		 json_free_capaths(struct capaths *);
 int		 json_parse_capaths(struct json *, struct capaths *);
+
+int		 dropprivs(uid_t, gid_t);		 
 
 /*
  * Should we print debugging messages?
