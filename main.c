@@ -158,7 +158,7 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_KEY]) {
 		close(acct_fds[0]);
 		close(chng_fds[0]);
-		c = keyproc(key_fds[0], keyfile, domain,
+		c = keyproc(key_fds[0], keyfile, 
 			nobody_uid, nobody_gid, 
 			(const char **)alts, altsz);
 		free(alts);

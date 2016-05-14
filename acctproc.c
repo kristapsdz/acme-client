@@ -41,6 +41,11 @@
 
 #define	KEY_BITS 4096
 
+/*
+ * Converts a BIGNUM to the form used in JWK.
+ * This is essentially a base64-encoded big-endian binary string
+ * representation of the number.
+ */
 static char *
 bn2string(const BIGNUM *bn)
 {
@@ -48,6 +53,7 @@ bn2string(const BIGNUM *bn)
 	char	*buf, *bbuf;
 
 	/* Extract big-endian representation of BIGNUM. */
+
 	len = BN_num_bytes(bn);
 	if (NULL == (buf = malloc(len))) {
 		dowarn("malloc");
@@ -59,6 +65,7 @@ bn2string(const BIGNUM *bn)
 	}
 
 	/* Convert to base64url. */
+
 	if (NULL == (bbuf = base64buf_url(buf, len))) {
 		dowarnx("base64buf_url");
 		free(buf);
@@ -69,6 +76,9 @@ bn2string(const BIGNUM *bn)
 	return(bbuf);
 }
 
+/*
+ * The thumbprint operation is used for the challenge sequence.
+ */
 static int
 op_thumbprint(int fd, RSA *r)
 {
@@ -79,7 +89,6 @@ op_thumbprint(int fd, RSA *r)
 
 	EVP_MD_CTX	*ctx;
 
-	/* Nullify all the things. */
 	rc = 0;
 	mod = exp = thumb = dig64 = NULL;
 	dig = NULL;
@@ -94,9 +103,10 @@ op_thumbprint(int fd, RSA *r)
 	}
 
 	/*
-	 * Construct the thumbprint.
+	 * Construct the thumbprint input itself.
 	 * NOTE: WHITESPACE IS IMPORTANT.
 	 */
+
 	cc = asprintf(&thumb, 
 		"{\"e\":\"%s\",\"kty\":\"RSA\",\"n\":\"%s\"}",
 		exp, mod);
@@ -107,20 +117,14 @@ op_thumbprint(int fd, RSA *r)
 	}
 
 	/*
-	 * Create an envelope for the key an assign the RSA private key
-	 * parts to it (we'll use it for signing).
-	 * (The dup is because the EVP_PKEY_free will kill the RSA.)
+	 * Compute the SHA256 digest of the thumbprint then
+	 * base64-encode the digest itself.
 	 */
+
 	if (NULL == (dig = malloc(EVP_MAX_MD_SIZE))) {
 		dowarn("malloc");
 		goto out;
-	}
-
-	/*
-	 * Here we go: using our RSA key as merged into the envelope,
-	 * sign a SHA256 digest of our message.
-	 */
-	if (NULL == (ctx = EVP_MD_CTX_create())) {
+	} else if (NULL == (ctx = EVP_MD_CTX_create())) {
 		dowarnx("EVP_MD_CTX_create");
 		goto out;
 	} else if ( ! EVP_DigestInit_ex(ctx, EVP_sha256(), NULL)) {
@@ -168,7 +172,6 @@ op_sign(int fd, RSA *r)
 	EVP_MD_CTX	*ctx;
 	EVP_PKEY	*pkey;
 
-	/* Nullify all the things. */
 	rc = 0;
 	pay = nonce = mod = exp = head = final =
 		sign = prot = prot64 = pay64 = dig64 = NULL;
@@ -176,14 +179,14 @@ op_sign(int fd, RSA *r)
 	pkey = NULL;
 	ctx = NULL;
 
-	/*
-	 * Read our payload and nonce from the requestor.
-	 * Then entangle these with our encoded modulus and exponent.
-	 */
+	/* Read our payload and nonce from the requestor. */
+
 	if (NULL == (pay = readstr(fd, COMM_PAY)))
 		goto out;
 	else if (NULL == (nonce = readstr(fd, COMM_NONCE))) 
 		goto out;
+
+	/* Extract relevant portions of our private key. */
 
 	if (NULL == (mod = bn2string(r->n))) {
 		dowarnx("bn2string");
@@ -191,12 +194,17 @@ op_sign(int fd, RSA *r)
 	} else if (NULL == (exp = bn2string(r->e))) {
 		dowarnx("bn2string");
 		goto out;
-	} else if (NULL == (pay64 = base64buf_url(pay, strlen(pay)))) {
+	} 
+	
+	/* Base64-encode the payload. */
+
+	if (NULL == (pay64 = base64buf_url(pay, strlen(pay)))) {
 		dowarnx("base64buf_url");
 		goto out;
 	}
 
-	/* Now we construct the public header. */
+	/* Construct the public header. */
+
 	cc = asprintf(&head, "{\"alg\": \"RS256\", "
 		"\"jwk\": {\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}}",
 		exp, mod);
@@ -206,7 +214,8 @@ op_sign(int fd, RSA *r)
 		goto out;
 	}
 
-	/* Now the header combined with the nonce, base64'd. */
+	/* Now the header combined with the nonce, then base64. */
+
 	cc = asprintf(&prot, "{"
 		"\"alg\": \"RS256\", "
 		"\"jwk\": {\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}, "
@@ -221,6 +230,7 @@ op_sign(int fd, RSA *r)
 	}
 
 	/* Now the signature material. */
+
 	cc = asprintf(&sign, "%s.%s", prot64, pay64);
 	if (-1 == cc) {
 		dowarn("asprintf");
@@ -232,7 +242,10 @@ op_sign(int fd, RSA *r)
 	 * Create an envelope for the key an assign the RSA private key
 	 * parts to it (we'll use it for signing).
 	 * (The dup is because the EVP_PKEY_free will kill the RSA.)
+	 * FIXME: we don't need to keep recomputing this.
+	 * Do it outside of this function and loop.
 	 */
+
 	if (NULL == (pkey = EVP_PKEY_new())) {
 		dowarnx("EVP_PKEY_new");
 		goto out;
@@ -248,6 +261,7 @@ op_sign(int fd, RSA *r)
 	 * Here we go: using our RSA key as merged into the envelope,
 	 * sign a SHA256 digest of our message.
 	 */
+
 	if (NULL == (ctx = EVP_MD_CTX_create())) {
 		dowarnx("EVP_MD_CTX_create");
 		goto out;
@@ -265,11 +279,8 @@ op_sign(int fd, RSA *r)
 		goto out;
 	}
 
-	/*
-	 * Finally, compose our message.
-	 * This incorporates all of the above components.
-	 * Write this back to the requester.
-	 */
+	/* Write back in the correct JSON format. */
+
 	cc = asprintf(&final, 
 		"{\"header\": %s, \"protected\": \"%s\", "
 		"\"payload\": \"%s\", \"signature\": \"%s\"}",
@@ -314,49 +325,60 @@ acctproc(int netsock, const char *acctkey,
 	unsigned char	 rbuf[64];
 	BIGNUM		*bne;
 	extern enum comp proccomp;
+	int		 rc;
 
 	proccomp = COMP_ACCOUNT;
-
-	/* Do this before we chroot()? */
-	ERR_load_crypto_strings();
+	f = NULL;
+	r = NULL;
+	bne = NULL;
+	rc = 0;
 
 	/* 
-	 * Next, open our private key file read-only or write-only if
+	 * First, open our private key file read-only or write-only if
 	 * we're creating from scratch.
-	 * After this, we're going to go dark.
 	 */
-	if (NULL == (f = fopen(acctkey, newacct ? "wx" : "r")))
-		doerr("%s", acctkey);
 
-	/*
-	 * File-system, user, and sandbox jailing.
-	 */
+	if (NULL == (f = fopen(acctkey, newacct ? "wx" : "r"))) {
+		dowarn("%s", acctkey);
+		goto error;
+	}
+
+	/* File-system, user, and sandbox jailing. */
 
 #ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
- 	    SANDBOX_NAMED, NULL))
-		doerr("sandbox_init");
+ 	    SANDBOX_NAMED, NULL)) {
+		dowarn("sandbox_init");
+		goto error;
+	}
 #endif
-	if (-1 == chroot(PATH_VAR_EMPTY))
-		doerr("%s: chroot", PATH_VAR_EMPTY);
-	if (-1 == chdir("/"))
-		doerr("/: chdir");
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio", NULL))
-		doerr("pledge");
-#endif
-	if ( ! dropprivs(uid, gid))
-		doerrx("dropprivs");
+	if (-1 == chroot(PATH_VAR_EMPTY)) {
+		dowarn("%s: chroot", PATH_VAR_EMPTY);
+		goto error;
+	} else if (-1 == chdir("/")) {
+		dowarn("/: chdir");
+		goto error;
+	}
 
-	r = NULL;
-	bne = NULL;
+	/* Pre-pledge due to file access attempts. */
+
+	ERR_load_crypto_strings();
+
+#if defined(__OpenBSD__) && OpenBSD >= 201605
+	if (-1 == pledge("stdio", NULL)) {
+		dowarn("pledge");
+		goto error;
+	}
+#endif
+	if ( ! dropprivs(uid, gid)) 
+		goto error;
 
 	/* 
-	 * Ok, now we're dark.
 	 * Seed our PRNG with data from arc4random().
 	 * Do this until we're told it's ok and use increments of 64
 	 * bytes (arbitrarily).
 	 */
+
 	while (0 == RAND_status()) {
 		arc4random_buf(rbuf, sizeof(rbuf));
 		RAND_seed(rbuf, sizeof(rbuf));
@@ -400,6 +422,7 @@ acctproc(int netsock, const char *acctkey,
 	 * It might ask us for our thumbprint, for example, or for us to
 	 * sign a message.
 	 */
+
 	for (;;) {
 		if (0 == (lval = readop(netsock, COMM_ACCT)))
 			op = ACCT_STOP;
@@ -429,10 +452,7 @@ acctproc(int netsock, const char *acctkey,
 		}
 	}
 
-	RSA_free(r);
-	ERR_free_strings();
-	close(netsock);
-	return(1);
+	rc = 1;
 error:
 	if (NULL != f)
 		fclose(f);
@@ -443,6 +463,6 @@ error:
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
 	close(netsock);
-	return(0);
+	return(rc);
 }
 

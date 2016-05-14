@@ -96,8 +96,8 @@ int		 certproc(int, const char *);
 int		 netproc(int, int, int, int, int, uid_t, gid_t, 
 			const char *const *, size_t);
 int		 acctproc(int, const char *, int, uid_t, gid_t);
-int		 keyproc(int, const char *, const char *, 
-			uid_t, gid_t, const char **, size_t);
+int		 keyproc(int, const char *, uid_t, gid_t, 
+			const char **, size_t);
 int		 chngproc(int, const char *);
 
 /*
