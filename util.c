@@ -17,6 +17,9 @@
 #include <sys/wait.h>
 
 #include <errno.h>
+#ifdef __linux__
+# include <grp.h>
+#endif
 #include <limits.h>
 #include <signal.h>
 #include <stdarg.h>
