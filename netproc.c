@@ -99,7 +99,7 @@ netcleanup(char *dir)
  * Returns NULL on failure, else the new root.
  */
 static char *
-netprepare(void)
+netprepare(uid_t uid, gid_t gid)
 {
 	char	*dir, *tmp;
 	int	 fd, oflags, fd2;
@@ -115,6 +115,9 @@ netprepare(void)
 		goto err;
 	} else if (NULL == mkdtemp(dir)) {
 		dowarn("mkdtemp");
+		goto err;
+	} else if (-1 == chown(dir, uid, gid)) {
+		dowarn("%s", dir);
 		goto err;
 	}
 
@@ -530,7 +533,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 
 	/* Prepare our file-system jail. */
 
-	if (NULL == (home = netprepare()))
+	if (NULL == (home = netprepare(uid, gid)))
 		return(0);
 
 	/*
