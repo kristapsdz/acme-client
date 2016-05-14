@@ -51,9 +51,8 @@ enum	comm {
 	COMM_PAY,
 	COMM_NONCE,
 	COMM_TOK,
-	COMM_CHNG,
+	COMM_CHNG_OP,
 	COMM_CHNG_ACK,
-	COMM_CHNG_FIN,
 	COMM_ACCT,
 	COMM_CSR,
 	COMM__MAX
@@ -65,9 +64,11 @@ enum	comm {
  * (presumably!) local machine to an ACME connection; and a URI, to
  * which we must connect to verify the token.
  */
-struct challenge {
+struct 	chng {
 	char		*uri; /* uri on ACME server */
 	char		*token; /* token we must offer */
+	size_t		 retry;
+	int		 status;
 };
 
 /*
@@ -91,7 +92,7 @@ __BEGIN_DECLS
  */
 int		 certproc(int, const char *);
 int		 netproc(int, int, int, int, int, 
-			const char *, const char **, size_t);
+			const char *const *, size_t);
 int		 acctproc(int, const char *, int);
 int		 keyproc(int, const char *, 
 			const char *, const char **, size_t);
@@ -138,8 +139,8 @@ void		 json_reset(struct json *);
 void		 json_free(struct json *);
 size_t		 jsonbody(void *, size_t, size_t, void *);
 int		 json_parse_response(struct json *);
-void		 json_free_challenge(struct challenge *);
-int		 json_parse_challenge(struct json *, struct challenge *);
+void		 json_free_challenge(struct chng *);
+int		 json_parse_challenge(struct json *, struct chng *);
 void		 json_free_capaths(struct capaths *);
 int		 json_parse_capaths(struct json *, struct capaths *);
 

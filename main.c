@@ -112,7 +112,8 @@ main(int argc, char *argv[])
 		close(cert_fds[0]);
 		c = netproc(key_fds[1], acct_fds[1], 
 			chng_fds[1], cert_fds[1], newacct,
-			domain, (const char **)alts, altsz);
+			(const char *const *)alts, altsz);
+		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -131,6 +132,7 @@ main(int argc, char *argv[])
 		close(chng_fds[0]);
 		c = keyproc(key_fds[0], keyfile, domain,
 			(const char **)alts, altsz);
+		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -142,6 +144,7 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_ACCOUNT]) {
+		free(alts);
 		close(chng_fds[0]);
 		c = acctproc(acct_fds[0], acctkey, newacct);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -155,6 +158,7 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_CHALLENGE]) {
+		free(alts);
 		c = chngproc(chng_fds[0], chngdir);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
@@ -167,6 +171,7 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_CERT]) {
+		free(alts);
 		c = certproc(cert_fds[0], certdir);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
@@ -191,6 +196,7 @@ usage:
 		"[-C challengedir] "
 		"[-c certdir] "
 		"[-f accountkey] "
+		"[-k domainkey] "
 		"domain [altnames...]\n", 
 		getprogname());
 	return(EXIT_FAILURE);

@@ -1,4 +1,4 @@
-.Dd $Mdocdate$
+.Dd $Mdocdate: May 13 2016 $
 .Dt LETSKENCRYPT 1
 .Os
 .Sh NAME
@@ -13,7 +13,7 @@
 .Op Fl C Ar challengedir
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
-.Op Fl k Ar keyfile
+.Op Fl k Ar domainkey
 .Ar domain
 .Op Ar altnames...
 .Sh DESCRIPTION
@@ -55,7 +55,7 @@ for details.
 The account private key.
 This was either made with a previous letsencrypt client or with
 .Fl n .
-.It Fl k Ar keyfile
+.It Fl k Ar domainkey
 The private key for the domain.
 .It Ar domain
 The domain name.

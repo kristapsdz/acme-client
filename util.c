@@ -36,9 +36,8 @@ static	const char *const comms[COMM__MAX] = {
 	"payload", /* COMM_PAY */
 	"nonce", /* COMM_NONCE */
 	"token", /* COMM_TOK */
-	"challenge", /* COMM_CHNG */
+	"challenge-op", /* COMM_CHNG_OP */
 	"challenge-ack", /* COMM_CHNG_ACK */
-	"challenge-fin", /* COMM_CHNG_FIN */
 	"account", /* COMM_SIGN */
 	"csr", /* COMM_CSR */
 };
