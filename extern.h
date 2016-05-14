@@ -30,6 +30,16 @@ enum	acctop {
 };
 
 /*
+ * Requests to challenge infrastructure.
+ */
+enum	chngop {
+	CHNG_STOP,
+	CHNG_SYN,
+	CHNG_ACK,
+	CHNG__MAX
+};
+
+/*
  * Our components.
  * Each one of these is in a separated, isolated process.
  */
@@ -110,6 +120,7 @@ void		 dowarn(const char *, ...);
 void		 doerr(const char *, ...);
 void		 doerrx(const char *, ...);
 void		 dodbg(const char *, ...);
+void		 doddbg(const char *, ...);
 const char 	*compname(enum comp);
 
 /*
@@ -146,6 +157,11 @@ void		 json_free_challenge(struct chng *);
 int		 json_parse_challenge(struct json *, struct chng *);
 void		 json_free_capaths(struct capaths *);
 int		 json_parse_capaths(struct json *, struct capaths *);
+
+char		*json_fmt_challenge(const char *, const char *);
+char		*json_fmt_newauthz(const char *);
+char		*json_fmt_newcert(const char *);
+char		*json_fmt_newreg(const char *);
 
 int		 dropprivs(uid_t, gid_t);		 
 

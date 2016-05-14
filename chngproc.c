@@ -16,6 +16,7 @@
  */
 #include <sys/stat.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -33,7 +34,8 @@ int
 chngproc(int netsock, const char *root)
 {
 	int		  rc;
-	long		  op;
+	long		  lval;
+	enum chngop	  op;
 	char		 *tok, *thumb;
 	char		**fs;
 	size_t		  i, fsz;
@@ -78,10 +80,19 @@ chngproc(int netsock, const char *root)
 	 * We'll get this for each SAN request.
 	 */
 	for (;;) {
-		if (0 == (op = readop(netsock, COMM_CHNG_OP))) 
+		if (0 == (lval = readop(netsock, COMM_CHNG_OP))) 
+			op = CHNG_STOP;
+		else if (LONG_MAX == lval)
+			op = CHNG__MAX;
+		else
+			op = lval;
+
+		if (CHNG_STOP == op)
 			break;
-		else if (LONG_MAX == op)
+		else if (CHNG__MAX == op)
 			goto out;
+
+		assert(CHNG_SYN == op);
 
 		/* 
 		 * Read the thumbprint and token.
@@ -106,7 +117,10 @@ chngproc(int netsock, const char *root)
 		tok = NULL;
 		fsz++;
 
-		/* Create and write to our challenge file. */
+		/* 
+		 * Create and write to our challenge file.
+		 * Then mark the file as mode 0444.
+		 */
 
 		if (NULL == (f = fopen(fs[fsz - 1], "wx"))) {
 			dowarn("%s", fs[fsz - 1]);
@@ -119,16 +133,20 @@ chngproc(int netsock, const char *root)
 			goto out;
 		}
 
+		f = NULL;
 		free(thumb);
 		thumb = NULL;
 
+		if (-1 == chmod(fs[fsz - 1], 0444)) {
+			dowarn("%s", fs[fsz - 1]);
+			goto out;
+		}
+
 		dodbg("%s/%s: created", root, fs[fsz - 1]);
-		fclose(f);
-		f = NULL;
 
 		/* Write our acknowledgement. */
 
-		if ( ! writeop(netsock, COMM_CHNG_ACK, 1))
+		if ( ! writeop(netsock, COMM_CHNG_ACK, CHNG_ACK))
 			goto out;
 	}
 

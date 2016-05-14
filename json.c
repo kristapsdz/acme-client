@@ -14,7 +14,11 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifdef __linux__
+# define _GNU_SOURCE
+#endif
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -251,4 +255,73 @@ jsonbody(void *ptr, size_t sz, size_t nm, void *arg)
 		return(sz * nm);
 
 	return(0);
+}
+
+char *
+json_fmt_newreg(const char *license)
+{
+	int	 c;
+	char	*p;
+
+	c = asprintf(&p, "{"
+		"\"resource\": \"new-reg\", "
+		"\"agreement\": \"%s\""
+		"}", license);
+	if (-1 == c) {
+		dowarn("asprintf");
+		p = NULL;
+	} 
+	return(p);
+}
+
+char *
+json_fmt_newauthz(const char *domain)
+{
+	int	 c;
+	char	*p;
+
+	c = asprintf(&p, "{"
+		"\"resource\": \"new-authz\", "
+		"\"identifier\": "
+		"{\"type\": \"dns\", \"value\": \"%s\"}"
+		"}", domain);
+	if (-1 == c) {
+		dowarn("asprintf");
+		p = NULL;
+	} 
+	return(p);
+}
+
+char *
+json_fmt_challenge(const char *token, const char *thumb)
+{
+	int	 c;
+	char	*p;
+
+	c = asprintf(&p, "{"
+		"\"resource\": \"challenge\", "
+		"\"keyAuthorization\": \"%s.%s\""
+		"}", token, thumb);
+	if (-1 == c) {
+		dowarn("asprintf");
+		p = NULL;
+	}
+	return(p);
+}
+
+char *
+json_fmt_newcert(const char *cert)
+{
+	int	 c;
+	char	*p;
+
+	c = asprintf(&p, "{"
+		"\"resource\": \"new-cert\", "
+		"\"csr\": \"%s\""
+		"}", cert);
+	if (-1 == c) {
+		dowarn("asprintf");
+		p = NULL;
+	}
+	return(p);
 }
