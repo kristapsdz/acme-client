@@ -19,7 +19,11 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <json-c/json.h>
+#ifdef __linux__
+# include <json/json.h>
+#else
+# include <json-c/json.h>
+#endif
 
 #include "extern.h"
 

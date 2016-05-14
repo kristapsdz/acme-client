@@ -14,6 +14,9 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifdef __linux__
+# define _GNU_SOURCE
+#endif
 #include <sys/stat.h>
 #include <sys/wait.h>
 
