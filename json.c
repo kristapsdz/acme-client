@@ -157,7 +157,14 @@ json_parse_response(struct json *json)
 		return(-1);
 	if (NULL == (resp = json_getstr(json->obj, "status")))
 		return(-1);
-	rc = 0 == strcmp(resp, "pending");
+
+	if (0 == strcmp(resp, "valid")) 
+		rc = 1;
+	else if (0 == strcmp(resp, "pending"))
+		rc = 0;
+	else
+		rc = -1;
+
 	free(resp);
 	return(rc);
 }
@@ -242,13 +249,11 @@ jsonbody(void *ptr, size_t sz, size_t nm, void *arg)
 {
 	struct json	*json = arg;
 	enum json_tokener_error er;
-	extern int	 verbose;
 
 	if (NULL != json->obj)
 		return(0);
 
-	if (verbose > 1) 
-		dodbg("json: %.*s", (int)(nm * sz), ptr);
+	doddbg("received: [%.*s]", (int)(nm * sz), ptr);
 
 	/* This will be non-NULL when we finish. */
 	json->obj = json_tokener_parse_ex(json->tok, ptr, nm * sz);

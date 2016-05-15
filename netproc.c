@@ -208,7 +208,7 @@ netbody(void *ptr, size_t sz, size_t nm, void *arg)
 	void		*pp;
 
 	nsz = sz * nm;
-	doddbg("received: [%.*s]", (int)nsz, ptr);
+	/*doddbg("received: [%.*s]", (int)nsz, ptr);*/
 	pp = realloc(buf->buf, buf->sz + nsz + 1);
 	if (NULL == pp) {
 		dowarn("realloc");
@@ -471,7 +471,7 @@ dochngcheck(CURL *c, struct json *json, struct chng *chng)
 	} else if (-1 == (cc = json_parse_response(json))) {
 		dowarnx("%s: bad response", chng->uri);
 		return(0);
-	} else if (0 == cc)
+	} else if (cc > 0)
 		chng->status = 1;
 
 	return(1);
