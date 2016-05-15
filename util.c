@@ -190,7 +190,11 @@ checkexit(pid_t pid, enum comp comp)
 	}
 
 	if ( ! WIFEXITED(c)) 
-		dowarnx("bad exit: %s(%u)", compname(comp), pid);
+		dowarnx("bad exit: %s(%u) (%s)", 
+			compname(comp), pid,
+			WIFSIGNALED(c) ?
+			sys_signame[WTERMSIG(c)] :
+			"not-a-signal");
 	else if (EXIT_SUCCESS != WEXITSTATUS(c))
 		dowarnx("bad exit code: %s(%u)", compname(comp), pid);
 	else

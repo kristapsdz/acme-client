@@ -318,7 +318,7 @@ acctproc(int netsock, const char *acctkey,
 	 * we're creating from scratch.
 	 */
 
-	if (NULL == (f = fopen(acctkey, newacct ? "wx" : "r"))) {
+	if (NULL == (f = fopen(acctkey, newacct ? "w+x" : "r"))) {
 		dowarn("%s", acctkey);
 		goto error;
 	}
@@ -347,7 +347,6 @@ acctproc(int netsock, const char *acctkey,
 		goto error;
 	}
 #endif
-
 	/* 
 	 * Seed our PRNG with data from arc4random().
 	 * Do this until we're told it's ok and use increments of 64
@@ -370,7 +369,7 @@ acctproc(int netsock, const char *acctkey,
 			dowarnx("RSA_new");
 			goto error;
 		}
-		dodbg("%s: creating: %s bits", acctkey, KEY_BITS);
+		dodbg("%s: creating: %d bits", acctkey, KEY_BITS);
 		if ( ! RSA_generate_key_ex(r, KEY_BITS, bne, NULL)) {
 			dowarnx("RSA_generate_key_ex");
 			goto error;
@@ -381,6 +380,7 @@ acctproc(int netsock, const char *acctkey,
 			goto error;
 		}
 		BN_free(bne);
+		bne = NULL;
 	} else {
 		r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
 		if (NULL == r) {
