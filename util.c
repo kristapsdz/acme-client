@@ -192,11 +192,13 @@ checkexit(pid_t pid, enum comp comp)
 	}
 
 	if ( ! WIFEXITED(c)) 
+#ifdef __linux__
+		dowarnx("bad exit: %s(%u)", compname(comp), pid);
+#else
 		dowarnx("bad exit: %s(%u) (%s)", 
-			compname(comp), pid,
-			WIFSIGNALED(c) ?
-			sys_signame[WTERMSIG(c)] :
-			"not-a-signal");
+			compname(comp), pid, WIFSIGNALED(c) ? 
+			sys_signame[WTERMSIG(c)] : "not-a-signal");
+#endif
 	else if (EXIT_SUCCESS != WEXITSTATUS(c))
 		dowarnx("bad exit code: %s(%u)", compname(comp), pid);
 	else
@@ -239,11 +241,21 @@ dropprivs(uid_t uid, gid_t gid)
 		return(0);
 	}
 #else
-	if (setgroups(1, &gid) ||
-	    setegid(gid) || setgid(gid) ||
-	    seteuid(uid) || setuid(uid)) {
-		dowarn("drop privileges");
-		return(0);
+	if (-1 == setgroups(1, &gid)) {
+		dowarn("setgroups");
+		return(0); 
+	} else if (-1 == setgid(gid)) {
+		dowarn("setgid");
+		return(0); 
+	} else if (-1 == setegid(gid)) {
+		dowarn("setegid");
+		return(0); 
+	} else if (-1 == setuid(uid)) {
+		dowarn("setuid");
+		return(0); 
+	} else if (-1 == seteuid(uid)) {
+		dowarn("seteuid");
+		return(0); 
 	}
 #endif
 
