@@ -50,21 +50,21 @@ serialise(const char *tmp, const char *real,
 
 	fd = open(tmp, O_WRONLY|O_CREAT|O_TRUNC, 0444);
 	if (-1 == fd) {
-		dowarn(tmp);
+		dowarn("%s", tmp);
 		return(0);
 	} else if ((ssize_t)vsz != write(fd, v, vsz)) {
-		dowarnx(tmp);
+		dowarnx("%s", tmp);
 		close(fd);
 		return(0);
 	} else if (NULL != v2 && (ssize_t)v2sz != write(fd, v2, v2sz)) {
-		dowarnx(tmp);
+		dowarnx("%s", tmp);
 		close(fd);
 		return(0);
 	} else if (-1 == close(fd)) {
-		dowarn(tmp);
+		dowarn("%s", tmp);
 		return(0);
 	} else if (-1 == rename(tmp, real)) {
-		dowarn(real);
+		dowarn("%s", real);
 		return(0);
 	}
 
