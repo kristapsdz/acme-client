@@ -82,8 +82,8 @@ enum	comm {
 struct 	chng {
 	char		*uri; /* uri on ACME server */
 	char		*token; /* token we must offer */
-	size_t		 retry;
-	int		 status;
+	size_t		 retry; /* how many times have we tried */
+	int		 status; /* challenge accepted? */
 };
 
 /*
@@ -119,12 +119,18 @@ int		 chngproc(int, const char *);
  * They should be used instead of err.h because they print the process
  * component and pid.
  */
-void		 dowarnx(const char *, ...);
-void		 dowarn(const char *, ...);
-void		 doerr(const char *, ...);
-void		 doerrx(const char *, ...);
-void		 dodbg(const char *, ...);
-void		 doddbg(const char *, ...);
+void		 dowarnx(const char *, ...)
+			__attribute__((format(printf, 1, 2)));
+void		 dowarn(const char *, ...)
+			__attribute__((format(printf, 1, 2)));
+void		 doerr(const char *, ...)
+			__attribute__((format(printf, 1, 2)));
+void		 doerrx(const char *, ...)
+			__attribute__((format(printf, 1, 2)));
+void		 dodbg(const char *, ...)
+			__attribute__((format(printf, 1, 2)));
+void		 doddbg(const char *, ...)
+			__attribute__((format(printf, 1, 2)));
 const char 	*compname(enum comp);
 
 /*
@@ -166,7 +172,8 @@ char		*json_fmt_challenge(const char *, const char *);
 char		*json_fmt_newauthz(const char *);
 char		*json_fmt_newcert(const char *);
 char		*json_fmt_newreg(const char *);
-char		*json_fmt_protected(const char *, const char *, const char *);
+char		*json_fmt_protected(const char *, 
+			const char *, const char *);
 char		*json_fmt_header(const char *, const char *);
 char		*json_fmt_thumb(const char *, const char *);
 char		*json_fmt_signed(const char *, 
