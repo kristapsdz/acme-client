@@ -30,15 +30,20 @@
 
 #define	CERT_PEM "cert.pem"
 #define	CERT_PEM_BAK "cert.pem~"
+#define	CHAIN_PEM "chain.pem"
+#define	CHAIN_PEM_BAK "chain.pem~"
+#define	FULLCHAIN_PEM "fullchain.pem"
+#define	FULLCHAIN_PEM_BAK "fullchain.pem~"
 
 int
 fileproc(int certsock, const char *certdir)
 {
-	char		*csr;
+	char		*csr, *chain;
+	size_t		 chainsz;
 	int		 rc;
 	FILE		*f;
 
-	csr = NULL;
+	csr = chain = NULL;
 	rc = 0;
 	f = NULL;
 
@@ -67,6 +72,31 @@ fileproc(int certsock, const char *certdir)
 	}
 #endif
 
+	if (NULL == (chain = readbuf(certsock, COMM_CHAIN, &chainsz)))
+		goto error;
+
+	if (NULL == (f = fopen(CHAIN_PEM_BAK, "w"))) {
+		dowarn(CHAIN_PEM_BAK);
+		goto error;
+	} else if (chainsz != fwrite(chain, 1, chainsz, f)) {
+		dowarnx(CHAIN_PEM_BAK);
+		goto error;
+	} else if (-1 == fclose(f)) {
+		dowarn(CHAIN_PEM_BAK);
+		goto error;
+	}
+	f = NULL;
+
+	if (-1 == rename(CHAIN_PEM_BAK, CHAIN_PEM)) {
+		dowarn(CHAIN_PEM);
+		goto error;
+	} else if (-1 == chmod(CHAIN_PEM, 0444)) {
+		dowarn(CHAIN_PEM);
+		goto error;
+	}
+
+	dodbg("%s: created", CHAIN_PEM);
+
 	/*
 	 * Wait until we receive the DER encoded (signed) certificate
 	 * from the network process.
@@ -83,7 +113,7 @@ fileproc(int certsock, const char *certdir)
 	if (NULL == (f = fopen(CERT_PEM_BAK, "w"))) {
 		dowarn(CERT_PEM_BAK);
 		goto error;
-	} else if (-1 == fprintf(f, "%s", csr)) {
+	} else if (-1 == fputs(csr, f)) {
 		dowarnx(CERT_PEM_BAK);
 		goto error;
 	} else if (-1 == fclose(f)) {
@@ -107,12 +137,37 @@ fileproc(int certsock, const char *certdir)
 
 	dodbg("%s: created", CERT_PEM);
 
+	if (NULL == (f = fopen(FULLCHAIN_PEM_BAK, "w"))) {
+		dowarn(FULLCHAIN_PEM_BAK);
+		goto error;
+	} else if (-1 == fputs(csr, f)) {
+		dowarnx(FULLCHAIN_PEM_BAK);
+		goto error;
+	} else if (chainsz != fwrite(chain, 1, chainsz, f)) {
+		dowarnx(FULLCHAIN_PEM_BAK);
+		goto error;
+	} else if (-1 == fclose(f)) {
+		dowarn(FULLCHAIN_PEM_BAK);
+		goto error;
+	}
+	f = NULL;
+
+	if (-1 == rename(FULLCHAIN_PEM_BAK, FULLCHAIN_PEM)) {
+		dowarn(FULLCHAIN_PEM);
+		goto error;
+	} else if (-1 == chmod(FULLCHAIN_PEM, 0444)) {
+		dowarn(FULLCHAIN_PEM);
+		goto error;
+	}
+
+	dodbg("%s: created", FULLCHAIN_PEM);
+
 	rc = 1;
 error:
 	if (NULL != f)
 		fclose(f);
 	free(csr);
+	free(chain);
 	close(certsock);
 	return(rc);
 }
-
