@@ -112,6 +112,8 @@ main(int argc, char *argv[])
 
 	altsz = argc + 1;
 	alts = calloc(altsz, sizeof(char *));
+	if (NULL == alts)
+		err(EXIT_FAILURE, "calloc");
 	alts[0] = domain;
 	for (i = 0; i < altsz; i++)
 		alts[i + 1] = argv[i];
