@@ -75,7 +75,7 @@ keyproc(int netsock, const char *keyfile,
 	X509_REQ	*x;
 	X509_NAME 	*name;
 	unsigned char	 rbuf[64];
-	int		 len, rc;
+	int		 len, rc, nid;
 	STACK_OF(X509_EXTENSION) *exts;
 
 	x = NULL;
@@ -182,19 +182,23 @@ keyproc(int netsock, const char *keyfile,
 
 	/* 
 	 * Now add the SAN extensions. 
-	 * Don't do this if we don't need to.
 	 * This was lifted more or less directly from demos/x509/mkreq.c
 	 * of the OpenSSL source code.
 	 * (The zeroth altname is the domain name.)
+	 * FIXME: memory management...?
 	 */
 
 	if (altsz > 1) {
+		nid = NID_subject_alt_name;
 		if (NULL == (exts = sk_X509_EXTENSION_new_null())) {
 			dowarnx("sk_X509_EXTENSION_new_null");
 			goto error;
 		}
 		for (i = 1; i < altsz; i++)
-			add_ext(exts, NID_subject_alt_name, alts[i]);
+			if ( ! add_ext(exts, nid, alts[i])) {
+				dowarnx("add_ext");
+				goto error;
+			}
 		if ( ! X509_REQ_add_extensions(x, exts)) {
 			dowarnx("X509_REQ_add_extensions");
 			goto error;
