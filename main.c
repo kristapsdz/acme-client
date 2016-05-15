@@ -243,11 +243,7 @@ main(int argc, char *argv[])
 
 	close(file_fds[1]);
 
-	/*
-	 * Now we jail ourselves: we won't do anything after this point
-	 * except wait for the components to finish.
-	 * We use sandboxing, file-system, and user.
-	 */
+	/* Jail: sandbox, file-system, user. */
 
 #ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
