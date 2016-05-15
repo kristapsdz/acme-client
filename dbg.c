@@ -42,8 +42,8 @@ dovddbg(const char *fmt, va_list ap)
 	if (verbose < 2)
 		return;
 	fprintf(stderr, "%s(%u): TRACE: ", comps[proccomp], getpid());
-	vprintf(fmt, ap);
-	putchar('\n');
+	vfprintf(stderr, fmt, ap);
+	fputc('\n', stderr);
 }
 
 static void
@@ -55,8 +55,8 @@ dovdbg(const char *fmt, va_list ap)
 	if ( ! verbose)
 		return;
 	fprintf(stderr, "%s(%u): DEBUG: ", comps[proccomp], getpid());
-	vprintf(fmt, ap);
-	putchar('\n');
+	vfprintf(stderr, fmt, ap);
+	fputc('\n', stderr);
 }
 
 static void
