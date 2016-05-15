@@ -280,22 +280,25 @@ create and remove files.
 .\" .Sh HISTORY
 .\" .Sh AUTHORS
 .Sh CAVEATS
-On Mac OS X, the network process is not put into a
+On Mac OS X and Linux, the network process is not put into a
 .Xr chroot 2
 jail.
-This is due to limitations in how DNS resolution occurs on this system.
-Moreover, the sandbox for several components must be weakened from that
-of full-computation to no-network because the sandbox cannot be enacted
-within a
+This is due to limitations in how DNS resolution occurs on these
+systems.
+Moreover, for Mac OS X, the sandbox for several components must be
+weakened from that of full-computation to no-network because the sandbox
+cannot be enacted within a
 .Xr chroot 2 .
-In summary, running this on Mac OS X is not advised.
+There is no sandbox at all for Linux. 
+.Pp
+In summary, running this on anything but OpenBSD is not advised.
+.Sh BUGS
+The challenge and certificate processes retain their privileges, as I'm
+not sure which credentials to use otherwise.
 .Pp
 Since certificates are never examined (only private keys),
 .Nm
 doesn't know when the certificate is going to expire.
 This, for now, is left as an exercise to the operator.
-.Sh BUGS
-The challenge and certificate processes retain their privileges, as I'm
-not sure which credentials to use otherwise.
 .\" .Sh SECURITY CONSIDERATIONS
 .\" Not used in OpenBSD.

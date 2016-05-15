@@ -17,15 +17,16 @@ system is still a little young to be doing so.
 To use this tool, just download and run `make` and `make install` in
 the usual way.  The software has been designed with
 [OpenBSD](http://www.openbsd.org) in mind, though it works with reduced
-security on Mac OS X.  (This is due to the limitations of Apple's
-sandbox.)
+security on Mac OS X and Linux.  
+This is due to the chroot-unfriendly way that DNS lookups occur in both
+systems.
+Moreover, the sandbox facility in Mac OS X is very weak; and while it
+exists on Linux, it's too complicated to use.  Caveat emptor.
 
 In short, I don't recommend using any platform but OpenBSD.
 
 If you're trying to run on Linux, you'll need to edit the
-[Makefile](Makefile) as noted.  I only tested this on Debian, and only
-to compile.  Given the complexity of Linux's sandbox, I don't think
-that'll be supported any time soon.
+[Makefile](Makefile) as noted.  I only tested this on Debian.
 
 The software has several compile-time dependencies:
 [OpenSSL](https://openssl.org) or [LibreSSL](http://www.libressl.org),
