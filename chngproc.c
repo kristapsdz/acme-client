@@ -19,6 +19,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -37,15 +38,15 @@ chngproc(int netsock, const char *root)
 	int		  rc;
 	long		  lval;
 	enum chngop	  op;
-	char		 *tok, *thumb;
+	char		 *tok, *th, *fmt;
 	char		**fs;
 	size_t		  i, fsz;
 	void		 *pp;
-	FILE		 *f;
+	int		  fd;
 
 	rc = 0;
-	thumb = tok = NULL;
-	f = NULL;
+	th = tok = fmt = NULL;
+	fd = -1;
 	fs = NULL;
 	fsz = 0;
 
@@ -63,7 +64,7 @@ chngproc(int netsock, const char *root)
 		goto out;
 	} 
 #if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio cpath wpath rpath fattr", NULL)) {
+	if (-1 == pledge("stdio cpath wpath", NULL)) {
 		dowarn("pledge");
 		goto out;
 	}
@@ -73,6 +74,7 @@ chngproc(int netsock, const char *root)
 	 * Loop while we wait to get a thumbprint and token.
 	 * We'll get this for each SAN request.
 	 */
+
 	for (;;) {
 		if (0 == (lval = readop(netsock, COMM_CHNG_OP))) 
 			op = CHNG_STOP;
@@ -94,7 +96,7 @@ chngproc(int netsock, const char *root)
 		 * of tokens that we'll later clean up.
 		 */
 
-		if (NULL == (thumb = readstr(netsock, COMM_THUMB)))
+		if (NULL == (th = readstr(netsock, COMM_THUMB)))
 			goto out;
 		else if (NULL == (tok = readstr(netsock, COMM_TOK)))
 			goto out;
@@ -111,30 +113,34 @@ chngproc(int netsock, const char *root)
 		tok = NULL;
 		fsz++;
 
+		if (-1 == asprintf(&fmt, "%s.%s", fs[fsz - 1], th)) {
+			dowarn("asprintf");
+			goto out;
+		}
+
 		/* 
 		 * Create and write to our challenge file.
-		 * Then mark the file as mode 0444.
+		 * Note: we use file descriptors instead of FILE because
+		 * we want to minimise our pledges.
 		 */
 
-		if (NULL == (f = fopen(fs[fsz - 1], "wx"))) {
+		fd = open(fs[fsz - 1], O_WRONLY|O_EXCL|O_CREAT, 0444);
+
+		if (-1 == fd) {
 			dowarn("%s", fs[fsz - 1]);
 			goto out;
-		} if (-1 == fprintf(f, "%s.%s", fs[fsz - 1], thumb)) {
+		} if (-1 == write(fd, fmt, strlen(fmt))) {
 			dowarn("%s", fs[fsz - 1]);
 			goto out;
-		} else if (-1 == fclose(f)) {
+		} else if (-1 == close(fd)) {
 			dowarn("%s", fs[fsz - 1]);
 			goto out;
 		}
 
-		f = NULL;
-		free(thumb);
-		thumb = NULL;
-
-		if (-1 == chmod(fs[fsz - 1], 0444)) {
-			dowarn("%s", fs[fsz - 1]);
-			goto out;
-		}
+		fd = -1;
+		free(th);
+		free(fmt);
+		th = fmt = NULL;
 
 		dodbg("%s/%s: created", root, fs[fsz - 1]);
 
@@ -146,15 +152,16 @@ chngproc(int netsock, const char *root)
 
 	rc = 1;
 out:
-	if (NULL != f)
-		fclose(f);
+	if (-1 != fd)
+		close(fd);
 	for (i = 0; i < fsz; i++) {
-		if (-1 == remove(fs[i]) && ENOENT != errno)
+		if (-1 == unlink(fs[i]) && ENOENT != errno)
 			dowarn("%s", fs[i]);
 		free(fs[i]);
 	}
 	free(fs);
-	free(thumb);
+	free(fmt);
+	free(th);
 	free(tok);
 	close(netsock);
 	return(rc);
