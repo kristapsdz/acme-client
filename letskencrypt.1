@@ -1,4 +1,4 @@
-.Dd $Mdocdate: May 14 2016 $
+.Dd $Mdocdate: May 15 2016 $
 .Dt LETSKENCRYPT 1
 .Os
 .Sh NAME
@@ -167,6 +167,7 @@ as
 and
 .Pa fullchain.pem ,
 respectively.
+These are all created as the root user with mode 444.
 An ngnix configuration using these might be as follows:
 .Bd -literal
 server {
@@ -203,6 +204,8 @@ user.
 .It Certificate process.
 Translates certificates into PEM files and transfers them to the file
 process.
+Also extracts the CA issuer name from the certificate and transfers it
+to the network process for downloading.
 This process is jailed in
 .Pa /var/empty
 and sandboxed to do nothing at all.

@@ -199,44 +199,6 @@ checkexit(pid_t pid, enum comp comp)
 	return(0);
 }
 
-/*
- * The usual way to read a stream of bytes: copy into a static buffer,
- * grow a vector, copy into the vector.
- * Returns NULL on error, otherwise returns a nil-terminated string.
- * This sees EOF as being the end of the string.
- */
-char *
-readstream(int fd, enum comm comm)
-{
-	char	 buf[BUFSIZ];
-	char	*p;
-	void	*pp;
-	ssize_t	 ssz;
-	size_t	 sz;
-
-	sz = 0;
-	p = NULL;
-
-	while ((ssz = read(fd, buf, sizeof(buf))) > 0) {
-		pp = realloc(p, sz + (size_t)ssz + 1);
-		if (NULL == pp) {
-			dowarn("realloc");
-			free(p);
-			return(NULL);
-		}
-		p = pp;
-		memcpy(p + sz, buf, (size_t)ssz);
-		sz += ssz;
-		p[sz] = '\0';
-	}
-	if (ssz < 0) {
-		dowarn("read: %s", comms[comm]);
-		free(p);
-		return(NULL);
-	} 
-	return(p);
-}
-
 int
 dropprivs(uid_t uid, gid_t gid)
 {
