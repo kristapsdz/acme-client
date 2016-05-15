@@ -87,7 +87,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	int		 i, rc, idx;
 	X509		*x, *chainx;
 	X509_EXTENSION	*ext;
-	const X509V3_EXT_METHOD* method;
+	X509V3_EXT_METHOD *method;
 	void		*entries;
 	STACK_OF(CONF_VALUE) *val;
 	CONF_VALUE	*nval;
@@ -151,7 +151,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 
 	idx = X509_get_ext_by_NID(x, NID_info_access, idx);
 	if (idx >= 0 && NULL != (ext = X509_get_ext(x, idx)))
-		method = X509V3_EXT_get(ext);
+		method = (X509V3_EXT_METHOD *)X509V3_EXT_get(ext);
 
 	entries = X509_get_ext_d2i(x, NID_info_access, 0, 0);
 	if (NULL != method && NULL != entries) {
