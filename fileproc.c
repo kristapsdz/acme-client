@@ -41,33 +41,29 @@ serialise(const char *tmp, const char *real,
 	const char *v, size_t vsz,
 	const char *v2, size_t v2sz)
 {
-	FILE	*f;
+	int 	 fd;
 
-	/* Write into backup location, overwriting. */
+	/* 
+	 * Write into backup location, overwriting.
+	 * Then atomically (?) do the rename.
+	 */
 
-	if (NULL == (f = fopen(tmp, "w"))) {
+	fd = open(tmp, O_WRONLY|O_CREAT|O_TRUNC, 0444);
+	if (-1 == fd) {
 		dowarn(tmp);
 		return(0);
-	} else if (vsz != fwrite(v, 1, vsz, f)) {
+	} else if ((ssize_t)vsz != write(fd, v, vsz)) {
 		dowarnx(tmp);
-		fclose(f);
+		close(fd);
 		return(0);
-	} else if (NULL != v2 && v2sz != fwrite(v2, 1, v2sz, f)) {
+	} else if (NULL != v2 && (ssize_t)v2sz != write(fd, v2, v2sz)) {
 		dowarnx(tmp);
-		fclose(f);
+		close(fd);
 		return(0);
-	} else if (-1 == fclose(f)) {
+	} else if (-1 == close(fd)) {
 		dowarn(tmp);
-		fclose(f);
 		return(0);
-	}
-
-	/* Atomically (?) rename to real file and chmod. */
-
-	if (-1 == rename(tmp, real)) {
-		dowarn(real);
-		return(0);
-	} else if (-1 == chmod(real, 0444)) {
+	} else if (-1 == rename(tmp, real)) {
 		dowarn(real);
 		return(0);
 	}
@@ -81,12 +77,10 @@ fileproc(int certsock, const char *certdir)
 	char		*csr, *ch;
 	size_t		 chsz, csz;
 	int		 rc;
-	FILE		*f;
 	long		 lval;
 
 	csr = ch = NULL;
 	rc = 0;
-	f = NULL;
 
 	/* File-system and sandbox jailing. */
 
@@ -102,7 +96,12 @@ fileproc(int certsock, const char *certdir)
 		goto out;
 	} 
 #if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio cpath wpath", NULL)) {
+	/* 
+	 * XXX: rpath shouldn't be here, but it's tripped by the
+	 * rename(2) despite that pledge(2) specifically says rename(2)
+	 * is cpath.
+	 */
+	if (-1 == pledge("stdio cpath wpath rpath", NULL)) {
 		dowarn("pledge");
 		goto out;
 	}
@@ -151,8 +150,6 @@ fileproc(int certsock, const char *certdir)
 
 	rc = 1;
 out:
-	if (NULL != f)
-		fclose(f);
 	free(csr);
 	free(ch);
 	close(certsock);

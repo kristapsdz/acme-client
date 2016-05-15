@@ -137,6 +137,20 @@ chngproc(int netsock, const char *root)
 			goto out;
 		}
 
+		/*
+		 * I use this for testing when letskencrypt is being run
+		 * on machines apart from where I'm hosting the
+		 * challenge directory.
+		 */
+#if 0
+		fputs("RUN THIS IN THE CHALLENGE DIRECTORY\n", stderr);
+		fputs("YOU HAVE 20 SECONDS...\n", stderr);
+		fprintf(stderr, "doas sh -c \"echo %s > %s\"", 
+			fmt, fs[fsz - 1]);
+		sleep(20);
+		fputs("CONTINUING...\n", stderr);
+#endif
+
 		fd = -1;
 		free(th);
 		free(fmt);
