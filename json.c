@@ -253,7 +253,7 @@ jsonbody(void *ptr, size_t sz, size_t nm, void *arg)
 	if (NULL != json->obj)
 		return(0);
 
-	doddbg("received: [%.*s]", (int)(nm * sz), ptr);
+	doddbg("received: [%.*s]", (int)(nm * sz), (char *)ptr);
 
 	/* This will be non-NULL when we finish. */
 	json->obj = json_tokener_parse_ex(json->tok, ptr, nm * sz);
