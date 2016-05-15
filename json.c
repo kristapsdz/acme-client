@@ -143,6 +143,10 @@ json_free(struct json *p)
 	free(p);
 }
 
+/*
+ * Parse the response from the ACME server when we're waiting to see
+ * whether the challenge has been ok.
+ */
 int
 json_parse_response(struct json *json)
 {
