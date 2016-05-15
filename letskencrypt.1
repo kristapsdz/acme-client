@@ -19,12 +19,13 @@
 .Sh DESCRIPTION
 The
 .Nm
-utility submits (or refreshes) the
-.Dq Let's Encrypt
-certificate for
+utility submits an X509 certificate for
 .Ar domain
 and its alternate DNS names
-.Ar altnames .
+.Ar altnames
+to a
+.Dq Let's Encrypt
+server for automated signing.
 It must be run as root.
 .Pp
 By default, it uses
@@ -172,6 +173,7 @@ and
 .Pa fullchain.pem ,
 respectively.
 These are all created as the root user with mode 444.
+.Pp
 An ngnix configuration using these might be as follows:
 .Bd -literal
 server {
@@ -182,6 +184,15 @@ server {
   ssl_certificate_key /etc/ssl/letsencrypt/private/privkey.pem;
 }
 .Ed
+.Pp
+None of these certificates are
+.Em ever
+examined by
+.Nm :
+only the domain private key is used when generating certificates and
+talking to the
+.Dq Let's Encrypt
+server.
 .\" .Sh CONTEXT
 .\" For section 9 functions only.
 .Sh IMPLEMENTATION NOTES
@@ -278,6 +289,11 @@ of full-computation to no-network because the sandbox cannot be enacted
 within a
 .Xr chroot 2 .
 In summary, running this on Mac OS X is not advised.
+.Pp
+Since certificates are never examined (only private keys),
+.Nm
+doesn't know when the certificate is going to expire.
+This, for now, is left as an exercise to the operator.
 .Sh BUGS
 The challenge and certificate processes retain their privileges, as I'm
 not sure which credentials to use otherwise.
