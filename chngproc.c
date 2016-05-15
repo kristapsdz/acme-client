@@ -48,24 +48,19 @@ chngproc(int netsock, const char *root)
 	fs = NULL;
 	fsz = 0;
 
-	/*
-	 * File-system and sandbox jailing.
-	 */
+	/* File-system and sandbox jailing. */
 
 #ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL)) {
-		dowarn("sandbox_init");
+		dowarnx("sandbox_init");
 		goto out;
 	}
 #endif
-	if (-1 == chroot(root)) {
-		dowarn("%s: chroot", root);
+	if ( ! dropfs(root)) {
+		dowarnx("dropfs");
 		goto out;
-	} else if (-1 == chdir("/")) {
-		dowarn("/: chdir");
-		goto out;
-	}
+	} 
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio cpath wpath", NULL)) {
 		dowarn("pledge");

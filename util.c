@@ -199,6 +199,28 @@ checkexit(pid_t pid, enum comp comp)
 	return(0);
 }
 
+/*
+ * Safely chroot() into the desired directory.
+ * Returns zero on failure, non-zero on success.
+ */
+int
+dropfs(const char *root)
+{
+
+	if (-1 == chroot(root))
+		dowarn("%s: chroot", root);
+	else if (-1 == chdir("/")) 
+		dowarn("/: chdir");
+	else
+		return(1);
+
+	return(0);
+}
+
+/*
+ * Safely drop privileges into the given credentials.
+ * Returns zero on failure, non-zero on success.
+ */
 int
 dropprivs(uid_t uid, gid_t gid)
 {
@@ -207,14 +229,14 @@ dropprivs(uid_t uid, gid_t gid)
 	if (setgroups(1, &gid) ||
 	    setresgid(gid, gid, gid) ||
 	    setresuid(uid, uid, uid)) {
-		dowarn("cannot drop privileges");
+		dowarn("drop privileges");
 		return(0);
 	}
 #else
 	if (setgroups(1, &gid) ||
 	    setegid(gid) || setgid(gid) ||
 	    seteuid(uid) || setuid(uid)) {
-		dowarn("cannot drop privileges");
+		dowarn("drop privileges");
 		return(0);
 	}
 #endif

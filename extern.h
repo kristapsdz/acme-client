@@ -173,6 +173,7 @@ char		*json_fmt_signed(const char *,
 			const char *, const char *, const char *);
 
 int		 dropprivs(uid_t, gid_t);		 
+int		 dropfs(const char *);
 
 /*
  * Should we print debugging messages?

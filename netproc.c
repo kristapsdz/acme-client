@@ -528,8 +528,18 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	long		 http, op;
 
 	rc = EXIT_FAILURE;
+	memset(&paths, 0, sizeof(struct capaths));
+	memset(&buf, 0, sizeof(struct buf));
+	home = url = reqsn = req = cert = thumb = NULL;
+	json = NULL;
+	c = NULL;
+	chngs = NULL;
 
-	/* Prepare our file-system jail. */
+	/* 
+	 * Start by creating our jailed environment.
+	 * If this fails, just return immediately as we haven't allocated any
+	 * resources yet.
+	 */
 
 	if (NULL == (home = netprepare(uid, gid)))
 		return(0);
@@ -540,11 +550,10 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	 * jail, and we can't do that if we're already in it.
 	 */
 
-	if (-1 == (pid = fork())) 
-		doerr("fork");
-
-	if (pid > 0) {
-		/* XXX: keep privileges to netcleanup(). */
+	if (-1 == (pid = fork())) {
+		dowarn("fork");
+		goto out;
+	} else if (pid > 0) {
 		close(kfd);
 		close(afd);
 		close(Cfd);
@@ -560,32 +569,35 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 
 #ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoWrite, 
- 	    SANDBOX_NAMED, NULL))
-		doerr("sandbox_init");
+ 	    SANDBOX_NAMED, NULL)) {
+		dowarnx("sandbox_init");
+		goto out;
+	}
 #endif
 #ifndef __APPLE__
-	if (-1 == chroot(home))
-		doerr("%s: chroot", home);
-	else if (-1 == chdir("/"))
-		doerr("/: chdir");
-#endif
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio dns", NULL))
-		doerr("pledge");
-#endif
-	if ( ! dropprivs(uid, gid))
-		doerrx("dropprivs");
-
+	/*
+	 * We don't do this on Mac OS X because Mac doesn't use the
+	 * traditional resolv.conf for its lookups.
+	 * Instead, it uses a socket, and I'm not going to look into how
+	 * to duplicate that right now.
+	 */
+	if ( ! dropfs(home)) {
+		dowarnx("dropfs");
+		goto out;
+	}
 	free(home);
 	home = NULL;
-
-	/* Zero all the things. */
-	memset(&paths, 0, sizeof(struct capaths));
-	memset(&buf, 0, sizeof(struct buf));
-	url = reqsn = req = cert = thumb = NULL;
-	json = NULL;
-	c = NULL;
-	chngs = NULL;
+#endif
+	if ( ! dropprivs(uid, gid)) {
+		dowarnx("dropprivs");
+		goto out;
+	}
+#if defined(__OpenBSD__) && OpenBSD >= 201605
+	if (-1 == pledge("stdio dns", NULL)) {
+		dowarn("pledge");
+		goto out;
+	}
+#endif
 
 	/* Allocate main state. */
 
@@ -604,6 +616,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	/* Grab the directory structure from the CA. */
 
 	dodbg("%s: requesting directories", URL_CA);
+
 	if ( ! nreq(c, URL_CA, &http, json, NULL)) {
 		dowarnx("%s: bad comm", URL_CA);
 		goto out;
@@ -728,6 +741,7 @@ out:
 		close(afd);
 	if (-1 != Cfd)
 		close(Cfd);
+	free(home);
 	free(cert);
 	free(req);
 	free(reqsn);

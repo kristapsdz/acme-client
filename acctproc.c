@@ -325,30 +325,25 @@ acctproc(int netsock, const char *acctkey,
 #ifdef __APPLE__
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL)) {
-		dowarn("sandbox_init");
+		dowarnx("sandbox_init");
 		goto error;
 	}
 #endif
-	if (-1 == chroot(PATH_VAR_EMPTY)) {
-		dowarn("%s: chroot", PATH_VAR_EMPTY);
-		goto error;
-	} else if (-1 == chdir("/")) {
-		dowarn("/: chdir");
-		goto error;
-	}
-
-	/* Pre-pledge due to file access attempts. */
-
 	ERR_load_crypto_strings();
 
+	if ( ! dropfs(PATH_VAR_EMPTY)) {
+		dowarnx("dropfs");
+		goto error;
+	} else if ( ! dropprivs(uid, gid)) {
+		dowarnx("dropprivs");
+		goto error;
+	}
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio", NULL)) {
 		dowarn("pledge");
 		goto error;
 	}
 #endif
-	if ( ! dropprivs(uid, gid)) 
-		goto error;
 
 	/* 
 	 * Seed our PRNG with data from arc4random().

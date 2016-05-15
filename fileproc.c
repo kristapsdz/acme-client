@@ -95,22 +95,16 @@ fileproc(int certsock, const char *certdir)
 		goto error;
 	}
 #endif
-
-	if (-1 == chroot(certdir)) {
-		dowarn("%s: chroot", certdir);
+	if ( ! dropfs(certdir)) {
+		dowarnx("dropfs");
 		goto error;
-	} else if (-1 == chdir("/")) {
-		dowarn("/: chdir");
-		goto error;
-	}
-
+	} 
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio cpath wpath", NULL)) {
 		dowarn("pledge");
 		goto error;
 	}
 #endif
-
 	/*
 	 * Start by downloading the chain PEM as a buffer.
 	 * This is not nil-terminated, but we're just going to guess
