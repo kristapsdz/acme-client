@@ -117,7 +117,7 @@ filecopy(const char *in, const char *out)
 	oflags = O_CREAT|O_TRUNC|O_WRONLY|O_APPEND;
 
 	if (-1 == (fd2 = open(in, O_RDONLY, 0))) {
-		dowarn(in);
+		dowarn("%s", in);
 		goto out;
 	} else if (-1 == (fd = open(out, oflags, 0644))) {
 		dowarn("%s", out);
@@ -136,7 +136,7 @@ filecopy(const char *in, const char *out)
 		}
 	}
 	if (ssz < 0) {
-		dowarn(in);
+		dowarn("%s", in);
 		goto out;
 	}
 
