@@ -105,24 +105,64 @@ netcleanup(char *dir)
 	free(dir);
 }
 
+static int
+filecopy(const char *in, const char *out)
+{
+	int	 rc, fd2, fd, oflags;
+	ssize_t	 ssz, ssz2;
+	char	 dbuf[BUFSIZ];
+
+	fd2 = fd = -1;
+	rc = 0;
+	oflags = O_CREAT|O_TRUNC|O_WRONLY|O_APPEND;
+
+	if (-1 == (fd2 = open(in, O_RDONLY, 0))) {
+		dowarn(in);
+		goto out;
+	} else if (-1 == (fd = open(out, oflags, 0644))) {
+		dowarn("%s", out);
+		goto out;
+	}
+
+	/* Copy via a static buffer. */
+
+	while ((ssz = read(fd2, dbuf, sizeof(dbuf))) > 0) {
+		if ((ssz2 = write(fd, dbuf, ssz)) < 0) {
+			dowarn("%s", out);
+			goto out;
+		} else if (ssz2 != ssz) {
+			dowarnx("%s: short write", out);
+			goto out;
+		}
+	}
+	if (ssz < 0) {
+		dowarn(in);
+		goto out;
+	}
+
+	rc = 1;
+out:
+	if (-1 != fd)
+		close(fd);
+	if (-1 != fd2)
+		close(fd2);
+	return(rc);
+}
+
 /*
  * Prepare the file-system jail.
  * This will create a temporary directory and fill it with the
  * /etc/resolv.conf from the host.
  * This file is used by the DNS resolver and is the only file necessary
  * within the chroot.
- * This doesn't work with Mac OS X.
+ * This doesn't work with Mac OS X or Linux.
  * Returns NULL on failure, else the new root.
  */
 static char *
 netprepare(uid_t uid, gid_t gid)
 {
 	char	*dir, *tmp;
-	int	 fd, oflags, fd2;
-	char	 dbuf[BUFSIZ];
-	ssize_t	 ssz, ssz2;
 
-	fd = fd2 = -1;
 	tmp = dir = NULL;
 
 	dir = strdup("/tmp/letskencrypt.XXXXXXXXXX");
@@ -141,6 +181,7 @@ netprepare(uid_t uid, gid_t gid)
 
 	if (-1 == asprintf(&tmp, "%s/etc", dir)) {
 		dowarn("asprintf");
+		tmp = NULL;
 		goto err;
 	} else if (-1 == mkdir(tmp, 0755)) {
 		dowarn("%s", tmp);
@@ -152,46 +193,16 @@ netprepare(uid_t uid, gid_t gid)
 
 	/* Open /etc/resolv.conf and get ready. */
 
-	fd2 = open(PATH_RESOLV, O_RDONLY, 0);
-	if (-1 == fd2) {
-		dowarn(PATH_RESOLV);
-		goto err;
-	}
-
-	oflags = O_CREAT|O_TRUNC|O_WRONLY|O_APPEND;
 	if (-1 == asprintf(&tmp, "%s" PATH_RESOLV, dir)) {
 		dowarn("asprintf");
+		tmp = NULL;
 		goto err;
-	} else if (-1 == (fd = open(tmp, oflags, 0644))) {
-		dowarn("%s", tmp);
+	} else if ( ! filecopy(PATH_RESOLV, tmp))
 		goto err;
-	}
-
-	/* Copy via a static buffer. */
-
-	while ((ssz = read(fd2, dbuf, sizeof(dbuf))) > 0) {
-		if ((ssz2 = write(fd, dbuf, ssz)) < 0) {
-			dowarn("%s", tmp);
-			goto err;
-		} else if (ssz2 != ssz) {
-			dowarnx("%s: short write", tmp);
-			goto err;
-		}
-	}
-	if (ssz < 0) {
-		dowarn(PATH_RESOLV);
-		goto err;
-	}
-
-	close(fd);
-	close(fd2);
 	free(tmp);
+
 	return(dir);
 err:
-	if (-1 != fd)
-		close(fd);
-	if (-1 != fd2)
-		close(fd2);
 	free(tmp);
 	netcleanup(dir);
 	return(NULL);
@@ -575,7 +586,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 		goto out;
 	}
 #endif
-#ifndef __APPLE__
+#if ! defined(__APPLE__) && ! defined(__linux__)
 	/*
 	 * We don't do this on Mac OS X because Mac doesn't use the
 	 * traditional resolv.conf for its lookups.
