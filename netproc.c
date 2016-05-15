@@ -51,6 +51,18 @@ struct	buf {
 	size_t	 sz;
 };
 
+static void
+buf_reset(struct buf *buf)
+{
+
+	if (NULL == buf) 
+		return;
+
+	free(buf->buf);
+	buf->buf = NULL;
+	buf->sz = 0;
+}
+
 /*
  * Clean up the environment.
  * This will only have one file in it (within one directory).
@@ -239,10 +251,12 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
  * On non-zero return, stuffs the HTTP code into "code".
  */
 static int
-nreq(CURL *c, const char *addr, long *code, struct json *json)
+nreq(CURL *c, const char *addr, long *code, 
+	struct json *json, struct buf *buf)
 {
 	CURLcode	 res;
 
+	buf_reset(buf);
 	json_reset(json);
 	curl_easy_reset(c);
 	curl_easy_setopt(c, CURLOPT_URL, addr);
@@ -250,8 +264,13 @@ nreq(CURL *c, const char *addr, long *code, struct json *json)
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
 	if (verbose > 1)
 		curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
-	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
-	curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
+	if (NULL != json) {
+		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
+		curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
+	} else if (NULL != buf) {
+		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, netbody);
+		curl_easy_setopt(c, CURLOPT_WRITEDATA, buf);
+	}
 
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
 	      dowarnx("%s: %s", addr, curl_easy_strerror(res));
@@ -443,7 +462,7 @@ dochngcheck(CURL *c, struct json *json, struct chng *chng)
 
 	dodbg("%s: status", chng->uri);
 
-	if ( ! nreq(c, chng->uri, &lc, json)) {
+	if ( ! nreq(c, chng->uri, &lc, json, NULL)) {
 		dowarnx("%s: bad comm", chng->uri);
 		return(0);
 	} else if (200 != lc && 201 != lc && 202 != lc) {
@@ -500,7 +519,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	pid_t		 pid;
 	int		 st, rc;
 	size_t		 i;
-	char		*home, *cert, *req, *reqsn, *thumb;
+	char		*home, *cert, *req, *reqsn, *thumb, *url;
 	CURL		*c;
 	struct buf	 buf;
 	struct json	*json;
@@ -563,7 +582,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	/* Zero all the things. */
 	memset(&paths, 0, sizeof(struct capaths));
 	memset(&buf, 0, sizeof(struct buf));
-	reqsn = req = cert = thumb = NULL;
+	url = reqsn = req = cert = thumb = NULL;
 	json = NULL;
 	c = NULL;
 	chngs = NULL;
@@ -585,7 +604,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	/* Grab the directory structure from the CA. */
 
 	dodbg("%s: requesting directories", URL_CA);
-	if ( ! nreq(c, URL_CA, &http, json)) {
+	if ( ! nreq(c, URL_CA, &http, json, NULL)) {
 		dowarnx("%s: bad comm", URL_CA);
 		goto out;
 	} else if (200 != http && 201 != http) {
@@ -681,6 +700,22 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	else if ( ! docert(c, afd, paths.newcert, &buf, cert)) 
 		goto out;
 	else if ( ! writebuf(cfd, COMM_CSR, buf.buf, buf.sz))
+		goto out;
+
+	/* 
+	 * Read back the issuer from the certproc.
+	 * Then contact the issuer to get the certificate chain.
+	 * Write this chain directly back to the certproc.
+	 */
+
+	if (NULL == (url = readstr(cfd, COMM_ISSUER)))
+		goto out;
+
+	dodbg("%s: full-chain", url);
+
+	if ( ! nreq(c, url, &http, NULL, &buf))
+		goto out;
+	else if ( ! writebuf(cfd, COMM_CHAIN, buf.buf, buf.sz))
 		goto out;
 
 	rc = EXIT_SUCCESS;

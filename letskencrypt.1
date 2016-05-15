@@ -115,6 +115,10 @@ alternative names.
 Submit a request for signature to the CA.
 .It
 Download the signed X509 certificate.
+.It
+Extract the CA issuer from the X509 certificate.
+.It
+Download the certificate chain from the issuer.
 .El
 .
 .
@@ -154,9 +158,15 @@ responds to a challenge.
 .
 .
 .Ss Certificates
-Public certificates (the domain certificate and the full-chain) are
+Public certificates (domain certificate, chain, and the full-chain) are
 placed by default in
-.Pa /etc/ssl/letsencrypt .
+.Pa /etc/ssl/letsencrypt
+as
+.Pa cert.pem ,
+.Pa chain.pem ,
+and
+.Pa fullchain.pem ,
+respectively.
 An ngnix configuration using these might be as follows:
 .Bd -literal
 server {
@@ -191,7 +201,16 @@ It drops user privileges to the
 .Dq nobody
 user.
 .It Certificate process.
-Manages public certificate files.
+Translates certificates into PEM files and transfers them to the file
+process.
+This process is jailed in
+.Pa /var/empty
+and sandboxed to do nothing at all.
+It drops user privileges to the
+.Dq nobody
+user.
+.It File process.
+Manages public certificate and certificate chain files.
 This process is jailed in the certificate directory and can only create
 and rename files.
 Each domain certificate is written into a temporary file then atomically

@@ -277,6 +277,7 @@ main(int argc, char *argv[])
 	     checkexit(pids[COMP_CHALLENGE], COMP_CHALLENGE);
 
 	free(alts);
+	fflush(stderr);
 	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
 usage:
 	fprintf(stderr, "usage: %s "

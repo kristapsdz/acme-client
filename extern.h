@@ -68,6 +68,8 @@ enum	comm {
 	COMM_CHNG_ACK,
 	COMM_ACCT,
 	COMM_CSR,
+	COMM_ISSUER,
+	COMM_CHAIN,
 	COMM__MAX
 };
 

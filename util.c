@@ -43,6 +43,8 @@ static	const char *const comms[COMM__MAX] = {
 	"challenge-ack", /* COMM_CHNG_ACK */
 	"account", /* COMM_SIGN */
 	"csr", /* COMM_CSR */
+	"issuer", /* COMM_ISSUER */
+	"chain", /* COMM_CHAIN */
 };
 
 static void
