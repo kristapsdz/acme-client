@@ -19,6 +19,7 @@
 #endif
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/param.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -593,7 +594,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 		goto out;
 	}
 #if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio dns", NULL)) {
+	if (-1 == pledge("stdio dns rpath inet", NULL)) {
 		dowarn("pledge");
 		goto out;
 	}
@@ -711,6 +712,8 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	if (NULL == (cert = readstr(kfd, COMM_CERT)))
 		goto out;
 	else if ( ! docert(c, afd, paths.newcert, &buf, cert)) 
+		goto out;
+	else if ( ! writeop(cfd, COMM_CSR_OP, 1))
 		goto out;
 	else if ( ! writebuf(cfd, COMM_CSR, buf.buf, buf.sz))
 		goto out;

@@ -17,6 +17,8 @@
 #ifdef __linux__
 # define _GNU_SOURCE
 #endif
+#include <sys/param.h>
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>

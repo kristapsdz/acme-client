@@ -15,6 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include <sys/stat.h>
+#include <sys/param.h>
 
 #include <fcntl.h>
 #include <stdarg.h>
@@ -81,6 +82,7 @@ fileproc(int certsock, const char *certdir)
 	size_t		 chsz, csz;
 	int		 rc;
 	FILE		*f;
+	long		 lval;
 
 	csr = ch = NULL;
 	rc = 0;
@@ -92,17 +94,17 @@ fileproc(int certsock, const char *certdir)
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL)) {
 		dowarn("sandbox_init");
-		goto error;
+		goto out;
 	}
 #endif
 	if ( ! dropfs(certdir)) {
 		dowarnx("dropfs");
-		goto error;
+		goto out;
 	} 
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio cpath wpath", NULL)) {
 		dowarn("pledge");
-		goto error;
+		goto out;
 	}
 #endif
 	/*
@@ -112,10 +114,14 @@ fileproc(int certsock, const char *certdir)
 	 * Once downloaded, dump it into CHAIN_BAK.
 	 */
 
-	if (NULL == (ch = readbuf(certsock, COMM_CHAIN, &chsz)))
-		goto error;
+	if (0 == (lval = readop(certsock, COMM_CHAIN_OP))) {
+		rc = 1;
+		goto out;
+	} else if (NULL == (ch = readbuf(certsock, COMM_CHAIN, &chsz)))
+		goto out;
+
 	if ( ! serialise(CHAIN_BAK, CHAIN_PEM, ch, chsz, NULL, 0))
-		goto error;
+		goto out;
 
 	dodbg("%s: created", CHAIN_PEM);
 
@@ -127,9 +133,9 @@ fileproc(int certsock, const char *certdir)
 	 */
 
 	if (NULL == (csr = readbuf(certsock, COMM_CSR, &csz)))
-		goto error;
+		goto out;
 	if ( ! serialise(CERT_BAK, CERT_PEM, csr, csz, NULL, 0))
-		goto error;
+		goto out;
 
 	dodbg("%s: created", CERT_PEM);
 
@@ -139,12 +145,12 @@ fileproc(int certsock, const char *certdir)
 	 */
 
 	if ( ! serialise(FCHAIN_BAK, FCHAIN_PEM, csr, csz, ch, chsz))
-		goto error;
+		goto out;
 
 	dodbg("%s: created", FCHAIN_PEM);
 
 	rc = 1;
-error:
+out:
 	if (NULL != f)
 		fclose(f);
 	free(csr);

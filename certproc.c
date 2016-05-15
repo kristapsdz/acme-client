@@ -15,6 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include <sys/stat.h>
+#include <sys/param.h>
 
 #include <fcntl.h>
 #include <stdarg.h>
@@ -85,6 +86,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	unsigned char	*csrcp, *chaincp;
 	size_t		 csrsz, chainsz;
 	int		 i, rc, idx;
+	long		 lval;
 	X509		*x, *chainx;
 	X509_EXTENSION	*ext;
 	X509V3_EXT_METHOD *method;
@@ -105,38 +107,43 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL)) {
 		dowarnx("sandbox_init");
-		goto error;
+		goto out;
 	}
 #endif
 	ERR_load_crypto_strings();
 
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
 		dowarnx("dropfs");
-		goto error;
+		goto out;
 	} else if ( ! dropprivs(uid, gid)) {
 		dowarnx("dropprivs");
-		goto error;
+		goto out;
 	}
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio", NULL)) {
 		dowarn("pledge");
-		goto error;
+		goto out;
 	}
 #endif
 
 	/*
 	 * Wait until we receive the DER encoded (signed) certificate
 	 * from the network process.
+	 * If the netproc exits (sending us a zero), then just exit
+	 * cleanly.
 	 */
 
-	if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
-		goto error;
+	if (0 == (lval = readop(netsock, COMM_CSR_OP))) {
+		rc = 1;
+		goto out;
+	} else if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
+		goto out;
 
 	csrcp = (u_char *)csr;
 	x = d2i_X509(NULL, (const u_char **)&csrcp, csrsz);
 	if (NULL == x) {
 		dowarnx("d2i_X509");
-		goto error;
+		goto out;
 	}
 
 	/*
@@ -158,7 +165,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 			url = strdup(nval->value);
 			if (NULL == url) {
 				dowarn("strdup");
-				goto error;
+				goto out;
 			}
 			break;
 		}
@@ -166,18 +173,18 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 
 	if (NULL == url) {
 		dowarnx("no CA issuer registered with certificate");
-		goto error;
+		goto out;
 	}
 
 	/* Write the CA issuer to the netsock. */
 
 	if ( ! writestr(netsock, COMM_ISSUER, url))
-		goto error;
+		goto out;
 
 	/* Read the full-chain back from the netsock. */
 
 	if (NULL == (chain = readbuf(netsock, COMM_CHAIN, &chainsz)))
-		goto error;
+		goto out;
 
 	/*
 	 * Then check if the chain is PEM-encoded by looking to see if
@@ -193,26 +200,28 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 			(const u_char **)&chaincp, chainsz);
 		if (NULL == chainx) {
 			dowarnx("d2i_X509");
-			goto error;
+			goto out;
 		}
 		free(chain);
 		if (NULL == (chain = x509buf(chainx, &chainsz)))
-			goto error;
+			goto out;
 	} 
-	
-	if ( ! writebuf(filesock, COMM_CHAIN, chain, chainsz))
-		goto error;
+
+	if ( ! writeop(filesock, COMM_CHAIN_OP, 1))
+		goto out;
+	else if ( ! writebuf(filesock, COMM_CHAIN, chain, chainsz))
+		goto out;
 
 	/* Next, convert the X509 to a buffer and send that. */
 
 	free(chain);
 	if (NULL == (chain = x509buf(x, &chainsz)))
-		goto error;
+		goto out;
 	if ( ! writebuf(filesock, COMM_CSR, chain, chainsz))
-		goto error;
+		goto out;
 
 	rc = 1;
-error:
+out:
 	if (NULL != x)
 		X509_free(x);
 	if (NULL != chainx)
