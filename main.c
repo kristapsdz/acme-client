@@ -15,6 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include <sys/socket.h>
+#include <sys/param.h>
 
 #include <err.h>
 #include <pwd.h>
@@ -269,6 +270,7 @@ main(int argc, char *argv[])
 	rc = checkexit(pids[COMP_KEY], COMP_KEY) +
 	     checkexit(pids[COMP_CERT], COMP_CERT) +
 	     checkexit(pids[COMP_NET], COMP_NET) +
+	     checkexit(pids[COMP_FILE], COMP_FILE) +
 	     checkexit(pids[COMP_ACCOUNT], COMP_ACCOUNT) +
 	     checkexit(pids[COMP_CHALLENGE], COMP_CHALLENGE);
 

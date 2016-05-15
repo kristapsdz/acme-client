@@ -15,6 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include <sys/stat.h>
+#include <sys/param.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -62,7 +63,7 @@ chngproc(int netsock, const char *root)
 		goto out;
 	} 
 #if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio cpath wpath", NULL)) {
+	if (-1 == pledge("stdio cpath wpath rpath fattr", NULL)) {
 		dowarn("pledge");
 		goto out;
 	}
