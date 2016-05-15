@@ -35,6 +35,49 @@
 
 #define MARKER "-----BEGIN CERTIFICATE-----"
 
+/*
+ * Convert an X509 certificate to a buffer of "sz".
+ * We don't guarantee that it's nil-terminated.
+ * Returns NULL on failure.
+ */
+static char *
+x509buf(X509 *x, size_t *sz)
+{
+	BIO	*bio;
+	char	*p;
+	int	 ssz;
+
+	/* Convert X509 to PEM in BIO. */
+
+	if (NULL == (bio = BIO_new(BIO_s_mem()))) {
+		dowarnx("BIO_new");
+		return(NULL);
+	} else if ( ! PEM_write_bio_X509(bio, x)) {
+		dowarnx("PEM_write_bio_X509");
+		BIO_free(bio);
+		return(NULL);
+	}
+
+	/* Now convert bio to string. */
+
+	if (NULL == (p = malloc(bio->num_write))) {
+		dowarn("malloc");
+		BIO_free(bio);
+		return(NULL);
+	} 
+
+	ssz = BIO_read(bio, p, bio->num_write);
+	if (ssz < 0 || (unsigned)ssz != bio->num_write) {
+		dowarnx("BIO_read");
+		BIO_free(bio);
+		return(NULL);
+	}
+
+	*sz = ssz;
+	BIO_free(bio);
+	return(p);
+}
+
 int
 certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 {
@@ -42,22 +85,19 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	unsigned char	*csrcp, *chaincp;
 	size_t		 csrsz, chainsz;
 	int		 i, rc, idx;
-	FILE		*f;
 	X509		*x, *chainx;
 	X509_EXTENSION	*ext;
 	const X509V3_EXT_METHOD* method;
 	void		*entries;
 	STACK_OF(CONF_VALUE) *val;
-	BIO		*bio;
+	CONF_VALUE	*nval;
 
 	ext = NULL;
 	idx = -1;
 	method = NULL;
 	chain = csr = url = NULL;
 	rc = 0;
-	f = NULL;
 	x = chainx = NULL;
-	bio = NULL;
 
 	/* File-system and sandbox jailing. */
 
@@ -97,10 +137,10 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
 		goto error;
 
-	csrcp = (unsigned char *)csr;
-	x = d2i_X509(NULL, (const unsigned char **)&csrcp, csrsz);
+	csrcp = (u_char *)csr;
+	x = d2i_X509(NULL, (const u_char **)&csrcp, csrsz);
 	if (NULL == x) {
-		dowarn("d2i_X509");
+		dowarnx("d2i_X509");
 		goto error;
 	}
 
@@ -117,7 +157,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	if (NULL != method && NULL != entries) {
 		val = method->i2v(method, entries, 0);
 		for (i = 0; i < sk_CONF_VALUE_num(val); i++) {
-			CONF_VALUE* nval = sk_CONF_VALUE_value(val, i);
+			nval = sk_CONF_VALUE_value(val, i);
 			if (strcmp(nval->name, "CA Issuers - URI"))
 				continue;
 			url = strdup(nval->value);
@@ -150,6 +190,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	 * If so, ship it as-is; otherwise, convert to a PEM encoded
 	 * buffer and ship that.
 	 */
+
 	if (chainsz <= strlen(MARKER) ||
 	    strncmp(chain, MARKER, strlen(MARKER))) {
 		chaincp = (u_char *)chain;
@@ -160,69 +201,34 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 			goto error;
 		}
 		free(chain);
-		chain = NULL;
-
-		/* Write into a BIO buffer. */
-
-		if (NULL == (bio = BIO_new(BIO_s_mem()))) {
-			dowarn("BIO_new");
+		if (NULL == (chain = x509buf(chainx, &chainsz)))
 			goto error;
-		} else if ( ! PEM_write_bio_X509(bio, chainx)) {
-			dowarn("PEM_write_bio_X509");
-			BIO_free(bio);
-			goto error;
-		}
-
-		/* Convert BIO buffer back into string. */
-
-		chain = calloc(1, bio->num_write + 1);
-		if (NULL == chain) {
-			dowarn("calloc");
-			goto error;
-		} else if (BIO_read(bio, chain, bio->num_write) <= 0) {
-			dowarnx("BIO_read");
-			goto error;
-		}
-
-		chainsz = bio->num_write;
-		BIO_free(bio);
-		bio = NULL;
 	} 
 	
 	if ( ! writebuf(filesock, COMM_CHAIN, chain, chainsz))
 		goto error;
 
-	/* Write the certificate to the file socket. */
+	/* Next, convert the X509 to a buffer and send that. */
 
-	if (NULL == (f = fdopen(filesock, "a"))) {
-		dowarn("fdopen");
+	free(chain);
+	if (NULL == (chain = x509buf(x, &chainsz)))
 		goto error;
-	} else if ( ! PEM_write_X509(f, x)) {
-		dowarnx("PEM_write_X509");
+	if ( ! writebuf(filesock, COMM_CSR, chain, chainsz))
 		goto error;
-	} else if (-1 == fclose(f)) {
-		dowarn("fclose");
-		goto error;
-	}
-	f = NULL;
 
 	rc = 1;
 error:
-	if (NULL != f)
-		fclose(f);
 	if (NULL != x)
 		X509_free(x);
 	if (NULL != chainx)
 		X509_free(chainx);
-	if (NULL != bio)
-		BIO_free(bio);
 	free(csr);
 	free(url);
 	free(chain);
-	ERR_print_errors_fp(stderr);
-	ERR_free_strings();
 	close(netsock);
 	close(filesock);
+	ERR_print_errors_fp(stderr);
+	ERR_free_strings();
 	return(rc);
 }
 

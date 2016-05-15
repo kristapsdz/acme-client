@@ -134,7 +134,6 @@ const char 	*compname(enum comp);
 long		 readop(int, enum comm);
 char		*readbuf(int, enum comm, size_t *);
 char		*readstr(int, enum comm);
-char		*readstream(int, enum comm);
 int		 writebuf(int, enum comm, const void *, size_t);
 int		 writestr(int, enum comm, const char *);
 int		 writeop(int, enum comm, long);
