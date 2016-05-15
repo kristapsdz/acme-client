@@ -5,7 +5,7 @@ strong focus on security.
 This repository mirrors the master CVS repository: any changes will
 occur on the master and be pushed periodically to GitHub.
 
-See [letsencrypt.1](blob/master/letsencrypt.1) for complete documentation.
+See [letsencrypt.1](letsencrypt.1) for complete documentation.
 
 By default, this talks only to the Let's Encrypt staging server.  You'll
 need to edit netproc.c if you'd prefer the real deal, but the system is
@@ -22,7 +22,7 @@ This is due to the limitations of Mac's sandboxing.
 In short, I don't recommend using any platform but OpenBSD.
 
 If you're running on Linux, youll need to edit the
-[Makefile](blob/master/Makefile) as noted.  I only tested this on
+[Makefile](Makefile) as noted.  I only tested this on
 Debian, and only to compile.
 
 The software has several compile-time dependencies:
