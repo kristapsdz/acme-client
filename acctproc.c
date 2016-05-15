@@ -39,6 +39,9 @@
 
 #include "extern.h"
 
+/*
+ * Default number of bits when creating a new key.
+ */
 #define	KEY_BITS 4096
 
 /*
