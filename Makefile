@@ -4,6 +4,7 @@ OBJS 	 = acctproc.o \
 	   certproc.o \
 	   chngproc.o \
 	   dbg.o \
+	   dnsproc.o \
 	   fileproc.o \
 	   json.o \
 	   keyproc.o \

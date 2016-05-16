@@ -47,6 +47,10 @@ static	const char *const comms[COMM__MAX] = {
 	"issuer", /* COMM_ISSUER */
 	"chain", /* COMM_CHAIN */
 	"chain-op", /* COMM_CHAIN_OP */
+	"dns", /* COMM_DNS */
+	"dnsq", /* COMM_DNSQ */
+	"dnsa", /* COMM_DNSA */
+	"dnslen", /* COMM_DNSLEN */
 };
 
 static void

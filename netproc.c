@@ -38,8 +38,10 @@
 #define	PATH_RESOLV "/etc/resolv.conf"
 #if 0
 # define URL_CA "https://acme-v01.api.letsencrypt.org/directory"
+# define DOMAIN_CA "acme-v01.api.letsencrypt.org"
 #else
 # define URL_CA "https://acme-staging.api.letsencrypt.org/directory"
+# define DOMAIN_CA "acme-staging.api.letsencrypt.org"
 #endif
 #define URL_LICENSE "https://letsencrypt.org" \
 		    "/documents/LE-SA-v1.0.1-July-27-2015.pdf"
@@ -62,150 +64,6 @@ buf_reset(struct buf *buf)
 	free(buf->buf);
 	buf->buf = NULL;
 	buf->sz = 0;
-}
-
-/*
- * Clean up the environment.
- * This will only have one file in it (within one directory).
- * This allows for errors and frees "dir" on exit.
- */
-static void
-netcleanup(char *dir)
-{
-	char	*tmp;
-
-	if (NULL == dir)
-		return;
-
-	/* Start with the jail's resolv.conf. */
-
-	if (-1 == asprintf(&tmp, "%s" PATH_RESOLV, dir)) {
-		dowarn("asprintf");
-		tmp = NULL;
-	} else if (-1 == remove(tmp) && ENOENT != errno) 
-		dowarn("%s", tmp);
-
-	free(tmp);
-
-	/* Now the etc directory containing the resolv. */
-
-	if (-1 == asprintf(&tmp, "%s/etc", dir)) {
-		dowarn("asprintf");
-		tmp = NULL;
-	} else if (-1 == remove(tmp) && ENOENT != errno)
-		dowarn("%s", tmp);
-
-	free(tmp);
-
-	/* Finally, the jail itself. */
-
-	if (-1 == remove(dir) && ENOENT != errno)
-		dowarn("%s", dir);
-
-	free(dir);
-}
-
-static int
-filecopy(const char *in, const char *out)
-{
-	int	 rc, fd2, fd, oflags;
-	ssize_t	 ssz, ssz2;
-	char	 dbuf[BUFSIZ];
-
-	fd2 = fd = -1;
-	rc = 0;
-	oflags = O_CREAT|O_TRUNC|O_WRONLY|O_APPEND;
-
-	if (-1 == (fd2 = open(in, O_RDONLY, 0))) {
-		dowarn("%s", in);
-		goto out;
-	} else if (-1 == (fd = open(out, oflags, 0644))) {
-		dowarn("%s", out);
-		goto out;
-	}
-
-	/* Copy via a static buffer. */
-
-	while ((ssz = read(fd2, dbuf, sizeof(dbuf))) > 0) {
-		if ((ssz2 = write(fd, dbuf, ssz)) < 0) {
-			dowarn("%s", out);
-			goto out;
-		} else if (ssz2 != ssz) {
-			dowarnx("%s: short write", out);
-			goto out;
-		}
-	}
-	if (ssz < 0) {
-		dowarn("%s", in);
-		goto out;
-	}
-
-	rc = 1;
-out:
-	if (-1 != fd)
-		close(fd);
-	if (-1 != fd2)
-		close(fd2);
-	return(rc);
-}
-
-/*
- * Prepare the file-system jail.
- * This will create a temporary directory and fill it with the
- * /etc/resolv.conf from the host.
- * This file is used by the DNS resolver and is the only file necessary
- * within the chroot.
- * This doesn't work with Mac OS X or Linux.
- * Returns NULL on failure, else the new root.
- */
-static char *
-netprepare(uid_t uid, gid_t gid)
-{
-	char	*dir, *tmp;
-
-	tmp = dir = NULL;
-
-	dir = strdup("/tmp/letskencrypt.XXXXXXXXXX");
-	if (NULL == dir) {
-		dowarn("strdup");
-		goto err;
-	} else if (NULL == mkdtemp(dir)) {
-		dowarn("mkdtemp");
-		goto err;
-	} else if (-1 == chown(dir, uid, gid)) {
-		dowarn("%s", dir);
-		goto err;
-	}
-
-	/* Create the /etc directory. */
-
-	if (-1 == asprintf(&tmp, "%s/etc", dir)) {
-		dowarn("asprintf");
-		tmp = NULL;
-		goto err;
-	} else if (-1 == mkdir(tmp, 0755)) {
-		dowarn("%s", tmp);
-		goto err;
-	}
-
-	free(tmp);
-	tmp = NULL;
-
-	/* Open /etc/resolv.conf and get ready. */
-
-	if (-1 == asprintf(&tmp, "%s" PATH_RESOLV, dir)) {
-		dowarn("asprintf");
-		tmp = NULL;
-		goto err;
-	} else if ( ! filecopy(PATH_RESOLV, tmp))
-		goto err;
-	free(tmp);
-
-	return(dir);
-err:
-	free(tmp);
-	netcleanup(dir);
-	return(NULL);
 }
 
 /*
@@ -264,13 +122,14 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
  */
 static int
 nreq(CURL *c, const char *addr, long *code, 
-	struct json *json, struct buf *buf)
+	struct json *json, struct buf *buf, struct curl_slist *hosts)
 {
 	CURLcode	 res;
 
 	buf_reset(buf);
 	json_reset(json);
 	curl_easy_reset(c);
+	curl_easy_setopt(c, CURLOPT_RESOLVE, hosts);
 	curl_easy_setopt(c, CURLOPT_URL, addr);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
@@ -301,7 +160,8 @@ nreq(CURL *c, const char *addr, long *code,
  */
 static int
 sreq(int fd, CURL *c, const char *addr, const char *req, 
-	long *code, struct json *json, struct buf *buf)
+	long *code, struct json *json, struct buf *buf,
+	struct curl_slist *hosts)
 {
 	char		*nonce, *reqsn;
 	CURLcode	 res;
@@ -311,6 +171,7 @@ sreq(int fd, CURL *c, const char *addr, const char *req,
 	/* Grab our nonce by querying the CA. */
 
 	curl_easy_reset(c);
+	curl_easy_setopt(c, CURLOPT_RESOLVE, hosts);
 	curl_easy_setopt(c, CURLOPT_URL, URL_CA);
 	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
@@ -381,7 +242,8 @@ sreq(int fd, CURL *c, const char *addr, const char *req,
  * Returns non-zero on success.
  */
 static int
-donewreg(CURL *c, int fd, struct json *json, const struct capaths *p)
+donewreg(CURL *c, int fd, struct json *json, const struct capaths *p,
+	struct curl_slist *hosts)
 {
 	int	 rc;
 	char	*req;
@@ -392,7 +254,7 @@ donewreg(CURL *c, int fd, struct json *json, const struct capaths *p)
 
 	if (NULL == (req = json_fmt_newreg(URL_LICENSE)))
 		dowarnx("json_fmt_newreg");
-	else if ( ! sreq(fd, c, p->newreg, req, &lc, json, NULL))
+	else if ( ! sreq(fd, c, p->newreg, req, &lc, json, NULL, hosts))
 		dowarnx("%s: bad comm", p->newreg);
 	else if (200 != lc && 201 != lc)
 		dowarnx("%s: bad HTTP: %ld", p->newreg, lc);
@@ -409,8 +271,8 @@ donewreg(CURL *c, int fd, struct json *json, const struct capaths *p)
  * On non-zero exit, fills in "chng" with the challenge.
  */
 static int
-dochngreq(CURL *c, int fd, struct json *json, 
-	const char *alt, struct chng *chng, const struct capaths *p)
+dochngreq(CURL *c, int fd, struct json *json, const char *alt, 
+	struct chng *chng, const struct capaths *p, struct curl_slist *hosts)
 {
 	int	 rc;
 	char	*req;
@@ -421,7 +283,7 @@ dochngreq(CURL *c, int fd, struct json *json,
 
 	if (NULL == (req = json_fmt_newauthz(alt)))
 		dowarnx("json_fmt_newauthz");
-	else if ( ! sreq(fd, c, p->newauthz, req, &lc, json, NULL))
+	else if ( ! sreq(fd, c, p->newauthz, req, &lc, json, NULL, hosts))
 		dowarnx("%s: bad comm", p->newauthz);
 	else if (200 != lc && 201 != lc)
 		dowarnx("%s: bad HTTP: %ld", p->newauthz, lc);
@@ -439,7 +301,7 @@ dochngreq(CURL *c, int fd, struct json *json,
  */
 static int
 dochngresp(CURL *c, int fd, struct json *json, 
-	const struct chng *chng, const char *th)
+	const struct chng *chng, const char *th, struct curl_slist *hosts)
 {
 	int	 rc;
 	long	 lc;
@@ -450,7 +312,7 @@ dochngresp(CURL *c, int fd, struct json *json,
 
 	if (NULL == (req = json_fmt_challenge(chng->token, th)))
 		dowarnx("json_fmt_challenge");
-	else if ( ! sreq(fd, c, chng->uri, req, &lc, json, NULL))
+	else if ( ! sreq(fd, c, chng->uri, req, &lc, json, NULL, hosts))
 		dowarnx("%s: bad comm", chng->uri);
 	else if (200 != lc && 201 != lc && 202 != lc) 
 		dowarnx("%s: bad HTTP: %ld", chng->uri, lc);
@@ -467,14 +329,15 @@ dochngresp(CURL *c, int fd, struct json *json,
  * time between checks, but this happens in the caller.
  */
 static int
-dochngcheck(CURL *c, struct json *json, struct chng *chng)
+dochngcheck(CURL *c, struct json *json, struct chng *chng,
+	struct curl_slist *hosts)
 {
 	int	 cc;
 	long	 lc;
 
 	dodbg("%s: status", chng->uri);
 
-	if ( ! nreq(c, chng->uri, &lc, json, NULL)) {
+	if ( ! nreq(c, chng->uri, &lc, json, NULL, hosts)) {
 		dowarnx("%s: bad comm", chng->uri);
 		return(0);
 	} else if (200 != lc && 201 != lc && 202 != lc) {
@@ -494,8 +357,8 @@ dochngcheck(CURL *c, struct json *json, struct chng *chng)
  * This, upon success, will return the signed CA.
  */
 static int
-docert(CURL *c, int fd, const char *addr, 
-	struct buf *buf, const char *cert)
+docert(CURL *c, int fd, const char *addr, struct buf *buf, 
+	const char *cert, struct curl_slist *hosts)
 {
 	char	*req;
 	int	 rc;
@@ -506,7 +369,7 @@ docert(CURL *c, int fd, const char *addr,
 
 	if (NULL == (req = json_fmt_newcert(cert)))
 		dowarnx("json_fmt_newcert");
-	else if ( ! sreq(fd, c, addr, req, &lc, NULL, buf))
+	else if ( ! sreq(fd, c, addr, req, &lc, NULL, buf, hosts))
 		dowarnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc)
 		dowarnx("%s: bad HTTP: %ld", addr, lc);
@@ -525,57 +388,30 @@ docert(CURL *c, int fd, const char *addr,
  * account key information.
  */
 int
-netproc(int kfd, int afd, int Cfd, int cfd, int newacct, 
-	uid_t uid, gid_t gid, const char *const *alts, size_t altsz)
+netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
+	int newacct, uid_t uid, gid_t gid, 
+	const char *const *alts, size_t altsz)
 {
-	pid_t		 pid;
-	int		 st, rc;
+	int		 rc, cc;
 	size_t		 i;
-	char		*home, *cert, *req, *reqsn, *thumb, *url;
+	char		*cert, *req, *reqsn, *domain,
+			*thumb, *url, *host, *urlcp, *ep;
 	CURL		*c;
 	struct buf	 buf;
 	struct json	*json;
 	struct capaths	 paths;
 	struct chng 	*chngs;
 	long		 http, op;
+	struct curl_slist *hosts;
 
-	rc = EXIT_FAILURE;
+	rc = 0;
 	memset(&paths, 0, sizeof(struct capaths));
 	memset(&buf, 0, sizeof(struct buf));
-	home = url = reqsn = req = cert = thumb = NULL;
+	url = urlcp = domain = reqsn = req = cert = thumb = NULL;
 	json = NULL;
 	c = NULL;
 	chngs = NULL;
-
-	/* 
-	 * Start by creating our jailed environment.
-	 * If this fails, just return immediately as we haven't allocated any
-	 * resources yet.
-	 */
-
-	if (NULL == (home = netprepare(uid, gid)))
-		return(0);
-
-	/*
-	 * Begin by forking.
-	 * We need to do this because somebody needs to clean up the
-	 * jail, and we can't do that if we're already in it.
-	 */
-
-	if (-1 == (pid = fork())) {
-		dowarn("fork");
-		goto out;
-	} else if (pid > 0) {
-		close(kfd);
-		close(afd);
-		close(Cfd);
-		close(cfd);
-		if (-1 == waitpid(pid, &st, 0))
-			doerr("waitpid");
-		netcleanup(home);
-		return(WIFEXITED(st) && 
-		       EXIT_SUCCESS == WEXITSTATUS(st));
-	}
+	hosts = NULL;
 
 	/* File-system, user, and sandbox jail. */
 
@@ -586,21 +422,16 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 		goto out;
 	}
 #endif
-#if ! defined(__APPLE__) && ! defined(__linux__)
 	/*
 	 * We don't do this on Mac OS X because Mac doesn't use the
 	 * traditional resolv.conf for its lookups.
 	 * Instead, it uses a socket, and I'm not going to look into how
 	 * to duplicate that right now.
 	 */
-	if ( ! dropfs(home)) {
+	if ( ! dropfs(PATH_VAR_EMPTY)) {
 		dowarnx("dropfs");
 		goto out;
-	}
-	free(home);
-	home = NULL;
-#endif
-	if ( ! dropprivs(uid, gid)) {
+	} else if ( ! dropprivs(uid, gid)) {
 		dowarnx("dropprivs");
 		goto out;
 	}
@@ -625,11 +456,45 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 		goto out;
 	}
 
+	/*
+	 * Look up the domain of the ACME server.
+	 * We'll use this ourselves instead of having libcurl do the DNS
+	 * resolution itself.
+	 */
+
+	dodbg("%s: requesting DNS", DOMAIN_CA);
+
+	if ( ! writeop(dfd, COMM_DNS, 1))
+		goto out;
+	if ( ! writestr(dfd, COMM_DNSQ, DOMAIN_CA))
+		goto out;
+	if (LONG_MAX == (op = readop(dfd, COMM_DNSLEN)))
+		goto out;
+
+	for (i = 0; i < (size_t)op; i++) {
+		if (NULL == (url = readstr(dfd, COMM_DNSA))) 
+			goto out;
+		cc = asprintf(&host, "%s:443:%s", DOMAIN_CA, url);
+		if (-1 == cc) {
+			dowarn("asprintf");
+			host = NULL;
+			goto out;
+		}
+		hosts = curl_slist_append(hosts, host);
+		if (NULL == hosts) {
+			dowarnx("curl_slist_append");
+			free(host);
+			goto out;
+		}
+		free(url);
+		url = NULL;
+	}
+
 	/* Grab the directory structure from the CA. */
 
 	dodbg("%s: requesting directories", URL_CA);
 
-	if ( ! nreq(c, URL_CA, &http, json, NULL)) {
+	if ( ! nreq(c, URL_CA, &http, json, NULL, hosts)) {
 		dowarnx("%s: bad comm", URL_CA);
 		goto out;
 	} else if (200 != http && 201 != http) {
@@ -642,14 +507,14 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 
 	/* If new, register with the CA server. */
 
-	if (newacct && ! donewreg(c, afd, json, &paths))
+	if (newacct && ! donewreg(c, afd, json, &paths, hosts))
 		goto out;
 
 	/* Pre-authorise all domains with CA server. */
 
 	for (i = 0; i < altsz; i++)
 		if ( ! dochngreq(c, afd, json, 
-		    alts[i], &chngs[i], &paths))
+		    alts[i], &chngs[i], &paths, hosts))
 			goto out;
 
 	/*
@@ -681,7 +546,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 			goto out;
 		else if (LONG_MAX == op)
 			goto out;
-		else if ( ! dochngresp(c, afd, json, &chngs[i], thumb))
+		else if ( ! dochngresp(c, afd, json, &chngs[i], thumb, hosts))
 			goto out;
 
 	/*
@@ -701,7 +566,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 
 		/* Sleep before every attempt. */
 		sleep(RETRY_DELAY);
-		if ( ! dochngcheck(c, json, &chngs[i]))
+		if ( ! dochngcheck(c, json, &chngs[i], hosts))
 			goto out;
 	}
 
@@ -722,7 +587,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 
 	if (NULL == (cert = readstr(kfd, COMM_CERT)))
 		goto out;
-	else if ( ! docert(c, afd, paths.newcert, &buf, cert)) 
+	else if ( ! docert(c, afd, paths.newcert, &buf, cert, hosts)) 
 		goto out;
 	else if ( ! writeop(cfd, COMM_CSR_OP, 1))
 		goto out;
@@ -738,14 +603,71 @@ netproc(int kfd, int afd, int Cfd, int cfd, int newacct,
 	if (NULL == (url = readstr(cfd, COMM_ISSUER)))
 		goto out;
 
-	dodbg("%s: full-chain", url);
+	if (NULL == (domain = strdup(url))) {
+		dowarn("strdup");
+		goto out;
+	}
 
-	if ( ! nreq(c, url, &http, NULL, &buf))
+	dodbg("%s: processing hostname", url);
+
+	if (0 == strncmp(url, "https://", 8)) {
+		if (NULL == (urlcp = strdup(url + 8))) {
+			dowarn("strdup");
+			goto out;
+		}
+	} else if (0 == strncmp(url, "http://", 7)) {
+		if (NULL == (urlcp = strdup(url + 7))) {
+			dowarn("strdup");
+			goto out;
+		}
+	} else
+		urlcp = NULL;
+
+	if (NULL == urlcp) {
+		dowarnx("%s: unknown schema", url);
+		goto out;
+	} else if (NULL != (ep = strchr(urlcp, '/')))
+		*ep = '\0';
+
+	dodbg("%s: requesting DNS", urlcp);
+
+	if ( ! writeop(dfd, COMM_DNS, 1))
+		goto out;
+	if ( ! writestr(dfd, COMM_DNSQ, urlcp))
+		goto out;
+	if (LONG_MAX == (op = readop(dfd, COMM_DNSLEN)))
+		goto out;
+
+	free(url);
+
+	for (i = 0; i < (size_t)op; i++) {
+		if (NULL == (url = readstr(dfd, COMM_DNSA))) 
+			goto out;
+		cc = asprintf(&host, "%s:80:%s", urlcp, url);
+		if (-1 == cc) {
+			dowarn("asprintf");
+			host = NULL;
+			goto out;
+		}
+		dodbg("%s", host);
+		hosts = curl_slist_append(hosts, host);
+		if (NULL == hosts) {
+			dowarnx("curl_slist_append");
+			free(host);
+			goto out;
+		}
+		free(url);
+		url = NULL;
+	}
+
+	dodbg("%s: full-chain", domain);
+
+	if ( ! nreq(c, domain, &http, NULL, &buf, hosts))
 		goto out;
 	else if ( ! writebuf(cfd, COMM_CHAIN, buf.buf, buf.sz))
 		goto out;
 
-	rc = EXIT_SUCCESS;
+	rc = 1;
 out:
 	if (-1 != cfd)
 		close(cfd);
@@ -755,20 +677,21 @@ out:
 		close(afd);
 	if (-1 != Cfd)
 		close(Cfd);
-	free(home);
 	free(cert);
 	free(req);
 	free(reqsn);
+	free(url);
+	free(domain);
 	free(thumb);
 	free(buf.buf);
 	if (NULL != c)
 		curl_easy_cleanup(c);
+	curl_slist_free_all(hosts);
 	curl_global_cleanup();
 	json_free(json);
 	for (i = 0; i < altsz; i++)
 		json_free_challenge(&chngs[i]);
 	free(chngs);
 	json_free_capaths(&paths);
-	exit(rc);
-	/* NOTREACHED */
+	return(rc);
 }
