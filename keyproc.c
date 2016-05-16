@@ -40,6 +40,11 @@
 
 #include "extern.h"
 
+/*
+ * This was lifted more or less directly from demos/x509/mkreq.c of the
+ * OpenSSL source code.
+ * TODO: is this the best way of doing this?
+ */
 static int 
 add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 {
@@ -113,6 +118,7 @@ keyproc(int netsock, const char *keyfile,
 		dowarnx("dropprivs");
 		goto error;
 	}
+
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio", NULL)) {
 		dowarn("pledge");
@@ -121,10 +127,10 @@ keyproc(int netsock, const char *keyfile,
 #endif
 
 	/* 
-	 * Ok, now we're dark.
 	 * Seed our PRNG with data from arc4random().
 	 * Do this until we're told it's ok and use increments of 64
 	 * bytes (arbitrarily).
+	 * TODO: is this sufficient as a RAND source?
 	 */
 
 	while (0 == RAND_status()) {
@@ -143,6 +149,7 @@ keyproc(int netsock, const char *keyfile,
 		dowarnx("%s", keyfile);
 		goto error;
 	}
+
 	fclose(f);
 	f = NULL;
 
@@ -153,6 +160,7 @@ keyproc(int netsock, const char *keyfile,
 		dowarnx("EVP_PKEY_assign_RSA");
 		goto error;
 	} 
+
 	r = NULL;
 	
 	/* 
@@ -174,7 +182,7 @@ keyproc(int netsock, const char *keyfile,
 		dowarnx("X509_NAME_new");
 		goto error;
 	} else if ( ! X509_NAME_add_entry_by_txt(name, "CN", 
-	           MBSTRING_ASC, (unsigned char *)alts[0], -1, -1, 0)) {
+	           MBSTRING_ASC, (u_char *)alts[0], -1, -1, 0)) {
 		dowarnx("X509_NAME_add_entry_by_txt: CN=%s", alts[0]);
 		goto error;
 	} else if ( ! X509_REQ_set_subject_name(x, name)) {
@@ -187,7 +195,7 @@ keyproc(int netsock, const char *keyfile,
 	 * This was lifted more or less directly from demos/x509/mkreq.c
 	 * of the OpenSSL source code.
 	 * (The zeroth altname is the domain name.)
-	 * FIXME: memory management...?
+ 	 * TODO: is this the best way of doing this?
 	 */
 
 	if (altsz > 1) {
@@ -216,7 +224,7 @@ keyproc(int netsock, const char *keyfile,
 		goto error;
 	} 
 
-	/* Now, serialise to DER, then base64, then write. */
+	/* Now, serialise to DER, then base64. */
 
 	if ((len = i2d_X509_REQ(x, NULL)) < 0) {
 		dowarnx("i2d_X509");
@@ -230,11 +238,18 @@ keyproc(int netsock, const char *keyfile,
 	} else if (NULL == (der64 = base64buf_url(der, len))) {
 		dowarnx("base64buf_url");
 		goto error;
-	} else if ( ! writestr(netsock, COMM_CERT, der64)) 
+	}
+
+	/* Write that we're ready, then write. */
+       
+	if ( ! writeop(netsock, COMM_KEY_STAT, KEY_READY)) 
+		goto error;
+	else if ( ! writestr(netsock, COMM_CERT, der64)) 
 		goto error;
 
 	rc = 1;
 error:
+	close(netsock);
 	if (NULL != f)
 		fclose(f);
 	free(der);
@@ -249,7 +264,6 @@ error:
 		EVP_PKEY_free(evp);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
-	close(netsock);
 	return(rc);
 }
 
