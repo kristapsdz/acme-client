@@ -91,10 +91,12 @@ fileproc(int certsock, const char *certdir)
 		goto out;
 	}
 #endif
+
 	if ( ! dropfs(certdir)) {
 		dowarnx("dropfs");
 		goto out;
 	} 
+
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	/* 
 	 * XXX: rpath shouldn't be here, but it's tripped by the
@@ -106,6 +108,7 @@ fileproc(int certsock, const char *certdir)
 		goto out;
 	}
 #endif
+
 	/*
 	 * Start by downloading the chain PEM as a buffer.
 	 * This is not nil-terminated, but we're just going to guess
@@ -150,8 +153,8 @@ fileproc(int certsock, const char *certdir)
 
 	rc = 1;
 out:
+	close(certsock);
 	free(csr);
 	free(ch);
-	close(certsock);
 	return(rc);
 }

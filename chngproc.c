@@ -140,6 +140,7 @@ chngproc(int netsock, const char *root, int remote)
 			dowarn("%s", fs[fsz - 1]);
 			goto out;
 		}
+		fd = -1;
 
 		/*
 		 * I use this for testing when letskencrypt is being run
@@ -156,7 +157,6 @@ chngproc(int netsock, const char *root, int remote)
 			puts("TIME'S UP.");
 		}
 
-		fd = -1;
 		free(th);
 		free(fmt);
 		th = fmt = NULL;
@@ -171,6 +171,7 @@ chngproc(int netsock, const char *root, int remote)
 
 	rc = 1;
 out:
+	close(netsock);
 	if (-1 != fd)
 		close(fd);
 	for (i = 0; i < fsz; i++) {
@@ -182,6 +183,5 @@ out:
 	free(fmt);
 	free(th);
 	free(tok);
-	close(netsock);
 	return(rc);
 }
