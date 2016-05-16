@@ -86,6 +86,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	unsigned char	*csrcp, *chaincp;
 	size_t		 csrsz, chainsz;
 	int		 i, rc, idx;
+	enum certop	 op;
 	long		 lval;
 	X509		*x, *chainx;
 	X509_EXTENSION	*ext;
@@ -131,11 +132,23 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	 * from the network process.
 	 * Then convert the DER encoding into an X509 certificate.
 	 */
+	if (0 == (lval = readop(netsock, COMM_CSR_OP)))
+		op = CERT_NONE;
+	else if (LONG_MAX == lval)
+		op = CERT__MAX;
+	else
+		op = lval;
 
-	if (0 == (lval = readop(netsock, COMM_CSR_OP))) {
+	if (CERT_NONE == op) {
 		rc = 1;
 		goto out;
-	} else if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
+	} else if (CERT_REVOKE == op) {
+	} else if (CERT_UPDATE != op) {
+		dowarnx("unknown operation");
+		goto out;
+	}
+
+	if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
 		goto out;
 
 	csrcp = (u_char *)csr;

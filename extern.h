@@ -49,6 +49,16 @@ enum	keyop {
 };
 
 /*
+ * Requests to the certificate infrastructure.
+ */
+enum	certop {
+	CERT_NONE,
+	CERT_REVOKE,
+	CERT_UPDATE,
+	CERT__MAX
+};
+
+/*
  * Our components.
  * Each one of these is in a separated, isolated process.
  */
@@ -130,7 +140,7 @@ int		 dnsproc(int, uid_t, gid_t);
 int		 fileproc(int, const char *);
 int		 keyproc(int, const char *, uid_t, gid_t, 
 			const char **, size_t);
-int		 netproc(int, int, int, int, int, int,
+int		 netproc(int, int, int, int, int, int, int,
 			uid_t, gid_t, const char *const *, size_t);
 
 /*
@@ -193,6 +203,7 @@ char		*json_fmt_newcert(const char *);
 char		*json_fmt_newreg(const char *);
 char		*json_fmt_protected(const char *, 
 			const char *, const char *);
+char		*json_fmt_revokecert(const char *);
 char		*json_fmt_header(const char *, const char *);
 char		*json_fmt_thumb(const char *, const char *);
 char		*json_fmt_signed(const char *, 
