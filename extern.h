@@ -50,6 +50,7 @@ enum	comp {
 	COMP_ACCOUNT, /* handles account key */
 	COMP_CHALLENGE, /* handles challenges */
 	COMP_FILE, /* handles writing certs */
+	COMP_DNS, /* handles DNS lookups */
 	COMP__MAX
 };
 
@@ -72,6 +73,10 @@ enum	comm {
 	COMM_ISSUER,
 	COMM_CHAIN,
 	COMM_CHAIN_OP,
+	COMM_DNS,
+	COMM_DNSQ,
+	COMM_DNSA,
+	COMM_DNSLEN,
 	COMM__MAX
 };
 
@@ -107,14 +112,15 @@ __BEGIN_DECLS
  * Start with our components.
  * These are all isolated and talk to each other using sockets.
  */
-int		 fileproc(int, const char *);
-int		 certproc(int, int, uid_t, gid_t);
-int		 netproc(int, int, int, int, int, uid_t, gid_t, 
-			const char *const *, size_t);
 int		 acctproc(int, const char *, int, uid_t, gid_t);
+int		 certproc(int, int, uid_t, gid_t);
+int		 chngproc(int, const char *);
+int		 dnsproc(int, uid_t, gid_t);
+int		 fileproc(int, const char *);
 int		 keyproc(int, const char *, uid_t, gid_t, 
 			const char **, size_t);
-int		 chngproc(int, const char *);
+int		 netproc(int, int, int, int, int, int,
+			uid_t, gid_t, const char *const *, size_t);
 
 /*
  * Warning and logging functions.

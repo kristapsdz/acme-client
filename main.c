@@ -41,7 +41,7 @@ main(int argc, char *argv[])
 	const char	 *domain, *certdir, *acctkey, 
 	     		 *chngdir, *keyfile;
 	int		  key_fds[2], acct_fds[2], chng_fds[2], 
-			  cert_fds[2], file_fds[2];
+			  cert_fds[2], file_fds[2], dns_fds[2];
 	pid_t		  pids[COMP__MAX];
 	int		  c, rc, newacct;
 	extern int	  verbose;
@@ -134,6 +134,8 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "socketpair");
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, file_fds))
 		err(EXIT_FAILURE, "socketpair");
+	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, dns_fds))
+		err(EXIT_FAILURE, "socketpair");
 
 	/* Start with the network-touching process. */
 
@@ -149,7 +151,8 @@ main(int argc, char *argv[])
 		close(file_fds[1]);
 		proccomp = COMP_NET;
 		c = netproc(key_fds[1], acct_fds[1], 
-			chng_fds[1], cert_fds[1], newacct,
+			chng_fds[1], cert_fds[1], 
+			dns_fds[1], newacct,
 			nobody_uid, nobody_gid,
 			(const char *const *)alts, altsz);
 		free(alts);
@@ -160,6 +163,7 @@ main(int argc, char *argv[])
 	close(acct_fds[1]);
 	close(chng_fds[1]);
 	close(cert_fds[1]);
+	close(dns_fds[1]);
 
 	/* Now the key-touching component. */
 
@@ -246,6 +250,20 @@ main(int argc, char *argv[])
 
 	close(file_fds[1]);
 
+	/* The DNS lookup component. */
+
+	if (-1 == (pids[COMP_DNS] = fork()))
+		err(EXIT_FAILURE, "fork");
+
+	if (0 == pids[COMP_DNS]) {
+		free(alts);
+		proccomp = COMP_DNS;
+		c = dnsproc(dns_fds[0], nobody_uid, nobody_gid);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	}
+
+	close(dns_fds[0]);
+
 	/* Jail: sandbox, file-system, user. */
 
 #ifdef __APPLE__
@@ -274,7 +292,8 @@ main(int argc, char *argv[])
 	     checkexit(pids[COMP_NET], COMP_NET) +
 	     checkexit(pids[COMP_FILE], COMP_FILE) +
 	     checkexit(pids[COMP_ACCOUNT], COMP_ACCOUNT) +
-	     checkexit(pids[COMP_CHALLENGE], COMP_CHALLENGE);
+	     checkexit(pids[COMP_CHALLENGE], COMP_CHALLENGE) +
+	     checkexit(pids[COMP_DNS], COMP_DNS);
 
 	free(alts);
 	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
