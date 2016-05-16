@@ -318,7 +318,7 @@ acctproc(int netsock, const char *acctkey,
 	 * we're creating from scratch.
 	 */
 
-	if (NULL == (f = fopen(acctkey, newacct ? "w+x" : "r"))) {
+	if (NULL == (f = fopen(acctkey, newacct ? "wx" : "r"))) {
 		dowarn("%s", acctkey);
 		goto error;
 	}
