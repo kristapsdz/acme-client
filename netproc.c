@@ -696,16 +696,11 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 
 	rc = 1;
 out:
-	if (-1 != cfd)
-		close(cfd);
-	if (-1 != kfd)
-		close(kfd);
-	if (-1 != afd)
-		close(afd);
-	if (-1 != Cfd)
-		close(Cfd);
-	if (-1 != dfd)
-		close(dfd);
+	close(cfd);
+	close(kfd);
+	close(afd);
+	close(Cfd);
+	close(dfd);
 	free(cert);
 	free(url);
 	free(thumb);
