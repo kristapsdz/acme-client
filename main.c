@@ -115,7 +115,7 @@ main(int argc, char *argv[])
 	if (NULL == alts)
 		err(EXIT_FAILURE, "calloc");
 	alts[0] = domain;
-	for (i = 0; i < altsz; i++)
+	for (i = 0; i < (size_t)argc; i++)
 		alts[i + 1] = argv[i];
 
 	/* 
@@ -149,6 +149,7 @@ main(int argc, char *argv[])
 		close(cert_fds[0]);
 		close(file_fds[0]);
 		close(file_fds[1]);
+		close(dns_fds[0]);
 		proccomp = COMP_NET;
 		c = netproc(key_fds[1], acct_fds[1], 
 			chng_fds[1], cert_fds[1], 
@@ -171,6 +172,7 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_KEY]) {
+		close(dns_fds[0]);
 		close(acct_fds[0]);
 		close(chng_fds[0]);
 		close(file_fds[0]);
@@ -192,6 +194,7 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_ACCOUNT]) {
 		free(alts);
+		close(dns_fds[0]);
 		close(chng_fds[0]);
 		close(file_fds[0]);
 		close(file_fds[1]);
@@ -210,6 +213,7 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_CHALLENGE]) {
 		free(alts);
+		close(dns_fds[0]);
 		close(file_fds[0]);
 		close(file_fds[1]);
 		proccomp = COMP_CHALLENGE;
@@ -226,6 +230,7 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_CERT]) {
 		free(alts);
+		close(dns_fds[0]);
 		close(file_fds[1]);
 		proccomp = COMP_CERT;
 		c = certproc(cert_fds[0], file_fds[0],
@@ -243,6 +248,7 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_FILE]) {
 		free(alts);
+		close(dns_fds[0]);
 		proccomp = COMP_FILE;
 		c = fileproc(file_fds[1], certdir);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
