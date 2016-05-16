@@ -710,8 +710,9 @@ out:
 	curl_slist_free_all(hosts);
 	curl_global_cleanup();
 	json_free(json);
-	for (i = 0; i < altsz; i++)
-		json_free_challenge(&chngs[i]);
+	if (NULL != chngs)
+		for (i = 0; i < altsz; i++)
+			json_free_challenge(&chngs[i]);
 	free(chngs);
 	json_free_capaths(&paths);
 	return(rc);
