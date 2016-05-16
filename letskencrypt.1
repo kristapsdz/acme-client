@@ -199,12 +199,9 @@ server.
 The
 .Nm
 utility follows a model of strict isolation between components.
-There are five such components, each of which is started in a
+There are six such components, each of which is started in a
 subprocess.
-Each subprocess is created in a
-.Xr chroot 2
-file-system jail, privilege-dropped, and sandboxed according to the
-operating system.
+Sandboxing is system-specific.
 .Bl -tag -width Ds
 .It DNS process.
 Manages domain name resolution.
@@ -220,10 +217,8 @@ This is due to weak (or overly complex) DNS resolution and/or
 sandboxing.
 .It Network process.
 Manages communication with the Let's Encrypt server.
-This is not allowed to access any files on the file system.
-It communicates with all other process using pipes.
 This process is sandboxed and jailed in
-.Pa /var/empty
+.Pa /var/empty ,
 and drops user privileges to the
 .Dq nobody
 user.
@@ -232,27 +227,23 @@ Translates certificates into PEM files and transfers them to the file
 process.
 Also extracts the CA issuer name from the certificate and transfers it
 to the network process for downloading.
-This process is jailed in
-.Pa /var/empty
-and sandboxed to do nothing at all.
-It drops user privileges to the
+This process is sandboxed and jailed in
+.Pa /var/empty ,
+and drops user privileges to the
 .Dq nobody
 user.
 .It File process.
 Manages public certificate and certificate chain files.
-This process is jailed in the certificate directory and can only create
-and rename files.
 Each domain certificate is written into a temporary file then atomically
 renamed into the real certificate with
 .Xr rename 2 .
-It is sandboxed to prevent any non-file related operations.
+This process is sandboxed and jailed in the certificate directory.
 .It Domain key process.
 Reads and parses the RSA private key for the domain.
 This is used for creating the X509 request.
-After opening the private key file, this is jailed in
-.Pa /var/empty
-and sandboxed to do nothing at all.
-It drops user privileges to the
+After opening the private key file, this is sandboxed and jailed in
+.Pa /var/empty ,
+and drops user privileges to the
 .Dq nobody
 user.
 .It Account key process.
@@ -261,16 +252,14 @@ This is responsible for signing messages submitted by the network
 process and creating
 .Dq thumbprint
 digests used by the challenge process.
-After opening the private key file, this is jailed in
-.Pa /var/empty
-and sandboxed to do nothing at all.
-It drops user privileges to the
+After opening the private key file, this is sandboxed and jailed in
+.Pa /var/empty ,
+and drops user privileges to the
 .Dq nobody
 user.
 .It Challenge process.
 This process creates and deletes challenge files.
-It is jailed in the challenge directory and sandboxed to do nothing but
-create and remove files.
+It is sandboxed and jailed in the challenge directory.
 .El
 .\" Not used in OpenBSD.
 .\" .Sh RETURN VALUES
