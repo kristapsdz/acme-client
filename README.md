@@ -2,32 +2,36 @@
 
 letskencrypt is a [Let's Encrypt](https://letsencrypt.org) client with a
 strong focus on security: file-system jails, privilege separation, and
-sandboxing.  See [letskencrypt.1](letskencrypt.1) for complete
-documentation.
+sandboxing. *It is still under development*. See
+[letskencrypt.1](letskencrypt.1) for complete documentation and
+functionality.
 
-This repository mirrors the master CVS repository: any source changes
-will occur on the master and be pushed periodically to GitHub.
+This repository mirrors the master CVS repository: any source changes will
+occur on the master and be pushed periodically to GitHub.  It is registered as
+a [Coverity project](https://scan.coverity.com/projects/letskencrypt).
 
-By default, this talks only to the [staging
+By default, letskencrypt talks only to the [staging
 server](https://community.letsencrypt.org/t/testing-against-the-lets-encrypt-staging-environment/6763).
-You'll need to edit netproc.c if you'd prefer the real deal, but the
-system is still a little young to be doing so.
+You'll need to edit [netproc.c](netproc.c) if you'd prefer the real
+deal, but the system is still kinda young to be doing so.
 
 ## Installation
 
-To use this tool, just download and run `make` and `make install` in the
-usual way.  The software has been designed with
+To use letskencrypt, just download and run `make` and `make install` in
+the usual way.  The software has been designed with
 [OpenBSD](http://www.openbsd.org) in mind, though it works with reduced
 security on Mac OS X and Linux.  This is due to the security-hostile
 focus of both systems: the sandbox facility in Mac OS X is very weak;
 and while it exists on Linux, it's too complicated to use.  Moreover,
 the DNS resolution on both systems is run almost no protection but for
-dropping privileges.  Caveat emptor.
+dropping privileges.
 
 In short, I don't recommend using any platform but OpenBSD.
 
 If you're trying to run on Linux, you'll need to edit the
-[Makefile](Makefile) as noted.  I only tested this on Debian.
+[Makefile](Makefile) as noted.  I only tested this on Debian.  It
+compiles on both OpenBSD and Mac OS X without any Makefile
+modifications.
 
 The software has several compile-time dependencies:
 [OpenSSL](https://openssl.org) or [LibreSSL](http://www.libressl.org),
