@@ -1,3 +1,5 @@
+.SUFFIXES: .dot .png .1 .1.html
+
 CFLAGS	+= -g -W -Wall -Wno-deprecated-declarations `curl-config --cflags`
 OBJS 	 = acctproc.o \
 	   base64.o \
@@ -30,6 +32,15 @@ install: letskencrypt
 
 $(OBJS): extern.h
 
+www: letskencrypt.png letskencrypt.1.html
+
+.dot.png:
+	dot -Tpng -o$@ $<
+
+.1.1.html:
+	mandoc -Thtml $< >$@
+
 clean:
 	rm -f letskencrypt $(OBJS)
+	rm -f letskencrypt.png letskencrypt.1.html
 	rm -rf letskencrypt.dSYM

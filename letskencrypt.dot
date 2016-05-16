@@ -1,0 +1,16 @@
+digraph {
+	dnsproc[label="dnsproc"];
+	fileproc[label="fileproc"];
+	chngproc[label="challengeproc"];
+	netproc[label="netproc"];
+	keyproc[label="keyproc"];
+	acctproc[label="acctproc"];
+	certproc[label="certproc"];
+
+	dnsproc -> netproc[label="DNS names"];
+	certproc -> fileproc[label="X509 certificates"];
+	netproc -> chngproc[label="ACME challenges"];
+	keyproc -> netproc[label="X509 request"];
+	acctproc -> netproc[label="ACME authentication"];
+	netproc -> certproc[label="DER X509 certificates"];
+}
