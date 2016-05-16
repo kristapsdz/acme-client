@@ -37,7 +37,7 @@
 #include "extern.h"
 
 int
-chngproc(int netsock, const char *root)
+chngproc(int netsock, const char *root, int remote)
 {
 	int		  rc;
 	long		  lval;
@@ -145,15 +145,16 @@ chngproc(int netsock, const char *root)
 		 * I use this for testing when letskencrypt is being run
 		 * on machines apart from where I'm hosting the
 		 * challenge directory.
+		 * DON'T DEPEND ON THIS FEATURE.
 		 */
-#if 0
-		fputs("RUN THIS IN THE CHALLENGE DIRECTORY\n", stderr);
-		fputs("YOU HAVE 20 SECONDS...\n", stderr);
-		fprintf(stderr, "doas sh -c \"echo %s > %s\"", 
-			fmt, fs[fsz - 1]);
-		sleep(20);
-		fputs("CONTINUING...\n", stderr);
-#endif
+		if (remote) {
+			puts("RUN THIS IN THE CHALLENGE DIRECTORY");
+			puts("YOU HAVE 20 SECONDS...");
+			printf("doas sh -c \"echo %s > %s\"\n", 
+				fmt, fs[fsz - 1]);
+			sleep(20);
+			puts("TIME'S UP.");
+		}
 
 		fd = -1;
 		free(th);
