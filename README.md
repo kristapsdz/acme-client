@@ -1,32 +1,60 @@
 ## Synopsis
 
-letskencrypt is a [Let's Encrypt](https://letsencrypt.org) client with a
-strong focus on security: file-system jails, privilege separation, and
-sandboxing. *It is still under development*. See
-[letskencrypt.1](letskencrypt.1) for complete documentation and
-functionality.
+*letskencrypt* is yet another [Let's Encrypt](https://letsencrypt.org)
+client, but one with a strong focus on security.  **It is still under
+development**.  See
+[letskencrypt.1](http://kristaps.bsd.lv/letskencrypt/letskencrypt.1.html)
+for complete documentation and functionality.
 
-This repository mirrors the master CVS repository: any source changes will
-occur on the master and be pushed periodically to GitHub.  It is registered as
-a [Coverity project](https://scan.coverity.com/projects/letskencrypt).
+This repository mirrors the master CVS repository: any source changes
+will occur on the master and be pushed periodically to GitHub.  It is
+registered as a [Coverity
+project](https://scan.coverity.com/projects/letskencrypt).
 
-By default, letskencrypt talks only to the [staging
+## Implementation
+
+When *letskencrypt* starts, it forks itself (in [main.c](main.c)) into
+seven isolated components, each with a specific job to do.  This
+separation protects your system and your account and domain private
+keys.
+
+![graph](http://kristaps.bsd.lv/letskencrypt/letskencrypt.png)
+
+The account and key processes manage your account and domain private
+keys, respectively.  The former, [acctproc.c](acctproc.c), uses the key
+to sign messages; the latter, [keyproc.c](keyproc.c), produces the X509
+certificate request.  Both of these are jailed and privilege-dropped
+after opening the keys.
+
+The network processor, [netproc.c](netproc.c), actually interfaces with
+the Let's Encrypt server.  It's also jailed and privilege-dropped,
+though allowed to make network connections.  It talks to the DNS
+process, [dnsproc.c](dnsproc.c), to resolve names.  The DNS process is
+privilege-dropped and jailed.
+
+The challenge processor, [chngproc.c](chngproc.c), coordinates challenge
+responses made by the Let's Encrypt server. The certificate and file
+processor, [certproc.c](certproc.c) and [fileproc.c](fileproc.c), are a
+pipeline to serialise signed certificates to your file-system.
+
+The software has been designed with [OpenBSD](http://www.openbsd.org) in
+mind, though it works with reduced security on Mac OS X and Linux.  This
+is due to the security-hostile focus of both systems: the sandbox
+facility in Mac OS X is very weak; and while it exists on Linux, it's
+too complicated to use.  Moreover, the DNS resolution on both systems is
+run almost no protection but for dropping privileges.
+
+In short, I don't recommend using any platform but OpenBSD.
+
+By default, *letskencrypt* talks only to the [staging
 server](https://community.letsencrypt.org/t/testing-against-the-lets-encrypt-staging-environment/6763).
 You'll need to edit [netproc.c](netproc.c) if you'd prefer the real
 deal, but the system is still kinda young to be doing so.
 
 ## Installation
 
-To use letskencrypt, just download and run `make` and `make install` in
-the usual way.  The software has been designed with
-[OpenBSD](http://www.openbsd.org) in mind, though it works with reduced
-security on Mac OS X and Linux.  This is due to the security-hostile
-focus of both systems: the sandbox facility in Mac OS X is very weak;
-and while it exists on Linux, it's too complicated to use.  Moreover,
-the DNS resolution on both systems is run almost no protection but for
-dropping privileges.
-
-In short, I don't recommend using any platform but OpenBSD.
+To use *letskencrypt*, just download and run `make` and `make install`
+in the usual way.  
 
 If you're trying to run on Linux, you'll need to edit the
 [Makefile](Makefile) as noted.  I only tested this on Debian.  It
