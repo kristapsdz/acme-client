@@ -557,13 +557,16 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	 * There's no point in running if these don't work.
 	 */
 
-	if (0 == (op = readop(afd, COMM_ACCT_STAT)))
+	if (0 == (op = readop(afd, COMM_ACCT_STAT))) {
+		rc = 1;
 		goto out;
-	else if (ACCT_READY != op)
+	} else if (ACCT_READY != op)
 		goto out;
-	else if (0 == (op = readop(afd, COMM_KEY_STAT)))
+
+	if (0 == (op = readop(afd, COMM_KEY_STAT))) {
+		rc = 1;
 		goto out;
-	else if (KEY_READY != op)
+	} else if (KEY_READY != op)
 		goto out;
 
 	/* Allocate main state. */
