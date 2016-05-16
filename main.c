@@ -43,7 +43,7 @@ main(int argc, char *argv[])
 	int		  key_fds[2], acct_fds[2], chng_fds[2], 
 			  cert_fds[2], file_fds[2], dns_fds[2];
 	pid_t		  pids[COMP__MAX];
-	int		  c, rc, newacct;
+	int		  c, rc, newacct, remote;
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, altsz;
@@ -53,14 +53,14 @@ main(int argc, char *argv[])
 	gid_t		  nobody_gid;
 
 	alts = NULL;
-	newacct = 0;
+	newacct = remote = 0;
 	verbose = 0;
 	certdir = "/etc/ssl/letsencrypt";
 	keyfile = "/etc/ssl/letsencrypt/private/privkey.pem";
 	acctkey = "/etc/letsencrypt/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
-	while (-1 != (c = getopt(argc, argv, "nf:c:vC:k:"))) 
+	while (-1 != (c = getopt(argc, argv, "nf:c:vC:k:r"))) 
 		switch (c) {
 		case ('n'):
 			newacct = 1;
@@ -79,6 +79,13 @@ main(int argc, char *argv[])
 			break;
 		case ('v'):
 			verbose = verbose ? 2 : 1;
+			break;
+		case ('r'):
+			/*
+			 * Undocumented feature.
+			 * Don't use it.
+			 */
+			remote = 1;
 			break;
 		default:
 			goto usage;
@@ -217,7 +224,7 @@ main(int argc, char *argv[])
 		close(file_fds[0]);
 		close(file_fds[1]);
 		proccomp = COMP_CHALLENGE;
-		c = chngproc(chng_fds[0], chngdir);
+		c = chngproc(chng_fds[0], chngdir, remote);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
