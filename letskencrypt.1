@@ -1,4 +1,4 @@
-.Dd $Mdocdate: May 15 2016 $
+.Dd $Mdocdate: May 16 2016 $
 .Dt LETSKENCRYPT 1
 .Os
 .Sh NAME
@@ -206,14 +206,25 @@ Each subprocess is created in a
 file-system jail, privilege-dropped, and sandboxed according to the
 operating system.
 .Bl -tag -width Ds
+.It DNS process.
+Manages domain name resolution.
+This is allowed full access to the file-system, but is privilege-dropped
+to the
+.Dq nobody
+user.
+On
+.Ox , 
+the sandbox ensures that only DNS lookups are made; however, other
+systems do not have this.
+This is due to weak (or overly complex) DNS resolution and/or
+sandboxing.
 .It Network process.
 Manages communication with the Let's Encrypt server.
-This is not allowed to create any files on the file system.
+This is not allowed to access any files on the file system.
 It communicates with all other process using pipes.
-This process is jailed in a temporary directory in
-.Pa /tmp
-that consists only of files needed for DNS resolution.
-It drops user privileges to the
+This process is sandboxed and jailed in
+.Pa /var/empty
+and drops user privileges to the
 .Dq nobody
 user.
 .It Certificate process.
