@@ -2,8 +2,9 @@
 
 letskencrypt is a [Let's Encrypt](https://letsencrypt.org) client with a
 strong focus on security: file-system jails, privilege separation, and
-sandboxing.
-See [letskencrypt.1](letskencrypt.1) for complete documentation.
+sandboxing.  See [letskencrypt.1](letskencrypt.1) for complete
+documentation.
+
 This repository mirrors the master CVS repository: any source changes
 will occur on the master and be pushed periodically to GitHub.
 
@@ -14,14 +15,14 @@ system is still a little young to be doing so.
 
 ## Installation
 
-To use this tool, just download and run `make` and `make install` in
-the usual way.  The software has been designed with
+To use this tool, just download and run `make` and `make install` in the
+usual way.  The software has been designed with
 [OpenBSD](http://www.openbsd.org) in mind, though it works with reduced
-security on Mac OS X and Linux.  
-This is due to the chroot-unfriendly way that DNS lookups occur in both
-systems.
-Moreover, the sandbox facility in Mac OS X is very weak; and while it
-exists on Linux, it's too complicated to use.  Caveat emptor.
+security on Mac OS X and Linux.  This is due to the security-hostile
+focus of both systems: the sandbox facility in Mac OS X is very weak;
+and while it exists on Linux, it's too complicated to use.  Moreover,
+the DNS resolution on both systems is extremely chroot-unfriendly.
+Caveat emptor.
 
 In short, I don't recommend using any platform but OpenBSD.
 
