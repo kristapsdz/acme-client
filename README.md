@@ -21,8 +21,8 @@ usual way.  The software has been designed with
 security on Mac OS X and Linux.  This is due to the security-hostile
 focus of both systems: the sandbox facility in Mac OS X is very weak;
 and while it exists on Linux, it's too complicated to use.  Moreover,
-the DNS resolution on both systems is extremely chroot-unfriendly.
-Caveat emptor.
+the DNS resolution on both systems is run almost no protection but for
+dropping privileges.  Caveat emptor.
 
 In short, I don't recommend using any platform but OpenBSD.
 

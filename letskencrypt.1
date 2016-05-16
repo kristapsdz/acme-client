@@ -291,9 +291,8 @@ create and remove files.
 .\" .Sh HISTORY
 .\" .Sh AUTHORS
 .Sh CAVEATS
-On Mac OS X and Linux, the network process is not put into a
-.Xr chroot 2
-jail.
+On Mac OS X and Linux, the DNS process is essentially unprotected except
+for a privilege drop.
 This is due to limitations in how DNS resolution occurs on these
 systems.
 Moreover, for Mac OS X, the sandbox for several components must be
