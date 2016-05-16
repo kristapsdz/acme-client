@@ -129,8 +129,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	/*
 	 * Wait until we receive the DER encoded (signed) certificate
 	 * from the network process.
-	 * If the netproc exits (sending us a zero), then just exit
-	 * cleanly.
+	 * Then convert the DER encoding into an X509 certificate.
 	 */
 
 	if (0 == (lval = readop(netsock, COMM_CSR_OP))) {
@@ -148,7 +147,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 
 	/*
 	 * Extract the CA Issuers from its NID.
-	 * I have no idea what I'm doing.
+	 * TODO: I have no idea what I'm doing.
 	 */
 
 	idx = X509_get_ext_by_NID(x, NID_info_access, idx);
@@ -223,6 +222,8 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 
 	rc = 1;
 out:
+	close(netsock);
+	close(filesock);
 	if (NULL != x)
 		X509_free(x);
 	if (NULL != chainx)
@@ -230,8 +231,6 @@ out:
 	free(csr);
 	free(url);
 	free(chain);
-	close(netsock);
-	close(filesock);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
 	return(rc);

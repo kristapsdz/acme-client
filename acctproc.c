@@ -435,6 +435,7 @@ acctproc(int netsock, const char *acctkey,
 
 	rc = 1;
 out:
+	close(netsock);
 	if (NULL != f)
 		fclose(f);
 	if (NULL != r)
@@ -443,7 +444,6 @@ out:
 		BN_free(bne);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
-	close(netsock);
 	return(rc);
 }
 
