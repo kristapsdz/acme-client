@@ -25,6 +25,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -105,6 +106,8 @@ readbuf(int fd, enum comm comm, size_t *sz)
 		dowarn("read: %s length", comms[comm]);
 	else if ((size_t)ssz != sizeof(size_t))
 		dowarnx("short read: %s length", comms[comm]);
+	else if (*sz > SIZE_MAX - 1)
+		dowarnx("integer overflow");
 	else if (NULL == (p = calloc(1, *sz + 1)))
 		dowarn("malloc");
 	else if ((ssz = read(fd, p, *sz)) < 0)
