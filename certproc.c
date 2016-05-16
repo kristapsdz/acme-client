@@ -191,6 +191,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	 * it begins with the PEM marker.
 	 * If so, ship it as-is; otherwise, convert to a PEM encoded
 	 * buffer and ship that.
+	 * FIXME: if PEM, re-parse it.
 	 */
 
 	if (chainsz <= strlen(MARKER) ||

@@ -551,6 +551,21 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	}
 #endif
 
+	/* 
+	 * Wait until the acctproc and keyproc have started up and are
+	 * ready to serve us data.
+	 * There's no point in running if these don't work.
+	 */
+
+	if (0 == (op = readop(afd, COMM_ACCT_STAT)))
+		goto out;
+	else if (ACCT_READY != op)
+		goto out;
+	else if (0 == (op = readop(afd, COMM_KEY_STAT)))
+		goto out;
+	else if (KEY_READY != op)
+		goto out;
+
 	/* Allocate main state. */
 
 	chngs = calloc(altsz, sizeof(struct chng));

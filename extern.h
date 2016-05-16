@@ -24,6 +24,7 @@
  */
 enum	acctop {
 	ACCT_STOP,
+	ACCT_READY,
 	ACCT_SIGN,
 	ACCT_THUMBPRINT,
 	ACCT__MAX
@@ -37,6 +38,14 @@ enum	chngop {
 	CHNG_SYN,
 	CHNG_ACK,
 	CHNG__MAX
+};
+
+/*
+ * Requests to the private key infrastructure.
+ */
+enum	keyop {
+	KEY_READY,
+	KEY__MAX
 };
 
 /*
@@ -68,6 +77,7 @@ enum	comm {
 	COMM_CHNG_OP,
 	COMM_CHNG_ACK,
 	COMM_ACCT,
+	COMM_ACCT_STAT,
 	COMM_CSR,
 	COMM_CSR_OP,
 	COMM_ISSUER,
@@ -77,6 +87,7 @@ enum	comm {
 	COMM_DNSQ,
 	COMM_DNSA,
 	COMM_DNSLEN,
+	COMM_KEY_STAT,
 	COMM__MAX
 };
 

@@ -42,7 +42,8 @@ static	const char *const comms[COMM__MAX] = {
 	"token", /* COMM_TOK */
 	"challenge-op", /* COMM_CHNG_OP */
 	"challenge-ack", /* COMM_CHNG_ACK */
-	"account", /* COMM_SIGN */
+	"account", /* COMM_ACCT */
+	"acctpro-status", /* COMM_ACCT_STAT */
 	"csr", /* COMM_CSR */
 	"csr-op", /* COMM_CSR_OP */
 	"issuer", /* COMM_ISSUER */
@@ -52,6 +53,7 @@ static	const char *const comms[COMM__MAX] = {
 	"dnsq", /* COMM_DNSQ */
 	"dnsa", /* COMM_DNSA */
 	"dnslen", /* COMM_DNSLEN */
+	"keyproc-status", /* COMM_KEY_STAT */
 };
 
 static void

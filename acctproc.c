@@ -320,7 +320,7 @@ acctproc(int netsock, const char *acctkey,
 
 	if (NULL == (f = fopen(acctkey, newacct ? "wx" : "r"))) {
 		dowarn("%s", acctkey);
-		goto error;
+		goto out;
 	}
 
 	/* File-system, user, and sandbox jailing. */
@@ -329,22 +329,23 @@ acctproc(int netsock, const char *acctkey,
 	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
  	    SANDBOX_NAMED, NULL)) {
 		dowarnx("sandbox_init");
-		goto error;
+		goto out;
 	}
 #endif
 	ERR_load_crypto_strings();
 
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
 		dowarnx("dropfs");
-		goto error;
+		goto out;
 	} else if ( ! dropprivs(uid, gid)) {
 		dowarnx("dropprivs");
-		goto error;
+		goto out;
 	}
+
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio", NULL)) {
 		dowarn("pledge");
-		goto error;
+		goto out;
 	}
 #endif
 	/* 
@@ -361,23 +362,23 @@ acctproc(int netsock, const char *acctkey,
 	if (newacct) {
 		if (NULL == (bne = BN_new())) {
 			dowarnx("BN_new");
-			goto error;
+			goto out;
 		} else if ( ! BN_set_word(bne, RSA_F4)) {
 			dowarnx("BN_set_word");
-			goto error;
+			goto out;
 		} else if (NULL == (r = RSA_new())) {
 			dowarnx("RSA_new");
-			goto error;
+			goto out;
 		}
 		dodbg("%s: creating: %d bits", acctkey, KEY_BITS);
 		if ( ! RSA_generate_key_ex(r, KEY_BITS, bne, NULL)) {
 			dowarnx("RSA_generate_key_ex");
-			goto error;
+			goto out;
 		}
 		if ( ! PEM_write_RSAPrivateKey
 		    (f, r, NULL, 0, 0, NULL, NULL)) {
 			dowarnx("PEM_write_RSAPrivateKey");
-			goto error;
+			goto out;
 		}
 		BN_free(bne);
 		bne = NULL;
@@ -385,12 +386,17 @@ acctproc(int netsock, const char *acctkey,
 		r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
 		if (NULL == r) {
 			dowarnx("%s", acctkey);
-			goto error;
+			goto out;
 		}
 	}
 
 	fclose(f);
 	f = NULL;
+
+	/* Notify the netproc that we've started up. */
+
+	if ( ! writeop(netsock, COMM_ACCT_STAT, ACCT_READY))
+		goto out;
 
 	/*
 	 * Now we wait for requests from the network-facing process.
@@ -409,26 +415,26 @@ acctproc(int netsock, const char *acctkey,
 		if (ACCT_STOP == op)
 			break;
 		else if (ACCT__MAX == op)
-			goto error;
+			goto out;
 
 		switch (op) {
 		case (ACCT_SIGN):
 			if (op_sign(netsock, r))
 				break;
 			dowarnx("op_sign");
-			goto error;
+			goto out;
 		case (ACCT_THUMBPRINT):
 			if (op_thumbprint(netsock, r))
 				break;
 			dowarnx("op_thumbprint");
-			goto error;
+			goto out;
 		default:
 			abort();
 		}
 	}
 
 	rc = 1;
-error:
+out:
 	if (NULL != f)
 		fclose(f);
 	if (NULL != r)
