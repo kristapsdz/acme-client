@@ -146,7 +146,7 @@ chngproc(int netsock, const char *root)
 		 * on machines apart from where I'm hosting the
 		 * challenge directory.
 		 */
-#if 1
+#if 0
 		fputs("RUN THIS IN THE CHALLENGE DIRECTORY\n", stderr);
 		fputs("YOU HAVE 20 SECONDS...\n", stderr);
 		fprintf(stderr, "doas sh -c \"echo %s > %s\"", 
