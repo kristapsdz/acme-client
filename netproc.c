@@ -35,13 +35,10 @@
 
 #include "extern.h"
 
-#define	PATH_RESOLV "/etc/resolv.conf"
 #if 0
 # define URL_CA "https://acme-v01.api.letsencrypt.org/directory"
-# define DOMAIN_CA "acme-v01.api.letsencrypt.org"
 #else
 # define URL_CA "https://acme-staging.api.letsencrypt.org/directory"
-# define DOMAIN_CA "acme-staging.api.letsencrypt.org"
 #endif
 #define URL_LICENSE "https://letsencrypt.org" \
 		    "/documents/LE-SA-v1.0.1-July-27-2015.pdf"
@@ -49,11 +46,18 @@
 #define	RETRY_DELAY 5
 #define RETRY_MAX 10
 
+/*
+ * Buffer used when collecting the results of a CURL transfer.
+ */
 struct	buf {
-	char	*buf;
-	size_t	 sz;
+	char	*buf; /* binary buffer */
+	size_t	 sz; /* length of buffer */
 };
 
+/*
+ * Reset the contents of a buffer prior to transfer.
+ * This can be called regardless of whether buf is NULL.
+ */
 static void
 buf_reset(struct buf *buf)
 {
@@ -64,6 +68,117 @@ buf_reset(struct buf *buf)
 	free(buf->buf);
 	buf->buf = NULL;
 	buf->sz = 0;
+}
+
+/*
+ * Extract the domain and port from a URL.
+ * The url must be formatted as schema://address[/stuff].
+ * This returns NULL on failure.
+ */
+static char *
+url2host(const char *host, short *port)
+{
+	char	*url, *ep;
+
+	/* We only understand HTTP and HTTPS. */
+
+	if (0 == strncmp(host, "https://", 8)) {
+		*port = 443;
+		if (NULL == (url = strdup(host + 8))) {
+			dowarn("strdup");
+			return(NULL);
+		}
+	} else if (0 == strncmp(host, "http://", 7)) {
+		*port = 80;
+		if (NULL == (url = strdup(host + 7))) {
+			dowarn("strdup");
+			return(NULL);
+		}
+	} else {
+		dowarnx("%s: unknown schema", host);
+		return(NULL);
+	}
+
+	/* Terminate path part. */
+
+	if (NULL != (ep = strchr(url, '/')))
+		*ep = '\0';
+
+	return(url);
+}
+
+/*
+ * Given a url, translate it into a domain, resolve the address of the
+ * domain, then fill in a curl_slist in the format CURL wants for its
+ * internal resolver lookups.
+ */
+static struct curl_slist *
+urlresolve(int fd, const char *url)
+{
+	char	  	  *host, *addr, *buf;
+	int	  	   rc, cc;
+	size_t	  	   i;
+	short	  	   port;
+	long	  	   op;
+	struct curl_slist *hosts;
+
+	host = buf = addr = NULL;
+	hosts = NULL;
+	rc = 0;
+
+	if (NULL == (host = url2host(url, &port))) {
+		dowarnx("%s: url2host", url);
+		goto out;
+	}
+
+	dodbg("%s: resolving", host);
+
+	if ( ! writeop(fd, COMM_DNS, 1))
+		goto out;
+	else if ( ! writestr(fd, COMM_DNSQ, host))
+		goto out;
+	else if (LONG_MAX == (op = readop(fd, COMM_DNSLEN)))
+		goto out;
+
+	for (i = 0; i < (size_t)op; i++) {
+		if (NULL == (addr = readstr(fd, COMM_DNSA))) 
+			goto out;
+
+		/* XXX XXX XXX */
+		if (i > 0) {
+			free(addr);
+			addr = NULL;
+			continue;
+		}
+
+		cc = asprintf(&buf, "%s:%hd:%s", host, port, addr);
+		if (-1 == cc) {
+			dowarn("asprintf");
+			buf = NULL;
+			goto out;
+		}
+
+		hosts = curl_slist_append(hosts, buf);
+		if (NULL == hosts) {
+			dowarnx("curl_slist_append");
+			goto out;
+		}
+
+		free(buf);
+		free(addr);
+		buf = addr = NULL;
+	}
+
+	rc = 1;
+out:
+	if (0 == rc) {
+		curl_slist_free_all(hosts);
+		hosts = NULL;
+	}
+	free(host);
+	free(buf);
+	free(addr);
+	return(hosts);
 }
 
 /*
@@ -392,10 +507,9 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	int newacct, uid_t uid, gid_t gid, 
 	const char *const *alts, size_t altsz)
 {
-	int		 rc, cc;
+	int		 rc;
 	size_t		 i;
-	char		*cert, *req, *reqsn, *domain,
-			*thumb, *url, *host, *urlcp, *ep;
+	char		*cert, *thumb, *url;
 	CURL		*c;
 	struct buf	 buf;
 	struct json	*json;
@@ -407,7 +521,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	rc = 0;
 	memset(&paths, 0, sizeof(struct capaths));
 	memset(&buf, 0, sizeof(struct buf));
-	url = urlcp = domain = reqsn = req = cert = thumb = NULL;
+	url = cert = thumb = NULL;
 	json = NULL;
 	c = NULL;
 	chngs = NULL;
@@ -461,39 +575,9 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	 * We'll use this ourselves instead of having libcurl do the DNS
 	 * resolution itself.
 	 */
-
-	dodbg("%s: requesting DNS", DOMAIN_CA);
-
-	if ( ! writeop(dfd, COMM_DNS, 1))
+	if (NULL == (hosts = urlresolve(dfd, URL_CA))) 
 		goto out;
-	if ( ! writestr(dfd, COMM_DNSQ, DOMAIN_CA))
-		goto out;
-	if (LONG_MAX == (op = readop(dfd, COMM_DNSLEN)))
-		goto out;
-
-	for (i = 0; i < (size_t)op; i++) {
-		if (NULL == (url = readstr(dfd, COMM_DNSA))) 
-			goto out;
-		cc = asprintf(&host, "%s:443:%s", DOMAIN_CA, url);
-		if (-1 == cc) {
-			dowarn("asprintf");
-			host = NULL;
-			goto out;
-		}
-		hosts = curl_slist_append(hosts, host);
-		if (NULL == hosts) {
-			dowarnx("curl_slist_append");
-			free(host);
-			goto out;
-		}
-		free(url);
-		url = NULL;
-	}
-
-	/* Grab the directory structure from the CA. */
-
 	dodbg("%s: requesting directories", URL_CA);
-
 	if ( ! nreq(c, URL_CA, &http, json, NULL, hosts)) {
 		dowarnx("%s: bad comm", URL_CA);
 		goto out;
@@ -602,69 +686,17 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 
 	if (NULL == (url = readstr(cfd, COMM_ISSUER)))
 		goto out;
-
-	if (NULL == (domain = strdup(url))) {
-		dowarn("strdup");
+	curl_slist_free_all(hosts);
+	if (NULL == (hosts = urlresolve(dfd, url))) 
 		goto out;
-	}
-
-	dodbg("%s: processing hostname", url);
-
-	if (0 == strncmp(url, "https://", 8)) {
-		if (NULL == (urlcp = strdup(url + 8))) {
-			dowarn("strdup");
-			goto out;
-		}
-	} else if (0 == strncmp(url, "http://", 7)) {
-		if (NULL == (urlcp = strdup(url + 7))) {
-			dowarn("strdup");
-			goto out;
-		}
-	} else
-		urlcp = NULL;
-
-	if (NULL == urlcp) {
-		dowarnx("%s: unknown schema", url);
+	dodbg("%s: requesting full-chain", url);
+	if ( ! nreq(c, url, &http, NULL, &buf, hosts)) {
+		dowarnx("%s: bad comm", url);
 		goto out;
-	} else if (NULL != (ep = strchr(urlcp, '/')))
-		*ep = '\0';
-
-	dodbg("%s: requesting DNS", urlcp);
-
-	if ( ! writeop(dfd, COMM_DNS, 1))
+	} else if (200 != http && 201 != http) {
+		dowarnx("%s: bad HTTP: %ld", url, http);
 		goto out;
-	if ( ! writestr(dfd, COMM_DNSQ, urlcp))
-		goto out;
-	if (LONG_MAX == (op = readop(dfd, COMM_DNSLEN)))
-		goto out;
-
-	free(url);
-
-	for (i = 0; i < (size_t)op; i++) {
-		if (NULL == (url = readstr(dfd, COMM_DNSA))) 
-			goto out;
-		cc = asprintf(&host, "%s:80:%s", urlcp, url);
-		if (-1 == cc) {
-			dowarn("asprintf");
-			host = NULL;
-			goto out;
-		}
-		dodbg("%s", host);
-		hosts = curl_slist_append(hosts, host);
-		if (NULL == hosts) {
-			dowarnx("curl_slist_append");
-			free(host);
-			goto out;
-		}
-		free(url);
-		url = NULL;
-	}
-
-	dodbg("%s: full-chain", domain);
-
-	if ( ! nreq(c, domain, &http, NULL, &buf, hosts))
-		goto out;
-	else if ( ! writebuf(cfd, COMM_CHAIN, buf.buf, buf.sz))
+	} else if ( ! writebuf(cfd, COMM_CHAIN, buf.buf, buf.sz))
 		goto out;
 
 	rc = 1;
@@ -677,11 +709,10 @@ out:
 		close(afd);
 	if (-1 != Cfd)
 		close(Cfd);
+	if (-1 != dfd)
+		close(dfd);
 	free(cert);
-	free(req);
-	free(reqsn);
 	free(url);
-	free(domain);
 	free(thumb);
 	free(buf.buf);
 	if (NULL != c)
