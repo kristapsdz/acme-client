@@ -128,7 +128,7 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 	size_t	 i;
 	ssize_t	 vsz;
 
-	rc = EXIT_FAILURE;
+	rc = 0;
 	look = NULL;
 
 	/*
@@ -173,10 +173,9 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 	if (0 != lval) 
 		goto out;
 
-	rc = EXIT_SUCCESS;
+	rc = 1;
 out:
 	close(nfd);
 	free(look);
-	exit(rc);
-	/* NOTREACHED */
+	return(rc);
 }
