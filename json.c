@@ -331,6 +331,26 @@ json_fmt_challenge(const char *token, const char *thumb)
  * Format the "new-cert" resource request.
  */
 char *
+json_fmt_revokecert(const char *cert)
+{
+	int	 c;
+	char	*p;
+
+	c = asprintf(&p, "{"
+		"\"resource\": \"revoke-cert\", "
+		"\"certificate\": \"%s\""
+		"}", cert);
+	if (-1 == c) {
+		dowarn("asprintf");
+		p = NULL;
+	}
+	return(p);
+}
+
+/*
+ * Format the "new-cert" resource request.
+ */
+char *
 json_fmt_newcert(const char *cert)
 {
 	int	 c;

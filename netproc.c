@@ -467,6 +467,35 @@ dochngcheck(CURL *c, struct json *json, struct chng *chng,
 	return(1);
 }
 
+/* 
+ * XXX: not used yet.
+ */
+static int
+dorevoke(CURL *c, int fd, const char *addr, struct buf *buf, 
+	const char *cert, struct curl_slist *hosts)
+{
+	char	*req;
+	int	 rc;
+	long	 lc;
+
+	rc = 0;
+	dodbg("%s: revoking", addr);
+
+	if (NULL == (req = json_fmt_revokecert(cert)))
+		dowarnx("json_fmt_revokecert");
+	else if ( ! sreq(fd, c, addr, req, &lc, NULL, buf, hosts))
+		dowarnx("%s: bad comm", addr);
+	else if (200 != lc && 201 != lc)
+		dowarnx("%s: bad HTTP: %ld", addr, lc);
+	else if (0 == buf->sz || NULL == buf->buf)
+		dowarnx("%s: empty response", addr);
+	else
+		rc = 1;
+
+	free(req);
+	return(rc);
+}
+
 /*
  * Submit our certificate to the CA.
  * This, upon success, will return the signed CA.
@@ -504,7 +533,7 @@ docert(CURL *c, int fd, const char *addr, struct buf *buf,
  */
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
-	int newacct, uid_t uid, gid_t gid, 
+	int newacct, int revoke, uid_t uid, gid_t gid, 
 	const char *const *alts, size_t altsz)
 {
 	int		 rc;
@@ -675,18 +704,35 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	if ( ! writeop(Cfd, COMM_CHNG_OP, CHNG_STOP))
 		goto out;
 
-	/*
-	 * Now wait until we've received the certificate we want to send
-	 * to the letsencrypt server; and once we have it, we send it to
-	 * the CA for signing, download the signed copy, and ship that
-	 * into the certificate process for copying.
-	 */
+	/* Wait to receive the certificate itself. */
 
 	if (NULL == (cert = readstr(kfd, COMM_CERT)))
 		goto out;
-	else if ( ! docert(c, afd, paths.newcert, &buf, cert, hosts)) 
+
+	/*
+	 * If we're meant to revoke, then submit the request to the CA
+	 * then notify the certproc, which will in turn notify the
+	 * fileproc.
+	 */
+
+	if (revoke) {
+		if ( ! dorevoke(c, afd, 
+		    paths.revokecert, &buf, cert, hosts)) 
+			goto out;
+		else if ( ! writeop(cfd, COMM_CSR_OP, CERT_REVOKE))
+			goto out;
+		rc = 1;
 		goto out;
-	else if ( ! writeop(cfd, COMM_CSR_OP, 1))
+	} 
+
+	/*
+	 * Otherwise, submit the CA for signing, download the signed
+	 * copy, and ship that into the certificate process for copying.
+	 */
+
+	if ( ! docert(c, afd, paths.newcert, &buf, cert, hosts)) 
+		goto out;
+	else if ( ! writeop(cfd, COMM_CSR_OP, CERT_UPDATE))
 		goto out;
 	else if ( ! writebuf(cfd, COMM_CSR, buf.buf, buf.sz))
 		goto out;

@@ -160,7 +160,7 @@ main(int argc, char *argv[])
 		proccomp = COMP_NET;
 		c = netproc(key_fds[1], acct_fds[1], 
 			chng_fds[1], cert_fds[1], 
-			dns_fds[1], newacct,
+			dns_fds[1], newacct, 0,
 			nobody_uid, nobody_gid,
 			(const char *const *)alts, altsz);
 		free(alts);
