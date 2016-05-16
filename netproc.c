@@ -536,12 +536,6 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 		goto out;
 	}
 #endif
-	/*
-	 * We don't do this on Mac OS X because Mac doesn't use the
-	 * traditional resolv.conf for its lookups.
-	 * Instead, it uses a socket, and I'm not going to look into how
-	 * to duplicate that right now.
-	 */
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
 		dowarnx("dropfs");
 		goto out;
@@ -549,6 +543,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 		dowarnx("dropprivs");
 		goto out;
 	}
+
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio dns rpath inet", NULL)) {
 		dowarn("pledge");
