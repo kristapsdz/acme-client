@@ -262,6 +262,14 @@ user.
 .It Challenge process.
 This process creates and deletes challenge files.
 It is sandboxed and jailed in the challenge directory.
+.It Revoke process.
+If found, reads and parses the X509 certificate to check whether it
+should be signed or not.
+After opening the certificate file, this is sandboxed and jailed in
+.Pa /var/empty ,
+and drops user privileges to the
+.Dq nobody
+user.
 .El
 .\" Not used in OpenBSD.
 .\" .Sh RETURN VALUES
