@@ -9,7 +9,7 @@
 .\" Not used in OpenBSD.
 .Sh SYNOPSIS
 .Nm letskencrypt
-.Op Fl vn
+.Op Fl Fvn
 .Op Fl C Ar challengedir
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
@@ -49,6 +49,8 @@ Its arguments are as follows:
 .It Fl v
 Verbose operation.
 Specify twice to also trace communication and data transfers.
+.It Fl F
+Force updating the certificate signature even if it's too soon.
 .It Fl n
 Create a new account key.
 This will fail if a file already exists in the account key's place.
@@ -187,14 +189,12 @@ server {
 }
 .Ed
 .Pp
-None of these certificates are
-.Em ever
-examined by
-.Nm :
-only the domain private key is used when generating certificates and
-talking to the
-.Dq Let's Encrypt
-server.
+The
+.Pa cert.pem
+file, if found, is checked for its expiration: if more than 30 days from
+expiring,
+.Nm
+will not attempt to refresh the signature.
 .\" .Sh CONTEXT
 .\" For section 9 functions only.
 .Sh IMPLEMENTATION NOTES
@@ -296,10 +296,5 @@ In summary, running this on anything but OpenBSD is not advised.
 .Sh BUGS
 The challenge and certificate processes retain their privileges, as I'm
 not sure which credentials to use otherwise.
-.Pp
-Since certificates are never examined (only private keys),
-.Nm
-doesn't know when the certificate is going to expire.
-This, for now, is left as an exercise to the operator.
 .\" .Sh SECURITY CONSIDERATIONS
 .\" Not used in OpenBSD.

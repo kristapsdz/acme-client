@@ -56,8 +56,6 @@ X509expires(X509 *x)
 	str = time->data;
 	memset(&t, 0, sizeof(t));
 
-	dodbg("expiration: %.*s", time->length, time->data);
-
 	/* Account for 2 and 4-digit time. */
 
 	if (time->type == V_ASN1_UTCTIME) {
@@ -102,7 +100,8 @@ X509expires(X509 *x)
 }
 
 int
-revokeproc(int netsock, const char *certdir, uid_t uid, gid_t gid)
+revokeproc(int netsock, const char *certdir, 
+	uid_t uid, gid_t gid, int force)
 {
 	int		 rc;
 	long		 lval;
@@ -120,7 +119,7 @@ revokeproc(int netsock, const char *certdir, uid_t uid, gid_t gid)
 	/*
 	 * First try to open the certificate before we drop privileges
 	 * and jail ourselves.
-	 * We allow "f" to be NULL iff the cert doesn't exist yet.
+	 * We allow "f" to be NULL IFF the cert doesn't exist yet.
 	 */
 
 	if (-1 == asprintf(&path, "%s/%s", certdir, CERT_PEM)) {
@@ -157,20 +156,6 @@ revokeproc(int netsock, const char *certdir, uid_t uid, gid_t gid)
 	}
 #endif
 
-	op = REVOKE__MAX;
-	if (0 == (lval = readop(netsock, COMM_REVOKE_OP)))
-		op = REVOKE_STOP;
-	else if (REVOKE_CHECK == lval)
-		op = lval;
-
-	if (REVOKE__MAX == op) {
-		dowarnx("unknown operation from netproc");
-		goto out;
-	} else if (REVOKE_STOP == op) {
-		rc = 1;
-		goto out;
-	}
-
 	/*
 	 * If we couldn't open the certificate, it doesn't exist so we
 	 * haven't submitted it yet, so obviously we can mark that it
@@ -193,12 +178,42 @@ revokeproc(int netsock, const char *certdir, uid_t uid, gid_t gid)
 		goto out;
 	}
 
+	rop = time(NULL) >= (t - RENEW_ALLOW) ? REVOKE_EXP : REVOKE_OK;
+
+	if (REVOKE_EXP == rop)
+		dodbg("%s/%s: certificate renewable: %lld days left",
+			certdir, CERT_PEM, 
+			(long long)(t - time(NULL)) / 24 / 60 / 60);
+	else
+		dodbg("%s/%s: certificate valid: %lld days left",
+			certdir, CERT_PEM, 
+			(long long)(t - time(NULL)) / 24 / 60 / 60);
+
+	if (REVOKE_OK == rop && force) {
+		dowarnx("%s/%s: forcing renewal", certdir, CERT_PEM);
+		rop = REVOKE_EXP;
+	}
+
 	/* We can re-submit it given RENEW_ALLOW time before. */
 
-	rop = time(NULL) >= (t - RENEW_ALLOW) ? 
-		REVOKE_EXP : REVOKE_OK;
 	if ( ! writeop(netsock, COMM_REVOKE_RESP, rop))
 		goto out;
+
+	op = REVOKE__MAX;
+	if (0 == (lval = readop(netsock, COMM_REVOKE_OP)))
+		op = REVOKE_STOP;
+	else if (REVOKE_CHECK == lval)
+		op = lval;
+
+	if (REVOKE__MAX == op) {
+		dowarnx("unknown operation from netproc");
+		goto out;
+	} else if (REVOKE_STOP == op) {
+		rc = 1;
+		goto out;
+	}
+
+	/* TODO: if asking for cert, return it for revocation. */
 
 	rc = 1;
 out:
