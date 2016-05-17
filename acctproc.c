@@ -405,17 +405,17 @@ acctproc(int netsock, const char *acctkey,
 	 */
 
 	for (;;) {
+		op = ACCT__MAX;
 		if (0 == (lval = readop(netsock, COMM_ACCT)))
 			op = ACCT_STOP;
-		else if (LONG_MAX == lval)
-			op = ACCT__MAX;
-		else
+		else if (ACCT_SIGN == lval || ACCT_THUMBPRINT == lval)
 			op = lval;
 
-		if (ACCT_STOP == op)
-			break;
-		else if (ACCT__MAX == op)
+		if (ACCT__MAX == op) {
+			dowarnx("unknown operation from netproc");
 			goto out;
+		} else if (ACCT_STOP == op)
+			break;
 
 		switch (op) {
 		case (ACCT_SIGN):

@@ -127,26 +127,37 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	}
 #endif
 
+	/* Read what the netproc wants us to do. */
+
+	op = CERT__MAX;
+	if (0 == (lval = readop(netsock, COMM_CSR_OP)))
+		op = CERT_STOP;
+	else if (CERT_REVOKE == lval || CERT_UPDATE == lval)
+		op = lval;
+
+	if (CERT_STOP == op) {
+		rc = 1;
+		goto out;
+	} else if (CERT__MAX == op) {
+		dowarnx("unknown operation from netproc");
+		goto out;
+	}
+
+	/* Pass revocation right through to fileproc. */
+
+	if (CERT_REVOKE == op) {
+		dodbg("revoke certificate");
+		if (writeop(filesock, COMM_CHAIN_OP, FILE_REMOVE))
+			rc = 1;
+		goto out;
+	}
+	dodbg("new certificate");
+
 	/*
 	 * Wait until we receive the DER encoded (signed) certificate
 	 * from the network process.
 	 * Then convert the DER encoding into an X509 certificate.
 	 */
-	if (0 == (lval = readop(netsock, COMM_CSR_OP)))
-		op = CERT_NONE;
-	else if (LONG_MAX == lval)
-		op = CERT__MAX;
-	else
-		op = lval;
-
-	if (CERT_NONE == op) {
-		rc = 1;
-		goto out;
-	} else if (CERT_REVOKE == op) {
-	} else if (CERT_UPDATE != op) {
-		dowarnx("unknown operation");
-		goto out;
-	}
 
 	if (NULL == (csr = readbuf(netsock, COMM_CSR, &csrsz)))
 		goto out;
@@ -220,7 +231,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 			goto out;
 	} 
 
-	if ( ! writeop(filesock, COMM_CHAIN_OP, 1))
+	if ( ! writeop(filesock, COMM_CHAIN_OP, FILE_CREATE))
 		goto out;
 	else if ( ! writebuf(filesock, COMM_CHAIN, chain, chainsz))
 		goto out;

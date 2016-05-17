@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <sys/param.h>
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -78,6 +79,7 @@ fileproc(int certsock, const char *certdir)
 	size_t		 chsz, csz;
 	int		 rc;
 	long		 lval;
+	enum fileop	 op;
 
 	csr = ch = NULL;
 	rc = 0;
@@ -109,6 +111,47 @@ fileproc(int certsock, const char *certdir)
 	}
 #endif
 
+	/* Read our operation. */
+
+	op = FILE__MAX;
+	if (0 == (lval = readop(certsock, COMM_CHAIN_OP))) 
+		op = FILE_STOP;
+	else if (FILE_CREATE == lval || FILE_REMOVE == lval)
+		op = lval;
+
+	if (FILE_STOP == op) {
+		rc = 1;
+		goto out;
+	} else if (FILE__MAX == op) {
+		dowarnx("unknown operation from certproc");
+		goto out;
+	} 
+
+	/* If revoking certificates, just unlink the files. */
+
+	if (FILE_REMOVE == op) {
+		if (-1 == unlink(CERT_PEM) && ENOENT != errno) {
+			dowarn("%s/%s", certdir, CERT_PEM);
+			goto out;
+		} else
+			dodbg("%s: unlinked", CERT_PEM);
+
+		if (-1 == unlink(CHAIN_PEM) && ENOENT != errno) {
+			dowarn("%s/%s", certdir, CHAIN_PEM);
+			goto out;
+		} else
+			dodbg("%s: unlinked", CHAIN_PEM);
+
+		if (-1 == unlink(FCHAIN_PEM) && ENOENT != errno) {
+			dowarn("%s/%s", certdir, FCHAIN_PEM);
+			goto out;
+		} else
+			dodbg("%s: unlinked", FCHAIN_PEM);
+
+		rc = 1;
+		goto out;
+	}
+
 	/*
 	 * Start by downloading the chain PEM as a buffer.
 	 * This is not nil-terminated, but we're just going to guess
@@ -116,12 +159,8 @@ fileproc(int certsock, const char *certdir)
 	 * Once downloaded, dump it into CHAIN_BAK.
 	 */
 
-	if (0 == (lval = readop(certsock, COMM_CHAIN_OP))) {
-		rc = 1;
+	if (NULL == (ch = readbuf(certsock, COMM_CHAIN, &chsz)))
 		goto out;
-	} else if (NULL == (ch = readbuf(certsock, COMM_CHAIN, &chsz)))
-		goto out;
-
 	if ( ! serialise(CHAIN_BAK, CHAIN_PEM, ch, chsz, NULL, 0))
 		goto out;
 

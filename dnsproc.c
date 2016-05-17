@@ -121,12 +121,13 @@ host_dns(const char *s, char vec[MAX_SERVERS_DNS][INET6_ADDRSTRLEN])
 int
 dnsproc(int nfd, uid_t uid, gid_t gid)
 {
-	int	 rc;
-	char	*look;
-	char	 v[MAX_SERVERS_DNS][INET6_ADDRSTRLEN];
-	long	 lval;
-	size_t	 i;
-	ssize_t	 vsz;
+	int		 rc;
+	char		*look;
+	char		 v[MAX_SERVERS_DNS][INET6_ADDRSTRLEN];
+	long		 lval;
+	size_t		 i;
+	ssize_t		 vsz;
+	enum dnsop	 op;
 
 	rc = 0;
 	look = NULL;
@@ -146,6 +147,7 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 		dowarnx("dropprivs");
 		goto out;
 	}
+
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio dns", NULL)) {
 		dowarn("pledge");
@@ -157,7 +159,19 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 	 * time we write back zero or more entries.
 	 */
 
-	while (1 == (lval = readop(nfd, COMM_DNS))) {
+	for (;;) {
+		op = DNS__MAX;
+		if (0 == (lval = readop(nfd, COMM_DNS)))
+			op = DNS_STOP;
+		else if (DNS_LOOKUP == lval)
+			op = lval;
+
+		if (DNS__MAX == op) {
+			dowarnx("unknown operation from netproc");
+			goto out;
+		} else if (DNS_STOP == op)
+			break;
+
 		if (NULL == (look = readstr(nfd, COMM_DNSQ)))
 			goto out;
 		if ((vsz = host_dns(look, v)) < 0)
@@ -167,11 +181,10 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 		for (i = 0; i < (size_t)vsz; i++) 
 			if ( ! writestr(nfd, COMM_DNSA, v[i]))
 				goto out;
+
 		free(look);
 		look = NULL;
 	}
-	if (0 != lval) 
-		goto out;
 
 	rc = 1;
 out:

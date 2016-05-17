@@ -80,17 +80,17 @@ chngproc(int netsock, const char *root, int remote)
 	 */
 
 	for (;;) {
+		op = CHNG__MAX;
 		if (0 == (lval = readop(netsock, COMM_CHNG_OP))) 
 			op = CHNG_STOP;
-		else if (LONG_MAX == lval)
-			op = CHNG__MAX;
-		else
+		else if (CHNG_SYN == lval)
 			op = lval;
 
-		if (CHNG_STOP == op)
-			break;
-		else if (CHNG__MAX == op)
+		if (CHNG__MAX == op) {
+			dowarnx("unknown operation from netproc");
 			goto out;
+		} else if (CHNG_STOP == op)
+			break;
 
 		assert(CHNG_SYN == op);
 

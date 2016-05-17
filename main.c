@@ -43,7 +43,7 @@ main(int argc, char *argv[])
 	int		  key_fds[2], acct_fds[2], chng_fds[2], 
 			  cert_fds[2], file_fds[2], dns_fds[2];
 	pid_t		  pids[COMP__MAX];
-	int		  c, rc, newacct, remote;
+	int		  c, rc, newacct, remote, revoke;
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, altsz;
@@ -53,14 +53,13 @@ main(int argc, char *argv[])
 	gid_t		  nobody_gid;
 
 	alts = NULL;
-	newacct = remote = 0;
-	verbose = 0;
+	newacct = remote = revoke = verbose = 0;
 	certdir = "/etc/ssl/letsencrypt";
 	keyfile = "/etc/ssl/letsencrypt/private/privkey.pem";
 	acctkey = "/etc/letsencrypt/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
-	while (-1 != (c = getopt(argc, argv, "nf:c:vC:k:r"))) 
+	while (-1 != (c = getopt(argc, argv, "nf:c:vC:k:rt"))) 
 		switch (c) {
 		case ('n'):
 			newacct = 1;
@@ -81,6 +80,9 @@ main(int argc, char *argv[])
 			verbose = verbose ? 2 : 1;
 			break;
 		case ('r'):
+			revoke = 1;
+			break;
+		case ('t'):
 			/*
 			 * Undocumented feature.
 			 * Don't use it.
@@ -160,7 +162,7 @@ main(int argc, char *argv[])
 		proccomp = COMP_NET;
 		c = netproc(key_fds[1], acct_fds[1], 
 			chng_fds[1], cert_fds[1], 
-			dns_fds[1], newacct, 0,
+			dns_fds[1], newacct, revoke,
 			nobody_uid, nobody_gid,
 			(const char *const *)alts, altsz);
 		free(alts);
@@ -312,7 +314,7 @@ main(int argc, char *argv[])
 	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
 usage:
 	fprintf(stderr, "usage: %s "
-		"[-vn] "
+		"[-vrn] "
 		"[-C challengedir] "
 		"[-c certdir] "
 		"[-f accountkey] "
