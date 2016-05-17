@@ -119,7 +119,7 @@ urlresolve(int fd, const char *url)
 	int	  	   rc, cc;
 	size_t	  	   i;
 	short	  	   port;
-	long	  	   op;
+	long	  	   lval;
 	struct curl_slist *hosts;
 
 	host = buf = addr = NULL;
@@ -133,14 +133,15 @@ urlresolve(int fd, const char *url)
 
 	dodbg("%s: resolving", host);
 
-	if ( ! writeop(fd, COMM_DNS, 1))
+	if ( ! writeop(fd, COMM_DNS, DNS_LOOKUP))
 		goto out;
 	else if ( ! writestr(fd, COMM_DNSQ, host))
 		goto out;
-	else if (LONG_MAX == (op = readop(fd, COMM_DNSLEN)))
+
+	if ((lval = readop(fd, COMM_DNSLEN)) < 0)
 		goto out;
 
-	for (i = 0; i < (size_t)op; i++) {
+	for (i = 0; i < (size_t)lval; i++) {
 		if (NULL == (addr = readstr(fd, COMM_DNSA))) 
 			goto out;
 
@@ -467,6 +468,7 @@ dochngcheck(CURL *c, struct json *json, struct chng *chng,
 	return(1);
 }
 
+#if 0
 /* 
  * XXX: not used yet.
  */
@@ -495,6 +497,7 @@ dorevoke(CURL *c, int fd, const char *addr, struct buf *buf,
 	free(req);
 	return(rc);
 }
+#endif
 
 /*
  * Submit our certificate to the CA.
@@ -544,7 +547,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	struct json	*json;
 	struct capaths	 paths;
 	struct chng 	*chngs;
-	long		 http, op;
+	long		 http, lval;
 	struct curl_slist *hosts;
 
 	rc = 0;
@@ -586,17 +589,21 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	 * There's no point in running if these don't work.
 	 */
 
-	if (0 == (op = readop(afd, COMM_ACCT_STAT))) {
+	if (0 == (lval = readop(afd, COMM_ACCT_STAT))) {
 		rc = 1;
 		goto out;
-	} else if (ACCT_READY != op)
+	} else if (ACCT_READY != lval) {
+		dowarnx("unknown operation from acctproc");
 		goto out;
+	}
 
-	if (0 == (op = readop(afd, COMM_KEY_STAT))) {
+	if (0 == (lval = readop(kfd, COMM_KEY_STAT))) {
 		rc = 1;
 		goto out;
-	} else if (KEY_READY != op)
+	} else if (KEY_READY != lval) {
+		dowarnx("unknown operation from keyproc");
 		goto out;
+	}
 
 	/* Allocate main state. */
 
@@ -655,25 +662,26 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	else if (NULL == (thumb = readstr(afd, COMM_THUMB)))
 		goto out;
 
-	/*
-	 * We'll now create the challenge area for each request.
-	 * Following that, we'll send to the CA that the challenge is
-	 * ready to be accessed.
-	 */
+	/* We'll now ask chngproc to build the challenge. */
 
-	for (i = 0; i < altsz; i++)
+	for (i = 0; i < altsz; i++) {
 		if ( ! writeop(Cfd, COMM_CHNG_OP, CHNG_SYN))
 			goto out;
 		else if ( ! writestr(Cfd, COMM_THUMB, thumb))
 			goto out;
 		else if ( ! writestr(Cfd, COMM_TOK, chngs[i].token))
 			goto out;
-		else if (CHNG_ACK != (op = readop(Cfd, COMM_CHNG_ACK)))
+
+		/* Read that the challenge has been made. */
+
+		if (CHNG_ACK != readop(Cfd, COMM_CHNG_ACK))
 			goto out;
-		else if (LONG_MAX == op)
+
+		/* Write to the CA that it's ready. */
+
+		if ( ! dochngresp(c, afd, json, &chngs[i], thumb, hosts))
 			goto out;
-		else if ( ! dochngresp(c, afd, json, &chngs[i], thumb, hosts))
-			goto out;
+	}
 
 	/*
 	 * We now wait on the ACME server for each domain.
@@ -709,6 +717,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 	if (NULL == (cert = readstr(kfd, COMM_CERT)))
 		goto out;
 
+#if 0
 	/*
 	 * If we're meant to revoke, then submit the request to the CA
 	 * then notify the certproc, which will in turn notify the
@@ -724,6 +733,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 		rc = 1;
 		goto out;
 	} 
+#endif
 
 	/*
 	 * Otherwise, submit the CA for signing, download the signed
