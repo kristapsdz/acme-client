@@ -190,6 +190,7 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_KEY]) {
+		close(cert_fds[0]);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
 		close(acct_fds[0]);
@@ -213,6 +214,7 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_ACCOUNT]) {
 		free(alts);
+		close(cert_fds[0]);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
 		close(chng_fds[0]);
@@ -233,6 +235,7 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_CHALLENGE]) {
 		free(alts);
+		close(cert_fds[0]);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
 		close(file_fds[0]);
