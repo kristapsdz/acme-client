@@ -122,26 +122,6 @@ chngproc(int netsock, const char *root, int remote)
 			goto out;
 		}
 
-		/* 
-		 * Create and write to our challenge file.
-		 * Note: we use file descriptors instead of FILE because
-		 * we want to minimise our pledges.
-		 */
-
-		fd = open(fs[fsz - 1], O_WRONLY|O_EXCL|O_CREAT, 0444);
-
-		if (-1 == fd) {
-			dowarn("%s", fs[fsz - 1]);
-			goto out;
-		} if (-1 == write(fd, fmt, strlen(fmt))) {
-			dowarn("%s", fs[fsz - 1]);
-			goto out;
-		} else if (-1 == close(fd)) {
-			dowarn("%s", fs[fsz - 1]);
-			goto out;
-		}
-		fd = -1;
-
 		/*
 		 * I use this for testing when letskencrypt is being run
 		 * on machines apart from where I'm hosting the
@@ -155,6 +135,25 @@ chngproc(int netsock, const char *root, int remote)
 				fmt, fs[fsz - 1]);
 			sleep(20);
 			puts("TIME'S UP.");
+		} else { 
+			/* 
+			 * Create and write to our challenge file.
+			 * Note: we use file descriptors instead of FILE
+			 * because we want to minimise our pledges.
+			 */
+			fd = open(fs[fsz - 1], 
+				O_WRONLY|O_EXCL|O_CREAT, 0444);
+			if (-1 == fd) {
+				dowarn("%s", fs[fsz - 1]);
+				goto out;
+			} if (-1 == write(fd, fmt, strlen(fmt))) {
+				dowarn("%s", fs[fsz - 1]);
+				goto out;
+			} else if (-1 == close(fd)) {
+				dowarn("%s", fs[fsz - 1]);
+				goto out;
+			}
+			fd = -1;
 		}
 
 		free(th);
