@@ -20,10 +20,10 @@
 #define	PATH_VAR_EMPTY "/var/empty"
 
 /*
- * Requests to accounts (signing) infrastructure.
+ * Requests to and from acctproc.
  */
 enum	acctop {
-	ACCT_STOP,
+	ACCT_STOP = 0,
 	ACCT_READY,
 	ACCT_SIGN,
 	ACCT_THUMBPRINT,
@@ -31,31 +31,59 @@ enum	acctop {
 };
 
 /*
- * Requests to challenge infrastructure.
+ * Requests to and from chngproc.
  */
 enum	chngop {
-	CHNG_STOP,
+	CHNG_STOP = 0,
 	CHNG_SYN,
 	CHNG_ACK,
 	CHNG__MAX
 };
 
 /*
- * Requests to the private key infrastructure.
+ * Requests to keyproc.
  */
 enum	keyop {
+	KEY_STOP = 0,
 	KEY_READY,
 	KEY__MAX
 };
 
 /*
- * Requests to the certificate infrastructure.
+ * Requests to certproc.
  */
 enum	certop {
-	CERT_NONE,
+	CERT_STOP = 0,
 	CERT_REVOKE,
 	CERT_UPDATE,
 	CERT__MAX
+};
+
+/*
+ * Requests to fileproc.
+ */
+enum	fileop {
+	FILE_STOP = 0,
+	FILE_REMOVE,
+	FILE_CREATE,
+	FILE__MAX
+};
+
+/*
+ * Requests to dnsproc.
+ */
+enum	dnsop {
+	DNS_STOP = 0,
+	DNS_LOOKUP,
+	DNS__MAX
+};
+
+enum	revokeop {
+	REVOKE_STOP = 0,
+	REVOKE_CHECK,
+	REVOKE_EXP,
+	REVOKE_OK,
+	REVOKE__MAX
 };
 
 /*
@@ -70,6 +98,7 @@ enum	comp {
 	COMP_CHALLENGE, /* handles challenges */
 	COMP_FILE, /* handles writing certs */
 	COMP_DNS, /* handles DNS lookups */
+	COMP_REVOKE, /* checks X509 expiration */
 	COMP__MAX
 };
 
@@ -98,6 +127,9 @@ enum	comm {
 	COMM_DNSA,
 	COMM_DNSLEN,
 	COMM_KEY_STAT,
+	COMM_REVOKE_OP,
+	COMM_REVOKE_CHECK,
+	COMM_REVOKE_RESP,
 	COMM__MAX
 };
 
@@ -120,9 +152,9 @@ struct 	chng {
  */
 struct	capaths {
 	char		*newauthz; /* new authorisation */
-	char		*newcert; 
+	char		*newcert;  /* sign certificate */
 	char		*newreg; /* new acme account */
-	char		*revokecert;
+	char		*revokecert; /* revoke certificate */
 };
 
 struct	json;

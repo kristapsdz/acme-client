@@ -54,6 +54,9 @@ static	const char *const comms[COMM__MAX] = {
 	"dnsa", /* COMM_DNSA */
 	"dnslen", /* COMM_DNSLEN */
 	"keyproc-status", /* COMM_KEY_STAT */
+	"revoke-op", /* COMM_REVOKE_OP */
+	"revoke-check", /* COMM_REVOKE_CHECK */
+	"revoke-response", /* COMM_REVOKE_RESP */
 };
 
 static void
