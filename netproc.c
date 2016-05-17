@@ -614,6 +614,11 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		dowarnx("unknown operation from revokeproc");
 		goto out;
 	} 
+
+	if (REVOKE_OK == lval) {
+		rc = 1;
+		goto out;
+	}
 	
 	/* Allocate main state. */
 
