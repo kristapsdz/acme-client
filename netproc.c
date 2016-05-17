@@ -535,7 +535,7 @@ docert(CURL *c, int fd, const char *addr, struct buf *buf,
  * account key information.
  */
 int
-netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
+netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	int newacct, int revoke, uid_t uid, gid_t gid, 
 	const char *const *alts, size_t altsz)
 {
@@ -584,9 +584,11 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 #endif
 
 	/* 
-	 * Wait until the acctproc and keyproc have started up and are
-	 * ready to serve us data.
+	 * Wait until the acctproc, keyproc, and revokeproc have started
+	 * up and are ready to serve us data.
 	 * There's no point in running if these don't work.
+	 * Then check whether revokeproc indicates that the certificate
+	 * on file (if any) can be updated.
 	 */
 
 	if (0 == (lval = readop(afd, COMM_ACCT_STAT))) {
@@ -605,6 +607,14 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd,
 		goto out;
 	}
 
+	if (0 == (lval = readop(rfd, COMM_REVOKE_RESP))) {
+		rc = 1;
+		goto out;
+	} else if (REVOKE_EXP != lval && REVOKE_OK != lval) {
+		dowarnx("unknown operation from revokeproc");
+		goto out;
+	} 
+	
 	/* Allocate main state. */
 
 	chngs = calloc(altsz, sizeof(struct chng));

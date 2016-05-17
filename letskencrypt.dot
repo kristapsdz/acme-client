@@ -6,7 +6,9 @@ digraph {
 	keyproc[label="keyproc"];
 	acctproc[label="acctproc"];
 	certproc[label="certproc"];
+	revokeproc[label="revokeproc"];
 
+	revokeproc -> netproc[label="X509 expiration"];
 	dnsproc -> netproc[label="DNS names"];
 	certproc -> fileproc[label="X509 certificates"];
 	netproc -> chngproc[label="ACME challenges"];

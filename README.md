@@ -6,6 +6,11 @@ development**.  See
 [letskencrypt.1](http://kristaps.bsd.lv/letskencrypt/letskencrypt.1.html)
 for complete documentation and functionality.
 
+It supports the following operations:
+
+* Account registration (see the -**n** flag).
+* Domain certificate signing.
+
 This repository mirrors the master CVS repository: any source changes
 will occur on the master and be pushed periodically to GitHub.  If you
 have bug reports or patches, either file them here or e-mail them to me.
@@ -35,14 +40,14 @@ patch](https://marc.info/?l=openbsd-ports&m=146282275327867&w=2).
 ## Implementation
 
 When *letskencrypt* starts, it forks itself (in [main.c](main.c)) into
-seven isolated components, each with a specific job to do, each
+several isolated components, each with a specific job to do, each
 communicating with other components over socketpairs.  This separation
-protects your system and your account and domain private keys.  Each
-component is isolated as per its function and resource requirements.
-Sandbox refers to using [pledge(2)](http://man.openbsd.org/pledge.2) on
-OpenBSD or sandbox\_init(3) on Mac OS X (which is deprecated, as per
-Apple's push away from UNIX and the open source community).  Jailing
-changes the file-system with
+protects your system and your account and domain private keys.
+
+Each component is isolated as per its function and resource
+requirements.  Sandbox, in this regard, refers to using
+[pledge(2)](http://man.openbsd.org/pledge.2) on OpenBSD or
+sandbox\_init(3) on Mac OS X.  Jailing changes the file-system with
 [chroot(2)](http://man.openbsd.org/chroot.2).  Unless otherwise noting,
 jailing is usually to an empty, harmless directory.  Privilege-dropping
 is changing from root to a "less-priviledged" user, usually user
@@ -70,6 +75,10 @@ not privilege separated.  The certificate and file processor,
 serialise signed certificates to your file-system.  The former is
 jailed, sandboxed, and privilege-separated; the latter is only jailed to
 the certificate directory.
+
+Lastly, the poorly-named revocation process,
+[revokeproc.c](revokeproc.c), attempts to read the certificate on file
+and determine its expected expiration.
 
 The software has been designed with [OpenBSD](http://www.openbsd.org) in
 mind, though it works with reduced security on Mac OS X and Linux.  This
