@@ -126,10 +126,10 @@ revokeproc(int fd, const char *certdir,
 	 */
 
 	if (-1 == asprintf(&path, "%s/%s", certdir, CERT_PEM)) {
-		dowarn("asprintf");
+		warn("asprintf");
 		goto out;
 	} else if (NULL == (f = fopen(path, "r")) && ENOENT != errno) {
-		dowarn("%s", path);
+		warn("%s", path);
 		goto out;
 	}
 
@@ -194,7 +194,7 @@ revokeproc(int fd, const char *certdir,
 			warnx("i2d_X509");
 			goto out;
 		} else if (NULL == (der = dercp = malloc(len))) {
-			dowarn("malloc");
+			warn("malloc");
 			goto out;
 		} else if (len != i2d_X509(x, (u_char **)&dercp)) {
 			warnx("i2d_X509");

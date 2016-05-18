@@ -46,7 +46,7 @@ serialise(const char *tmp, const char *real,
 
 	fd = open(tmp, O_WRONLY|O_CREAT|O_TRUNC, 0444);
 	if (-1 == fd) {
-		dowarn("%s", tmp);
+		warn("%s", tmp);
 		return(0);
 	} else if ((ssize_t)vsz != write(fd, v, vsz)) {
 		warnx("%s", tmp);
@@ -57,10 +57,10 @@ serialise(const char *tmp, const char *real,
 		close(fd);
 		return(0);
 	} else if (-1 == close(fd)) {
-		dowarn("%s", tmp);
+		warn("%s", tmp);
 		return(0);
 	} else if (-1 == rename(tmp, real)) {
-		dowarn("%s", real);
+		warn("%s", real);
 		return(0);
 	}
 
@@ -112,19 +112,19 @@ fileproc(int certsock, const char *certdir)
 
 	if (FILE_REMOVE == op) {
 		if (-1 == unlink(CERT_PEM) && ENOENT != errno) {
-			dowarn("%s/%s", certdir, CERT_PEM);
+			warn("%s/%s", certdir, CERT_PEM);
 			goto out;
 		} else
 			dodbg("%s: unlinked", CERT_PEM);
 
 		if (-1 == unlink(CHAIN_PEM) && ENOENT != errno) {
-			dowarn("%s/%s", certdir, CHAIN_PEM);
+			warn("%s/%s", certdir, CHAIN_PEM);
 			goto out;
 		} else
 			dodbg("%s: unlinked", CHAIN_PEM);
 
 		if (-1 == unlink(FCHAIN_PEM) && ENOENT != errno) {
-			dowarn("%s/%s", certdir, FCHAIN_PEM);
+			warn("%s/%s", certdir, FCHAIN_PEM);
 			goto out;
 		} else
 			dodbg("%s: unlinked", FCHAIN_PEM);

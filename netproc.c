@@ -84,13 +84,13 @@ url2host(const char *host, short *port)
 	if (0 == strncmp(host, "https://", 8)) {
 		*port = 443;
 		if (NULL == (url = strdup(host + 8))) {
-			dowarn("strdup");
+			warn("strdup");
 			return(NULL);
 		}
 	} else if (0 == strncmp(host, "http://", 7)) {
 		*port = 80;
 		if (NULL == (url = strdup(host + 7))) {
-			dowarn("strdup");
+			warn("strdup");
 			return(NULL);
 		}
 	} else {
@@ -153,7 +153,7 @@ urlresolve(int fd, const char *url)
 
 		cc = asprintf(&buf, "%s:%hd:%s", host, port, addr);
 		if (-1 == cc) {
-			dowarn("asprintf");
+			warn("asprintf");
 			buf = NULL;
 			goto out;
 		}
@@ -196,7 +196,7 @@ netbody(void *ptr, size_t sz, size_t nm, void *arg)
 	/*doddbg("received: [%.*s]", (int)nsz, ptr);*/
 	pp = realloc(buf->buf, buf->sz + nsz + 1);
 	if (NULL == pp) {
-		dowarn("realloc");
+		warn("realloc");
 		return(0);
 	}
 	buf->buf = pp;
@@ -221,7 +221,7 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 		return(nsz);
 
 	if (NULL == (*noncep = strdup((char *)ptr + 14))) {
-		dowarn("strdup");
+		warn("strdup");
 		return(0);
 	} else if ((psz = strlen(*noncep)) < 2) {
 		warnx("short nonce");
@@ -616,10 +616,10 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	chngs = calloc(altsz, sizeof(struct chng));
 	if (NULL == chngs) {
-		dowarn("calloc");
+		warn("calloc");
 		goto out;
 	} else if (NULL == (c = curl_easy_init())) {
-		dowarn("curl_easy_init");
+		warn("curl_easy_init");
 		goto out;
 	} else if (NULL == (json = json_alloc())) {
 		warnx("json_alloc");

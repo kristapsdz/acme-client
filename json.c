@@ -18,6 +18,7 @@
 # include "config.h"
 #endif
 
+#include <err.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -281,7 +282,7 @@ json_fmt_newreg(const char *license)
 		"\"agreement\": \"%s\""
 		"}", license);
 	if (-1 == c) {
-		dowarn("asprintf");
+		warn("asprintf");
 		p = NULL;
 	} 
 	return(p);
@@ -302,7 +303,7 @@ json_fmt_newauthz(const char *domain)
 		"{\"type\": \"dns\", \"value\": \"%s\"}"
 		"}", domain);
 	if (-1 == c) {
-		dowarn("asprintf");
+		warn("asprintf");
 		p = NULL;
 	} 
 	return(p);
@@ -322,7 +323,7 @@ json_fmt_challenge(const char *token, const char *thumb)
 		"\"keyAuthorization\": \"%s.%s\""
 		"}", token, thumb);
 	if (-1 == c) {
-		dowarn("asprintf");
+		warn("asprintf");
 		p = NULL;
 	}
 	return(p);
@@ -342,7 +343,7 @@ json_fmt_revokecert(const char *cert)
 		"\"certificate\": \"%s\""
 		"}", cert);
 	if (-1 == c) {
-		dowarn("asprintf");
+		warn("asprintf");
 		p = NULL;
 	}
 	return(p);
@@ -362,7 +363,7 @@ json_fmt_newcert(const char *cert)
 		"\"csr\": \"%s\""
 		"}", cert);
 	if (-1 == c) {
-		dowarn("asprintf");
+		warn("asprintf");
 		p = NULL;
 	}
 	return(p);
@@ -383,7 +384,7 @@ json_fmt_header(const char *exp, const char *mod)
 		"{\"e\": \"%s\", \"kty\": \"RSA\", \"n\": \"%s\"}"
 		"}", exp, mod);
 	if (-1 == c) {
-		dowarn("asprintf");
+		warn("asprintf");
 		p = NULL;
 	}
 	return(p);
@@ -405,7 +406,7 @@ json_fmt_protected(const char *exp, const char *mod, const char *nce)
 		"\"nonce\": \"%s\""
 		"}", exp, mod, nce);
 	if (-1 == c) {
-		dowarn("asprintf");
+		warn("asprintf");
 		p = NULL;
 	}
 	return(p);
@@ -428,7 +429,7 @@ json_fmt_signed(const char *header, const char *protected,
 		"\"signature\": \"%s\""
 		"}", header, protected, payload, digest);
 	if (-1 == c) {
-		dowarn("asprintf");
+		warn("asprintf");
 		p = NULL;
 	} 
 	return(p);
@@ -452,7 +453,7 @@ json_fmt_thumb(const char *exp, const char *mod)
 		"{\"e\":\"%s\",\"kty\":\"RSA\",\"n\":\"%s\"}",
 		exp, mod);
 	if (-1 == c) {
-		dowarn("asprintf");
+		warn("asprintf");
 		p = NULL;
 	}
 	return(p);

@@ -64,7 +64,7 @@ x509buf(X509 *x, size_t *sz)
 	/* Now convert bio to string. */
 
 	if (NULL == (p = malloc(bio->num_write))) {
-		dowarn("malloc");
+		warn("malloc");
 		BIO_free(bio);
 		return(NULL);
 	} 
@@ -184,7 +184,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 				continue;
 			url = strdup(nval->value);
 			if (NULL == url) {
-				dowarn("strdup");
+				warn("strdup");
 				goto out;
 			}
 			break;
