@@ -91,17 +91,6 @@ doverr(const char *fmt, va_list ap)
 	/* NOTREACHED */
 }
 
-static void
-dovwarn(const char *fmt, va_list ap)
-{
-	int		 er = errno;
-	extern enum comp proccomp;
-
-	fprintf(stderr, "%s(%u): WARN: ", comps[proccomp], getpid());
-	vfprintf(stderr, fmt, ap);
-	fprintf(stderr, ": %s\n", strerror(er));
-}
-
 void
 doerrx(const char *fmt, ...)
 {
@@ -119,16 +108,6 @@ doerr(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	doverr(fmt, ap);
-	va_end(ap);
-}
-
-void
-dowarn(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovwarn(fmt, ap);
 	va_end(ap);
 }
 

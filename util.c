@@ -82,7 +82,7 @@ readop(int fd, enum comm comm)
 
 	ssz = read(fd, &op, sizeof(long));
 	if (ssz < 0) {
-		dowarn("read: %s", comms[comm]);
+		warn("read: %s", comms[comm]);
 		return(LONG_MAX);
 	} else if (ssz && ssz != sizeof(long)) {
 		warnx("short read: %s", comms[comm]);
@@ -117,7 +117,7 @@ readbuf(int fd, enum comm comm, size_t *sz)
 	p = NULL;
 
 	if ((ssz = read(fd, sz, sizeof(size_t))) < 0) {
-		dowarn("read: %s length", comms[comm]);
+		warn("read: %s length", comms[comm]);
 		return(NULL);
 	} else if ((size_t)ssz != sizeof(size_t)) {
 		warnx("short read: %s length", comms[comm]);
@@ -126,7 +126,7 @@ readbuf(int fd, enum comm comm, size_t *sz)
 		warnx("integer overflow");
 		return(NULL);
 	} else if (NULL == (p = calloc(1, *sz + 1))) {
-		dowarn("malloc");
+		warn("malloc");
 		return(NULL);
 	}
 
@@ -136,7 +136,7 @@ readbuf(int fd, enum comm comm, size_t *sz)
 	lsz = *sz;
 	while (lsz) {
 		if ((ssz = read(fd, p + rsz, lsz)) < 0) {
-			dowarn("read: %s", comms[comm]);
+			warn("read: %s", comms[comm]);
 			break;
 		} else if (ssz > 0) {
 			rsz += (size_t)ssz;
@@ -170,7 +170,7 @@ writeop(int fd, enum comm comm, long op)
 	sig = signal(SIGPIPE, sigpipe);
 
 	if ((ssz = write(fd, &op, sizeof(long))) < 0) 
-		dowarn("write: %s", comms[comm]);
+		warn("write: %s", comms[comm]);
 	else if ((size_t)ssz != sizeof(long))
 		warnx("short write: %s", comms[comm]);
 	else
@@ -194,11 +194,11 @@ writebuf(int fd, enum comm comm, const void *v, size_t sz)
 	sig = signal(SIGPIPE, sigpipe);
 
 	if ((ssz = write(fd, &sz, sizeof(size_t))) < 0) 
-		dowarn("write: %s length", comms[comm]);
+		warn("write: %s length", comms[comm]);
 	else if ((size_t)ssz != sizeof(size_t))
 		warnx("short write: %s length", comms[comm]);
 	else if ((ssz = write(fd, v, sz)) < 0)
-		dowarn("write: %s", comms[comm]);
+		warn("write: %s", comms[comm]);
 	else if ((size_t)ssz != sz)
 		warnx("short write: %s", comms[comm]);
 	else
@@ -226,7 +226,7 @@ checkexit(pid_t pid, enum comp comp)
 	int	 c;
 
 	if (-1 == waitpid(pid, &c, 0)) {
-		dowarn("waitpid");
+		warn("waitpid");
 		return(0);
 	}
 
@@ -255,9 +255,9 @@ dropfs(const char *root)
 {
 
 	if (-1 == chroot(root))
-		dowarn("%s: chroot", root);
+		warn("%s: chroot", root);
 	else if (-1 == chdir("/")) 
-		dowarn("/: chdir");
+		warn("/: chdir");
 	else
 		return(1);
 

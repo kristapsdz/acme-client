@@ -48,7 +48,7 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 	char		*cp;
 
 	if (-1 == asprintf(&cp, "DNS:%s", value)) {
-		dowarn("asprintf");
+		warn("asprintf");
 		return(0);
 	}
 	ex = X509V3_EXT_conf_nid(NULL, NULL, nid, cp);
@@ -92,7 +92,7 @@ keyproc(int netsock, const char *keyfile,
 	/* Begin by opening our key file. */
 
 	if (NULL == (f = fopen(keyfile, "r"))) {
-		dowarn("%s", keyfile);
+		warn("%s", keyfile);
 		goto error;
 	}
 
@@ -220,7 +220,7 @@ keyproc(int netsock, const char *keyfile,
 		warnx("i2d_X509");
 		goto error;
 	} else if (NULL == (der = dercp = malloc(len))) {
-		dowarn("malloc");
+		warn("malloc");
 		goto error;
 	} else if (len != i2d_X509_REQ(x, (u_char **)&dercp)) {
 		warnx("i2d_X509");

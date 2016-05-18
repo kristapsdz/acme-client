@@ -55,7 +55,7 @@ bn2string(const BIGNUM *bn)
 
 	len = BN_num_bytes(bn);
 	if (NULL == (buf = malloc(len))) {
-		dowarn("malloc");
+		warn("malloc");
 		return(NULL);
 	} else if (len != BN_bn2bin(bn, (unsigned char *)buf)) {
 		warnx("BN_bn2bin");
@@ -114,7 +114,7 @@ op_thumbprint(int fd, RSA *r)
 	 */
 
 	if (NULL == (dig = malloc(EVP_MAX_MD_SIZE))) {
-		dowarn("malloc");
+		warn("malloc");
 		goto out;
 	} else if (NULL == (ctx = EVP_MD_CTX_create())) {
 		warnx("EVP_MD_CTX_create");
@@ -216,7 +216,7 @@ op_sign(int fd, RSA *r)
 
 	cc = asprintf(&sign, "%s.%s", prot64, pay64);
 	if (-1 == cc) {
-		dowarn("asprintf");
+		warn("asprintf");
 		sign = NULL;
 		goto out;
 	}
@@ -236,7 +236,7 @@ op_sign(int fd, RSA *r)
 		warnx("EVP_PKEY_assign_RSA");
 		goto out;
 	} else if (NULL == (dig = malloc(EVP_PKEY_size(pkey)))) {
-		dowarn("malloc");
+		warn("malloc");
 		goto out;
 	}
 
@@ -315,7 +315,7 @@ acctproc(int netsock, const char *acctkey,
 	 */
 
 	if (NULL == (f = fopen(acctkey, newacct ? "wx" : "r"))) {
-		dowarn("%s", acctkey);
+		warn("%s", acctkey);
 		goto out;
 	}
 

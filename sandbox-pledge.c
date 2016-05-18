@@ -18,6 +18,7 @@
 # include "config.h"
 #endif
 
+#include <err.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -45,19 +46,19 @@ sandbox_after(void)
 	case (COMP_REVOKE):
 	case (COMP__MAX):
 		if (-1 == pledge("stdio", NULL)) {
-			dowarn("pledge");
+			warn("pledge");
 			return(0);
 		}
 		break;
 	case (COMP_CHALLENGE):
 		if (-1 == pledge("stdio cpath wpath", NULL)) {
-			dowarn("pledge");
+			warn("pledge");
 			return(0);
 		}
 		break;
 	case (COMP_DNS):
 		if (-1 == pledge("stdio dns", NULL)) {
-			dowarn("pledge");
+			warn("pledge");
 			return(0);
 		}
 		break;
@@ -68,14 +69,14 @@ sandbox_after(void)
 		 * rename(2) is cpath.
 		 */
 		if (-1 == pledge("stdio cpath wpath rpath", NULL)) {
-			dowarn("pledge");
+			warn("pledge");
 			return(0);
 		}
 		break;
 	case (COMP_NET):
 		/* rpath required by libcurl */
 		if (-1 == pledge("stdio inet rpath", NULL)) {
-			dowarn("pledge");
+			warn("pledge");
 			return(0);
 		}
 		break;
