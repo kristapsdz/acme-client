@@ -63,6 +63,7 @@ sandbox_after(void)
 			dowarn("pledge");
 			return(0);
 		}
+		break;
 	case (COMP_FILE):
 		/* 
 		 * XXX: rpath shouldn't be here, but it's tripped by the
@@ -80,8 +81,6 @@ sandbox_after(void)
 			dowarn("pledge");
 			return(0);
 		}
-		break;
-	default:
 		break;
 	}
 #endif
