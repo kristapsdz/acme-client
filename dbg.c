@@ -66,16 +66,6 @@ dovdbg(const char *fmt, va_list ap)
 }
 
 static void
-dovwarnx(const char *fmt, va_list ap)
-{
-	extern enum comp proccomp;
-
-	fprintf(stderr, "%s(%u): WARN: ", comps[proccomp], getpid());
-	vfprintf(stderr, fmt, ap);
-	fputc('\n', stderr);
-}
-
-static void
 doverrx(const char *fmt, va_list ap)
 {
 	extern enum comp proccomp;
@@ -129,16 +119,6 @@ doerr(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	doverr(fmt, ap);
-	va_end(ap);
-}
-
-void
-dowarnx(const char *fmt, ...)
-{
-	va_list	 	 ap;
-
-	va_start(ap, fmt);
-	dovwarnx(fmt, ap);
 	va_end(ap);
 }
 

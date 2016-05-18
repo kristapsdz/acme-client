@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/param.h>
 
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -48,11 +49,11 @@ serialise(const char *tmp, const char *real,
 		dowarn("%s", tmp);
 		return(0);
 	} else if ((ssize_t)vsz != write(fd, v, vsz)) {
-		dowarnx("%s", tmp);
+		warnx("%s", tmp);
 		close(fd);
 		return(0);
 	} else if (NULL != v2 && (ssize_t)v2sz != write(fd, v2, v2sz)) {
-		dowarnx("%s", tmp);
+		warnx("%s", tmp);
 		close(fd);
 		return(0);
 	} else if (-1 == close(fd)) {
@@ -81,13 +82,13 @@ fileproc(int certsock, const char *certdir)
 	/* File-system and sandbox jailing. */
 
 	if ( ! sandbox_before()) {
-		dowarnx("sandbox_before");
+		warnx("sandbox_before");
 		goto out;
 	} else if ( ! dropfs(certdir)) {
-		dowarnx("dropfs");
+		warnx("dropfs");
 		goto out;
 	} else if ( ! sandbox_after()) {
-		dowarnx("sandbox_after");
+		warnx("sandbox_after");
 		goto out;
 	}
 
@@ -103,7 +104,7 @@ fileproc(int certsock, const char *certdir)
 		rc = 1;
 		goto out;
 	} else if (FILE__MAX == op) {
-		dowarnx("unknown operation from certproc");
+		warnx("unknown operation from certproc");
 		goto out;
 	} 
 

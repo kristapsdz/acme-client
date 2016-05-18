@@ -22,6 +22,7 @@
 #include <sys/wait.h>
 #include <sys/param.h>
 
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -93,7 +94,7 @@ url2host(const char *host, short *port)
 			return(NULL);
 		}
 	} else {
-		dowarnx("%s: unknown schema", host);
+		warnx("%s: unknown schema", host);
 		return(NULL);
 	}
 
@@ -125,7 +126,7 @@ urlresolve(int fd, const char *url)
 	rc = 0;
 
 	if (NULL == (host = url2host(url, &port))) {
-		dowarnx("%s: url2host", url);
+		warnx("%s: url2host", url);
 		goto out;
 	}
 
@@ -159,7 +160,7 @@ urlresolve(int fd, const char *url)
 
 		hosts = curl_slist_append(hosts, buf);
 		if (NULL == hosts) {
-			dowarnx("curl_slist_append");
+			warnx("curl_slist_append");
 			goto out;
 		}
 
@@ -223,7 +224,7 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 		dowarn("strdup");
 		return(0);
 	} else if ((psz = strlen(*noncep)) < 2) {
-		dowarnx("short nonce");
+		warnx("short nonce");
 		return(0);
 	}
 	(*noncep)[psz - 2] = '\0';
@@ -258,7 +259,7 @@ nreq(CURL *c, const char *addr, long *code,
 	}
 
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
-	      dowarnx("%s: %s", addr, curl_easy_strerror(res));
+	      warnx("%s: %s", addr, curl_easy_strerror(res));
 	      return(0);
 	}
 
@@ -294,11 +295,11 @@ sreq(int fd, CURL *c, const char *addr, const char *req,
 	curl_easy_setopt(c, CURLOPT_HEADERDATA, &nonce);
 
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
-		dowarnx("%s: %s", URL_CA, curl_easy_strerror(res));
+		warnx("%s: %s", URL_CA, curl_easy_strerror(res));
 		free(nonce);
 		return(0);
 	} else if (NULL == nonce) {
-		dowarnx("%s: no replay nonce", URL_CA);
+		warnx("%s: no replay nonce", URL_CA);
 		return(0);
 	}
 
@@ -341,7 +342,7 @@ sreq(int fd, CURL *c, const char *addr, const char *req,
 	}
 
 	if (CURLE_OK != (res = curl_easy_perform(c))) {
-	      dowarnx("%s: %s", addr, curl_easy_strerror(res));
+	      warnx("%s: %s", addr, curl_easy_strerror(res));
 	      free(reqsn);
 	      return(0);
 	}
@@ -368,11 +369,11 @@ donewreg(CURL *c, int fd, struct json *json, const struct capaths *p,
 	dodbg("%s: new-reg", p->newreg);
 
 	if (NULL == (req = json_fmt_newreg(URL_LICENSE)))
-		dowarnx("json_fmt_newreg");
+		warnx("json_fmt_newreg");
 	else if ( ! sreq(fd, c, p->newreg, req, &lc, json, NULL, hosts))
-		dowarnx("%s: bad comm", p->newreg);
+		warnx("%s: bad comm", p->newreg);
 	else if (200 != lc && 201 != lc)
-		dowarnx("%s: bad HTTP: %ld", p->newreg, lc);
+		warnx("%s: bad HTTP: %ld", p->newreg, lc);
 	else
 		rc = 1;
 
@@ -397,13 +398,13 @@ dochngreq(CURL *c, int fd, struct json *json, const char *alt,
 	dodbg("%s: req-auth: %s", p->newauthz, alt);
 
 	if (NULL == (req = json_fmt_newauthz(alt)))
-		dowarnx("json_fmt_newauthz");
+		warnx("json_fmt_newauthz");
 	else if ( ! sreq(fd, c, p->newauthz, req, &lc, json, NULL, hosts))
-		dowarnx("%s: bad comm", p->newauthz);
+		warnx("%s: bad comm", p->newauthz);
 	else if (200 != lc && 201 != lc)
-		dowarnx("%s: bad HTTP: %ld", p->newauthz, lc);
+		warnx("%s: bad HTTP: %ld", p->newauthz, lc);
 	else if ( ! json_parse_challenge(json, chng)) 
-		dowarnx("%s: bad challenge", p->newauthz);
+		warnx("%s: bad challenge", p->newauthz);
 	else
 		rc = 1;
 
@@ -426,11 +427,11 @@ dochngresp(CURL *c, int fd, struct json *json,
 	dodbg("%s: challenge", chng->uri);
 
 	if (NULL == (req = json_fmt_challenge(chng->token, th)))
-		dowarnx("json_fmt_challenge");
+		warnx("json_fmt_challenge");
 	else if ( ! sreq(fd, c, chng->uri, req, &lc, json, NULL, hosts))
-		dowarnx("%s: bad comm", chng->uri);
+		warnx("%s: bad comm", chng->uri);
 	else if (200 != lc && 201 != lc && 202 != lc) 
-		dowarnx("%s: bad HTTP: %ld", chng->uri, lc);
+		warnx("%s: bad HTTP: %ld", chng->uri, lc);
 	else
 		rc = 1;
 
@@ -453,13 +454,13 @@ dochngcheck(CURL *c, struct json *json, struct chng *chng,
 	dodbg("%s: status", chng->uri);
 
 	if ( ! nreq(c, chng->uri, &lc, json, NULL, hosts)) {
-		dowarnx("%s: bad comm", chng->uri);
+		warnx("%s: bad comm", chng->uri);
 		return(0);
 	} else if (200 != lc && 201 != lc && 202 != lc) {
-		dowarnx("%s: bad HTTP: %ld", chng->uri, lc);
+		warnx("%s: bad HTTP: %ld", chng->uri, lc);
 		return(0);
 	} else if (-1 == (cc = json_parse_response(json))) {
-		dowarnx("%s: bad response", chng->uri);
+		warnx("%s: bad response", chng->uri);
 		return(0);
 	} else if (cc > 0)
 		chng->status = 1;
@@ -482,16 +483,16 @@ dorevoke(CURL *c, int fd, const char *addr,
 	dodbg("%s: revoking", addr);
 
 	if (NULL == (req = json_fmt_revokecert(cert)))
-		dowarnx("json_fmt_revokecert");
+		warnx("json_fmt_revokecert");
 	else if ( ! sreq(fd, c, addr, req, &lc, NULL, &buf, hosts))
-		dowarnx("%s: bad comm", addr);
+		warnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc && 409 != lc)
-		dowarnx("%s: bad HTTP: %ld", addr, lc);
+		warnx("%s: bad HTTP: %ld", addr, lc);
 	else
 		rc = 1;
 
 	if (409 == lc)
-		dowarnx("%s: already revoked", addr);
+		warnx("%s: already revoked", addr);
 
 	free(buf.buf);
 	free(req);
@@ -514,13 +515,13 @@ docert(CURL *c, int fd, const char *addr, struct buf *buf,
 	dodbg("%s: certificate", addr);
 
 	if (NULL == (req = json_fmt_newcert(cert)))
-		dowarnx("json_fmt_newcert");
+		warnx("json_fmt_newcert");
 	else if ( ! sreq(fd, c, addr, req, &lc, NULL, buf, hosts))
-		dowarnx("%s: bad comm", addr);
+		warnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc)
-		dowarnx("%s: bad HTTP: %ld", addr, lc);
+		warnx("%s: bad HTTP: %ld", addr, lc);
 	else if (0 == buf->sz || NULL == buf->buf)
-		dowarnx("%s: empty response", addr);
+		warnx("%s: empty response", addr);
 	else
 		rc = 1;
 
@@ -561,16 +562,16 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	/* File-system, user, and sandbox jail. */
 
 	if ( ! sandbox_before()) {
-		dowarnx("sandbox_before");
+		warnx("sandbox_before");
 		goto out;
 	} else if ( ! dropfs(PATH_VAR_EMPTY)) {
-		dowarnx("dropfs");
+		warnx("dropfs");
 		goto out;
 	} else if ( ! dropprivs(uid, gid)) {
-		dowarnx("dropprivs");
+		warnx("dropprivs");
 		goto out;
 	} else if ( ! sandbox_after()) {
-		dowarnx("sandbox_after");
+		warnx("sandbox_after");
 		goto out;
 	}
 
@@ -586,7 +587,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		rc = 1;
 		goto out;
 	} else if (ACCT_READY != lval) {
-		dowarnx("unknown operation from acctproc");
+		warnx("unknown operation from acctproc");
 		goto out;
 	}
 
@@ -594,7 +595,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		rc = 1;
 		goto out;
 	} else if (KEY_READY != lval) {
-		dowarnx("unknown operation from keyproc");
+		warnx("unknown operation from keyproc");
 		goto out;
 	}
 
@@ -602,7 +603,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		rc = 1;
 		goto out;
 	} else if (REVOKE_EXP != lval && REVOKE_OK != lval) {
-		dowarnx("unknown operation from revokeproc");
+		warnx("unknown operation from revokeproc");
 		goto out;
 	} 
 
@@ -621,7 +622,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		dowarn("curl_easy_init");
 		goto out;
 	} else if (NULL == (json = json_alloc())) {
-		dowarnx("json_alloc");
+		warnx("json_alloc");
 		goto out;
 	}
 
@@ -634,13 +635,13 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		goto out;
 	dodbg("%s: requesting directories", URL_CA);
 	if ( ! nreq(c, URL_CA, &http, json, NULL, hosts)) {
-		dowarnx("%s: bad comm", URL_CA);
+		warnx("%s: bad comm", URL_CA);
 		goto out;
 	} else if (200 != http && 201 != http) {
-		dowarnx("%s: bad HTTP: %ld", URL_CA, http);
+		warnx("%s: bad HTTP: %ld", URL_CA, http);
 		goto out;
 	} else if ( ! json_parse_capaths(json, &paths)) {
-		dowarnx("%s: bad CA paths", URL_CA);
+		warnx("%s: bad CA paths", URL_CA);
 		goto out;
 	}
 
@@ -719,7 +720,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 			continue;
 
 		if (chngs[i].retry++ >= RETRY_MAX) {
-			dowarnx("%s: too many tries", chngs[i].uri);
+			warnx("%s: too many tries", chngs[i].uri);
 			goto out;
 		}
 
@@ -767,10 +768,10 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		goto out;
 	dodbg("%s: requesting full-chain", url);
 	if ( ! nreq(c, url, &http, NULL, &buf, hosts)) {
-		dowarnx("%s: bad comm", url);
+		warnx("%s: bad comm", url);
 		goto out;
 	} else if (200 != http && 201 != http) {
-		dowarnx("%s: bad HTTP: %ld", url, http);
+		warnx("%s: bad HTTP: %ld", url, http);
 		goto out;
 	} else if ( ! writebuf(cfd, COMM_CHAIN, buf.buf, buf.sz))
 		goto out;

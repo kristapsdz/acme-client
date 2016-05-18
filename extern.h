@@ -189,8 +189,6 @@ int		 netproc(int, int, int, int, int, int, int, int,
  * They should be used instead of err.h because they print the process
  * component and pid.
  */
-void		 dowarnx(const char *, ...)
-			__attribute__((format(printf, 1, 2)));
 void		 dowarn(const char *, ...)
 			__attribute__((format(printf, 1, 2)));
 void		 doerr(const char *, ...)
