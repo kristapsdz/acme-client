@@ -17,7 +17,7 @@ OBJS 	 = acctproc.o \
 	   util.o
 
 letskencrypt: $(OBJS)
-	$(CC) -o $@ $(OBJS) -lssl -lcrypto `curl-config --libs` $(LIBJSON) $(LIBBSD)
+	$(CC) -o $@ $(OBJS) -lssl -lcrypto `curl-config --libs` -ljson-c
 
 install: letskencrypt
 	mkdir -p $(PREFIX)/bin
@@ -38,4 +38,3 @@ www: letskencrypt.png letskencrypt.1.html
 clean:
 	rm -f letskencrypt $(OBJS)
 	rm -f letskencrypt.png letskencrypt.1.html
-	rm -rf letskencrypt.dSYM
