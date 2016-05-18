@@ -313,21 +313,16 @@ main(int argc, char *argv[])
 
 	/* Jail: sandbox, file-system, user. */
 
-#ifdef __APPLE__
-	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
- 	    SANDBOX_NAMED, NULL))
-		doerr("sandbox_init");
-#endif
+	if ( ! sandbox_before())
+		doerrx("sandbox_before");
 	if (-1 == chroot(PATH_VAR_EMPTY))
 		doerr("%s: chroot", PATH_VAR_EMPTY);
 	if (-1 == chdir("/"))
 		doerr("/: chdir");
 	if ( ! dropprivs(nobody_uid, nobody_gid))
 		doerrx("dropprivs");
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio", NULL))
-		doerr("pledge");
-#endif
+	if ( ! sandbox_after())
+		doerrx("sandbox_after");
 
 	/*
 	 * Collect our subprocesses.
