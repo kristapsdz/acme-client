@@ -100,31 +100,56 @@ readstr(int fd, enum comm comm)
 	return(readbuf(fd, comm, &sz));
 }
 
+/*
+ * Read a buffer from the sender.
+ * This consists of two parts: the lenght of the buffer, and the buffer
+ * itself.
+ * We allow the buffer to be binary, but nil-terminate it anyway.
+ */
 char *
 readbuf(int fd, enum comm comm, size_t *sz)
 {
 	ssize_t		 ssz;
+	size_t		 rsz, lsz;
 	char		*p;
 
 	p = NULL;
 
-	if ((ssz = read(fd, sz, sizeof(size_t))) < 0)
+	if ((ssz = read(fd, sz, sizeof(size_t))) < 0) {
 		dowarn("read: %s length", comms[comm]);
-	else if ((size_t)ssz != sizeof(size_t))
+		return(NULL);
+	} else if ((size_t)ssz != sizeof(size_t)) {
 		dowarnx("short read: %s length", comms[comm]);
-	else if (*sz > SIZE_MAX - 1)
+		return(NULL);
+	} else if (*sz > SIZE_MAX - 1) {
 		dowarnx("integer overflow");
-	else if (NULL == (p = calloc(1, *sz + 1)))
+		return(NULL);
+	} else if (NULL == (p = calloc(1, *sz + 1))) {
 		dowarn("malloc");
-	else if ((ssz = read(fd, p, *sz)) < 0)
-		dowarn("read: %s", comms[comm]);
-	else if ((size_t)ssz != *sz)
-		dowarnx("short read: %s", comms[comm]);
-	else
-		return(p);
+		return(NULL);
+	}
 
-	free(p);
-	return(NULL);
+	/* Catch this over several reads. */
+
+	rsz = 0;
+	lsz = *sz;
+	while (lsz) {
+		if ((ssz = read(fd, p + rsz, lsz)) < 0) {
+			dowarn("read: %s", comms[comm]);
+			break;
+		} else if (ssz > 0) {
+			rsz += (size_t)ssz;
+			lsz -= (size_t)ssz;
+		}
+	}
+
+	if (lsz) {
+		dowarnx("couldn't read buffer: %s", comms[comm]);
+		free(p);
+		return(NULL);
+	}
+
+	return(p);
 }
 
 /*
