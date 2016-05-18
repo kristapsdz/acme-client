@@ -14,6 +14,10 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <sys/stat.h>
 #include <sys/param.h>
 
@@ -24,18 +28,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#ifdef __APPLE__
-# include <sandbox.h>
-#endif
 
 #include "extern.h"
-
-#define	CERT_PEM "cert.pem"
-#define	CERT_BAK "cert.pem~"
-#define	CHAIN_PEM "chain.pem"
-#define	CHAIN_BAK "chain.pem~"
-#define	FCHAIN_PEM "fullchain.pem"
-#define	FCHAIN_BAK "fullchain.pem~"
 
 static int
 serialise(const char *tmp, const char *real, 

@@ -14,8 +14,8 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifdef __linux__
-# define _GNU_SOURCE
+#ifdef HAVE_CONFIG_H
+# include "config.h"
 #endif
 
 #include <sys/stat.h>
@@ -30,9 +30,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#ifdef __APPLE__
-# include <sandbox.h>
-#endif
 
 #include "extern.h"
 

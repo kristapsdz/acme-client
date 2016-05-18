@@ -14,6 +14,10 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <sys/stat.h>
 #include <sys/param.h>
 
@@ -23,9 +27,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#ifdef __APPLE__
-# include <sandbox.h>
-#endif
 
 #include <openssl/pem.h>
 #include <openssl/x509.h>

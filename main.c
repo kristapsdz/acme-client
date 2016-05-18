@@ -14,20 +14,18 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <sys/socket.h>
 #include <sys/param.h>
 
 #include <err.h>
 #include <pwd.h>
-#ifdef __APPLE__
-# include <sandbox.h>
-#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef __linux__
-# include <bsd/stdlib.h>
-#endif
 #include <string.h>
 #include <unistd.h>
 
@@ -306,7 +304,8 @@ main(int argc, char *argv[])
 		free(alts);
 		proccomp = COMP_REVOKE;
 		c = revokeproc(rvk_fds[0], certdir, 
-			nobody_uid, nobody_gid, force);
+			nobody_uid, nobody_gid, 
+			force, revoke);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
