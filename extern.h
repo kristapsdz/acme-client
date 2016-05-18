@@ -185,19 +185,13 @@ int		 netproc(int, int, int, int, int, int, int, int,
 			uid_t, gid_t, const char *const *, size_t);
 
 /*
- * Warning and logging functions.
- * They should be used instead of err.h because they print the process
- * component and pid.
+ * Debugging functions.
+ * These just route to warnx according to the verbosity.
  */
-void		 doerr(const char *, ...)
-			__attribute__((format(printf, 1, 2)));
-void		 doerrx(const char *, ...)
-			__attribute__((format(printf, 1, 2)));
 void		 dodbg(const char *, ...)
 			__attribute__((format(printf, 1, 2)));
 void		 doddbg(const char *, ...)
 			__attribute__((format(printf, 1, 2)));
-const char 	*compname(enum comp);
 
 /*
  * Read and write things from the wire.

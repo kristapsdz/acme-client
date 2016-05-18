@@ -35,6 +35,17 @@
 
 static	volatile sig_atomic_t sig;
 
+static	const char *const comps[COMP__MAX] = {
+	"netproc", /* COMP_NET */
+	"keyproc", /* COMP_KEY */
+	"certproc", /* COMP_CERT */
+	"acctproc", /* COMP_ACCOUNT */
+	"challengeproc", /* COMP_CHALLENGE */
+	"fileproc", /* COMP_FILE */
+	"dnsproc", /* COMP_DNS */
+	"revokeproc", /* COMP_REVOKE */
+};
+
 static	const char *const comms[COMM__MAX] = {
 	"req", /* COMM_REQ */
 	"thumbprint", /* COMM_THUMB */
@@ -232,14 +243,14 @@ checkexit(pid_t pid, enum comp comp)
 
 	if ( ! WIFEXITED(c)) 
 #ifdef __linux__
-		warnx("bad exit: %s(%u)", compname(comp), pid);
+		warnx("bad exit: %s(%u)", comps[comp], pid);
 #else
 		warnx("bad exit: %s(%u) (%s)", 
-			compname(comp), pid, WIFSIGNALED(c) ? 
+			comps[comp], pid, WIFSIGNALED(c) ? 
 			sys_signame[WTERMSIG(c)] : "not-a-signal");
 #endif
 	else if (EXIT_SUCCESS != WEXITSTATUS(c))
-		dodbg("bad exit code: %s(%u)", compname(comp), pid);
+		dodbg("bad exit code: %s(%u)", comps[comp], pid);
 	else
 		return(1);
 
