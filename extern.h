@@ -19,6 +19,14 @@
 
 #define	PATH_VAR_EMPTY "/var/empty"
 
+#define	CERT_PEM "cert.pem"
+#define	CERT_BAK "cert.pem~"
+#define	CHAIN_PEM "chain.pem"
+#define	CHAIN_BAK "chain.pem~"
+#define	FCHAIN_PEM "fullchain.pem"
+#define	FCHAIN_BAK "fullchain.pem~"
+
+
 /*
  * Requests to and from acctproc.
  */
@@ -169,7 +177,7 @@ int		 acctproc(int, const char *, int, uid_t, gid_t);
 int		 certproc(int, int, uid_t, gid_t);
 int		 chngproc(int, const char *, int);
 int		 dnsproc(int, uid_t, gid_t);
-int		 revokeproc(int, const char *, uid_t, gid_t, int);
+int		 revokeproc(int, const char *, uid_t, gid_t, int, int);
 int		 fileproc(int, const char *);
 int		 keyproc(int, const char *, uid_t, gid_t, 
 			const char **, size_t);

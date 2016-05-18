@@ -14,18 +14,16 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifdef __linux__
-# define _GNU_SOURCE
+#ifdef HAVE_CONFIG_H
+# include "config.h"
 #endif
+
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/param.h>
 
 #include <errno.h>
 #include <fcntl.h>
-#ifdef __APPLE__
-# include <sandbox.h>
-#endif
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -325,6 +323,7 @@ sreq(int fd, CURL *c, const char *addr, const char *req,
 
 	/* Now send the signed payload to the CA. */
 
+	buf_reset(buf);
 	json_reset(json);
 	curl_easy_reset(c);
 	curl_easy_setopt(c, CURLOPT_URL, addr);
@@ -468,36 +467,36 @@ dochngcheck(CURL *c, struct json *json, struct chng *chng,
 	return(1);
 }
 
-#if 0
-/* 
- * XXX: not used yet.
- */
 static int
-dorevoke(CURL *c, int fd, const char *addr, struct buf *buf, 
+dorevoke(CURL *c, int fd, const char *addr, 
 	const char *cert, struct curl_slist *hosts)
 {
-	char	*req;
-	int	 rc;
-	long	 lc;
+	char		*req;
+	int		 rc;
+	long		 lc;
+	struct buf	 buf;
 
+	memset(&buf, 0, sizeof(struct buf));
+	lc = 0;
 	rc = 0;
 	dodbg("%s: revoking", addr);
 
 	if (NULL == (req = json_fmt_revokecert(cert)))
 		dowarnx("json_fmt_revokecert");
-	else if ( ! sreq(fd, c, addr, req, &lc, NULL, buf, hosts))
+	else if ( ! sreq(fd, c, addr, req, &lc, NULL, &buf, hosts))
 		dowarnx("%s: bad comm", addr);
-	else if (200 != lc && 201 != lc)
+	else if (200 != lc && 201 != lc && 409 != lc)
 		dowarnx("%s: bad HTTP: %ld", addr, lc);
-	else if (0 == buf->sz || NULL == buf->buf)
-		dowarnx("%s: empty response", addr);
 	else
 		rc = 1;
 
+	if (409 == lc)
+		dowarnx("%s: already revoked", addr);
+
+	free(buf.buf);
 	free(req);
 	return(rc);
 }
-#endif
 
 /*
  * Submit our certificate to the CA.
@@ -653,6 +652,25 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		goto out;
 	}
 
+	/*
+	 * If we're meant to revoke, then wait for revokeproc to send us
+	 * the certificate (if it's found at all).
+	 * Following that, submit the request to the CA then notify the
+	 * certproc, which will in turn notify the fileproc.
+	 */
+
+	if (revoke) {
+		if (NULL == (cert = readstr(rfd, COMM_CSR)))
+			goto out;
+
+		if ( ! dorevoke(c, afd, paths.revokecert, cert, hosts)) 
+			goto out;
+		else if (writeop(cfd, COMM_CSR_OP, CERT_REVOKE))
+			rc = 1;
+		goto out;
+	} 
+
+
 	/* If new, register with the CA server. */
 
 	if (newacct && ! donewreg(c, afd, json, &paths, hosts))
@@ -731,24 +749,6 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	if (NULL == (cert = readstr(kfd, COMM_CERT)))
 		goto out;
-
-#if 0
-	/*
-	 * If we're meant to revoke, then submit the request to the CA
-	 * then notify the certproc, which will in turn notify the
-	 * fileproc.
-	 */
-
-	if (revoke) {
-		if ( ! dorevoke(c, afd, 
-		    paths.revokecert, &buf, cert, hosts)) 
-			goto out;
-		else if ( ! writeop(cfd, COMM_CSR_OP, CERT_REVOKE))
-			goto out;
-		rc = 1;
-		goto out;
-	} 
-#endif
 
 	/*
 	 * Otherwise, submit the CA for signing, download the signed

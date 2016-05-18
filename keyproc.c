@@ -14,22 +14,17 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifdef __linux__
-# define _GNU_SOURCE
+#ifdef HAVE_CONFIG_H
+# include "config.h"
 #endif
+
 #include <sys/param.h>
 
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef __linux__
-# include <bsd/stdlib.h>
-#endif
 #include <string.h>
 #include <unistd.h>
-#ifdef __APPLE__
-# include <sandbox.h>
-#endif
 
 #include <openssl/pem.h>
 #include <openssl/err.h>

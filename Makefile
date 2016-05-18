@@ -1,6 +1,6 @@
 .SUFFIXES: .dot .png .1 .1.html
 
-CFLAGS	+= -g -W -Wall -Wno-deprecated-declarations `curl-config --cflags`
+CFLAGS	+= -g -W -Wall -Wno-deprecated-declarations `curl-config --cflags` -DHAVE_CONFIG_H
 OBJS 	 = acctproc.o \
 	   base64.o \
 	   certproc.o \
@@ -31,7 +31,7 @@ install: letskencrypt
 	install -m 0755 letskencrypt $(PREFIX)/bin
 	install -m 0644 letskencrypt.1 $(PREFIX)/man/man1
 
-$(OBJS): extern.h
+$(OBJS): extern.h config.h
 
 www: letskencrypt.png letskencrypt.1.html
 

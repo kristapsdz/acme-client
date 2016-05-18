@@ -14,6 +14,10 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <sys/stat.h>
 #include <sys/param.h>
 
@@ -24,9 +28,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#ifdef __APPLE__
-# include <sandbox.h>
-#endif
 
 #include <openssl/pem.h>
 #include <openssl/x509.h>
@@ -34,7 +35,6 @@
 
 #include "extern.h"
 
-#define	CERT_PEM "cert.pem"
 #define	RENEW_ALLOW (30 * 24 * 60 * 60)
 
 /*
@@ -100,17 +100,19 @@ X509expires(X509 *x)
 }
 
 int
-revokeproc(int netsock, const char *certdir, 
-	uid_t uid, gid_t gid, int force)
+revokeproc(int fd, const char *certdir, 
+	uid_t uid, gid_t gid, int force, int revoke)
 {
 	int		 rc;
 	long		 lval;
 	FILE		*f;
-	char		*path;
+	char		*path, *der, *dercp, *der64;
 	X509		*x;
 	enum revokeop	 op, rop;
 	time_t		 t;
+	int		 len;
 
+	der = der64 = NULL;
 	rc = 0;
 	f = NULL;
 	path = NULL;
@@ -149,6 +151,7 @@ revokeproc(int netsock, const char *certdir,
 		goto out;
 
 	}
+
 #if defined(__OpenBSD__) && OpenBSD >= 201605
 	if (-1 == pledge("stdio", NULL)) {
 		dowarn("pledge");
@@ -160,20 +163,60 @@ revokeproc(int netsock, const char *certdir,
 	 * If we couldn't open the certificate, it doesn't exist so we
 	 * haven't submitted it yet, so obviously we can mark that it
 	 * has expired and we should renew it.
+	 * If we're revoking, however, then that's an error!
 	 */
-
-	if (NULL == f) {
-		if (writeop(netsock, COMM_REVOKE_RESP, REVOKE_EXP))
+	
+	if (NULL == f && revoke) {
+		dowarnx("%s/%s: no certificate found",
+			certdir, CERT_PEM);
+		(void)writeop(fd, COMM_REVOKE_RESP, REVOKE_OK);
+		goto out;
+	} else if (NULL == f && ! revoke) {
+		if (writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP))
 			rc = 1;
 		goto out;
 	} 
 
-	/* Read out the expiration date. */
-	
 	if (NULL == (x = PEM_read_X509(f, NULL, NULL, NULL))) {
 		dowarnx("PEM_read_X509");
 		goto out;
-	} else if ((time_t)-1 == (t = X509expires(x))) {
+	} 
+
+	/*
+	 * If we're going to revoke, write the certificate to the
+	 * netproc in DER and base64-encoded format.
+	 * Then exit: we have nothing left to do.
+	 */
+	
+	if (revoke) {
+		dodbg("%s/%s: revocation", certdir, CERT_PEM);
+
+		/* First, tell netproc we're online. */
+
+		if ( ! writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP)) 
+			goto out;
+
+		if ((len = i2d_X509(x, NULL)) < 0) {
+			dowarnx("i2d_X509");
+			goto out;
+		} else if (NULL == (der = dercp = malloc(len))) {
+			dowarn("malloc");
+			goto out;
+		} else if (len != i2d_X509(x, (u_char **)&dercp)) {
+			dowarnx("i2d_X509");
+			goto out;
+		} else if (NULL == (der64 = base64buf_url(der, len))) {
+			dowarnx("base64buf_url");
+			goto out;
+		} else if (writestr(fd, COMM_CSR, der64)) 
+			rc = 1;
+
+		goto out;
+	}
+
+	/* Read out the expiration date. */
+	
+	if ((time_t)-1 == (t = X509expires(x))) {
 		dowarnx("X509expires");
 		goto out;
 	}
@@ -196,11 +239,11 @@ revokeproc(int netsock, const char *certdir,
 
 	/* We can re-submit it given RENEW_ALLOW time before. */
 
-	if ( ! writeop(netsock, COMM_REVOKE_RESP, rop))
+	if ( ! writeop(fd, COMM_REVOKE_RESP, rop))
 		goto out;
 
 	op = REVOKE__MAX;
-	if (0 == (lval = readop(netsock, COMM_REVOKE_OP)))
+	if (0 == (lval = readop(fd, COMM_REVOKE_OP)))
 		op = REVOKE_STOP;
 	else if (REVOKE_CHECK == lval)
 		op = lval;
@@ -217,12 +260,14 @@ revokeproc(int netsock, const char *certdir,
 
 	rc = 1;
 out:
-	close(netsock);
+	close(fd);
 	if (NULL != f)
 		fclose(f);
 	if (NULL != x)
 		X509_free(x);
 	free(path);
+	free(der);
+	free(der64);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
 	return(rc);

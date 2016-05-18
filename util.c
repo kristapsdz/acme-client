@@ -14,12 +14,13 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <sys/wait.h>
 
 #include <errno.h>
-#ifdef __linux__
-# include <grp.h>
-#endif
 #include <limits.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -212,7 +213,7 @@ checkexit(pid_t pid, enum comp comp)
 			sys_signame[WTERMSIG(c)] : "not-a-signal");
 #endif
 	else if (EXIT_SUCCESS != WEXITSTATUS(c))
-		dowarnx("bad exit code: %s(%u)", compname(comp), pid);
+		dodbg("bad exit code: %s(%u)", compname(comp), pid);
 	else
 		return(1);
 
