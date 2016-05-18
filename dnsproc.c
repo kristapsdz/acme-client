@@ -71,7 +71,10 @@ host_dns(const char *s, char vec[MAX_SERVERS_DNS][INET6_ADDRSTRLEN])
 	error = getaddrinfo(s, NULL, &hints, &res0);
 
 	if (error == EAI_AGAIN || 
+		/* FIXME */
+#ifndef __FreeBSD__
 	    error == EAI_NODATA || 
+#endif
 	    error == EAI_NONAME)
 		return(0);
 
