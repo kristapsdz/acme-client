@@ -37,7 +37,7 @@ int
 main(int argc, char *argv[])
 {
 	const char	 *domain, *certdir, *acctkey, 
-	     		 *chngdir, *keyfile;
+	     		 *chngdir, *keyfile, *nobody;
 	int		  key_fds[2], acct_fds[2], chng_fds[2], 
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
@@ -52,13 +52,14 @@ main(int argc, char *argv[])
 	gid_t		  nobody_gid;
 
 	alts = NULL;
+	nobody = NOBODY_USER;
 	newacct = remote = revoke = verbose = force = 0;
 	certdir = "/etc/ssl/letsencrypt";
 	keyfile = "/etc/ssl/letsencrypt/private/privkey.pem";
 	acctkey = "/etc/letsencrypt/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
-	while (-1 != (c = getopt(argc, argv, "Fnf:c:vC:k:rt"))) 
+	while (-1 != (c = getopt(argc, argv, "Fnf:c:vC:k:rtu:"))) 
 		switch (c) {
 		case ('F'):
 			force = 1;
@@ -83,6 +84,9 @@ main(int argc, char *argv[])
 			break;
 		case ('r'):
 			revoke = 1;
+			break;
+		case ('u'):
+			nobody = optarg;
 			break;
 		case ('t'):
 			/*
@@ -113,9 +117,9 @@ main(int argc, char *argv[])
 	 * web user for the challenge operations.
 	 */
 
-	passent = getpwnam(NOBODY_USER);
+	passent = getpwnam(nobody);
 	if (NULL == passent)
-		errx(EXIT_FAILURE, "unknown user: %s", NOBODY_USER);
+		errx(EXIT_FAILURE, "%s: bad user", nobody);
 	nobody_uid = passent->pw_uid;
 	nobody_gid = passent->pw_gid;
 
@@ -131,8 +135,6 @@ main(int argc, char *argv[])
 
 	/* 
 	 * Open channels between our components. 
-	 * We exclusively use UNIX domain socketpairs.
-	 * FIXME: make these non-blocking!
 	 */
 
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, key_fds))
@@ -348,6 +350,7 @@ usage:
 		"[-c certdir] "
 		"[-f accountkey] "
 		"[-k domainkey] "
+		"[-u user] "
 		"domain [altnames...]\n", 
 		getprogname());
 	return(EXIT_FAILURE);
