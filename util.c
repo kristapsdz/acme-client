@@ -241,15 +241,15 @@ checkexit(pid_t pid, enum comp comp)
 		return(0);
 	}
 
-	if ( ! WIFEXITED(c)) 
-#ifdef __linux__
-		warnx("bad exit: %s(%u)", comps[comp], pid);
-#else
-		warnx("bad exit: %s(%u) (%s)", 
-			comps[comp], pid, WIFSIGNALED(c) ? 
-			sys_signame[WTERMSIG(c)] : "not-a-signal");
-#endif
-	else if (EXIT_SUCCESS != WEXITSTATUS(c))
+	if ( ! WIFEXITED(c))  {
+		if (WIFSIGNALED(c))
+			warnx("signalled: %s(%u): %s", 
+				comps[comp], pid, 
+				strsignal(WTERMSIG(c)));
+		else
+			warnx("did not exit: %s(%u)", 
+				comps[comp], pid);
+	} else if (EXIT_SUCCESS != WEXITSTATUS(c))
 		dodbg("bad exit code: %s(%u)", comps[comp], pid);
 	else
 		return(1);
