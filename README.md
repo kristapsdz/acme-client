@@ -8,7 +8,7 @@ for complete documentation and functionality.
 
 This repository is for the [OpenBSD](http://www.openbsd.org) version and
 requires OpenBSD 5.9 or greater.  For the portable version (Mac OS X,
-Linux, older OpenBSD) see
+Linux, FreeBSD, older OpenBSD) see
 [letskencrypt-portable](letskencrypt-portable).
 
 It supports the following operations:
