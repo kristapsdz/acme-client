@@ -80,30 +80,16 @@ fileproc(int certsock, const char *certdir)
 
 	/* File-system and sandbox jailing. */
 
-#ifdef __APPLE__
-	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
- 	    SANDBOX_NAMED, NULL)) {
-		dowarn("sandbox_init");
+	if ( ! sandbox_before()) {
+		dowarnx("sandbox_before");
 		goto out;
-	}
-#endif
-
-	if ( ! dropfs(certdir)) {
+	} else if ( ! dropfs(certdir)) {
 		dowarnx("dropfs");
 		goto out;
-	} 
-
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	/* 
-	 * XXX: rpath shouldn't be here, but it's tripped by the
-	 * rename(2) despite that pledge(2) specifically says rename(2)
-	 * is cpath.
-	 */
-	if (-1 == pledge("stdio cpath wpath rpath", NULL)) {
-		dowarn("pledge");
+	} else if ( ! sandbox_after()) {
+		dowarnx("sandbox_after");
 		goto out;
 	}
-#endif
 
 	/* Read our operation. */
 

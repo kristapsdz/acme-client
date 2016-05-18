@@ -13,6 +13,7 @@ OBJS 	 = acctproc.o \
 	   main.o \
 	   netproc.o \
 	   revokeproc.o \
+	   sandbox-pledge.o \
 	   util.o
 
 # On non-Linux (Mac OS X, BSD):

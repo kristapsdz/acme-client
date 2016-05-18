@@ -320,13 +320,11 @@ acctproc(int netsock, const char *acctkey,
 
 	/* File-system, user, and sandbox jailing. */
 
-#ifdef __APPLE__
-	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
- 	    SANDBOX_NAMED, NULL)) {
-		dowarnx("sandbox_init");
+	if ( ! sandbox_before()) {
+		dowarnx("sandbox_before");
 		goto out;
 	}
-#endif
+
 	ERR_load_crypto_strings();
 
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
@@ -335,14 +333,11 @@ acctproc(int netsock, const char *acctkey,
 	} else if ( ! dropprivs(uid, gid)) {
 		dowarnx("dropprivs");
 		goto out;
-	}
-
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio", NULL)) {
-		dowarn("pledge");
+	} else if ( ! sandbox_after()) {
+		dowarnx("sandbox_after");
 		goto out;
 	}
-#endif
+
 	/* 
 	 * Seed our PRNG with data from arc4random().
 	 * Do this until we're told it's ok and use increments of 64

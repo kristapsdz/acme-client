@@ -141,17 +141,17 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 	 * mystery meat.
 	 */
 
-	if ( ! dropprivs(uid, gid)) {
+	if ( ! sandbox_before()) {
+		dowarnx("sandbox_before");
+		goto out;
+	} else if ( ! dropprivs(uid, gid)) {
 		dowarnx("dropprivs");
+		goto out;
+	} else if ( ! sandbox_after()) {
+		dowarnx("sandbox_after");
 		goto out;
 	}
 
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio dns", NULL)) {
-		dowarn("pledge");
-		goto out;
-	}
-#endif
 	/*
 	 * This is simple: just loop on a request operation, and each
 	 * time we write back zero or more entries.
