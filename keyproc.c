@@ -20,6 +20,7 @@
 
 #include <sys/param.h>
 
+#include <err.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,7 +53,7 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 	}
 	ex = X509V3_EXT_conf_nid(NULL, NULL, nid, cp);
 	if (NULL == ex) {
-		dowarnx("X509V3_EXT_conf_nid");
+		warnx("X509V3_EXT_conf_nid");
 		return(0);
 	}
 	sk_X509_EXTENSION_push(sk, ex);
@@ -98,20 +99,20 @@ keyproc(int netsock, const char *keyfile,
 	/* File-system, user, and sandbox jail. */
 	
 	if ( ! sandbox_before()) {
-		dowarnx("sandbox_before");
+		warnx("sandbox_before");
 		goto error;
 	}
 
 	ERR_load_crypto_strings();
 
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
-		dowarnx("dropfs");
+		warnx("dropfs");
 		goto error;
 	} else if ( ! dropprivs(uid, gid)) {
-		dowarnx("dropprivs");
+		warnx("dropprivs");
 		goto error;
 	} else if ( ! sandbox_after()) {
-		dowarnx("sandbox_after");
+		warnx("sandbox_after");
 		goto error;
 	}
 
@@ -135,7 +136,7 @@ keyproc(int netsock, const char *keyfile,
 
 	r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
 	if (NULL == r) {
-		dowarnx("%s", keyfile);
+		warnx("%s", keyfile);
 		goto error;
 	}
 
@@ -143,10 +144,10 @@ keyproc(int netsock, const char *keyfile,
 	f = NULL;
 
 	if (NULL == (evp = EVP_PKEY_new())) {
-		dowarnx("EVP_PKEY_new");
+		warnx("EVP_PKEY_new");
 		goto error;
 	} else if ( ! EVP_PKEY_assign_RSA(evp, r)) {
-		dowarnx("EVP_PKEY_assign_RSA");
+		warnx("EVP_PKEY_assign_RSA");
 		goto error;
 	} 
 
@@ -158,24 +159,24 @@ keyproc(int netsock, const char *keyfile,
 	 */
 
 	if (NULL == (x = X509_REQ_new())) {
-		dowarnx("X509_new");
+		warnx("X509_new");
 		goto error;
 	} else if ( ! X509_REQ_set_pubkey(x, evp)) {
-		dowarnx("X509_set_pubkey");
+		warnx("X509_set_pubkey");
 		goto error;
 	}
 
 	/* Now specify the common name that we'll request. */
 
 	if (NULL == (name = X509_NAME_new())) {
-		dowarnx("X509_NAME_new");
+		warnx("X509_NAME_new");
 		goto error;
 	} else if ( ! X509_NAME_add_entry_by_txt(name, "CN", 
 	           MBSTRING_ASC, (u_char *)alts[0], -1, -1, 0)) {
-		dowarnx("X509_NAME_add_entry_by_txt: CN=%s", alts[0]);
+		warnx("X509_NAME_add_entry_by_txt: CN=%s", alts[0]);
 		goto error;
 	} else if ( ! X509_REQ_set_subject_name(x, name)) {
-		dowarnx("X509_req_set_issuer_name");
+		warnx("X509_req_set_issuer_name");
 		goto error;
 	}
 
@@ -190,16 +191,16 @@ keyproc(int netsock, const char *keyfile,
 	if (altsz > 1) {
 		nid = NID_subject_alt_name;
 		if (NULL == (exts = sk_X509_EXTENSION_new_null())) {
-			dowarnx("sk_X509_EXTENSION_new_null");
+			warnx("sk_X509_EXTENSION_new_null");
 			goto error;
 		}
 		for (i = 1; i < altsz; i++)
 			if ( ! add_ext(exts, nid, alts[i])) {
-				dowarnx("add_ext");
+				warnx("add_ext");
 				goto error;
 			}
 		if ( ! X509_REQ_add_extensions(x, exts)) {
-			dowarnx("X509_REQ_add_extensions");
+			warnx("X509_REQ_add_extensions");
 			goto error;
 		}
 		sk_X509_EXTENSION_pop_free
@@ -209,23 +210,23 @@ keyproc(int netsock, const char *keyfile,
 	/* Sign the X509 request using SHA256. */
 
 	if ( ! X509_REQ_sign(x, evp, EVP_sha256())) {
-		dowarnx("X509_sign");
+		warnx("X509_sign");
 		goto error;
 	} 
 
 	/* Now, serialise to DER, then base64. */
 
 	if ((len = i2d_X509_REQ(x, NULL)) < 0) {
-		dowarnx("i2d_X509");
+		warnx("i2d_X509");
 		goto error;
 	} else if (NULL == (der = dercp = malloc(len))) {
 		dowarn("malloc");
 		goto error;
 	} else if (len != i2d_X509_REQ(x, (u_char **)&dercp)) {
-		dowarnx("i2d_X509");
+		warnx("i2d_X509");
 		goto error;
 	} else if (NULL == (der64 = base64buf_url(der, len))) {
-		dowarnx("base64buf_url");
+		warnx("base64buf_url");
 		goto error;
 	}
 

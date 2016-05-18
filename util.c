@@ -20,6 +20,7 @@
 
 #include <sys/wait.h>
 
+#include <err.h>
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
@@ -84,7 +85,7 @@ readop(int fd, enum comm comm)
 		dowarn("read: %s", comms[comm]);
 		return(LONG_MAX);
 	} else if (ssz && ssz != sizeof(long)) {
-		dowarnx("short read: %s", comms[comm]);
+		warnx("short read: %s", comms[comm]);
 		return(LONG_MAX);
 	} else if (0 == ssz)
 		return(0);
@@ -119,10 +120,10 @@ readbuf(int fd, enum comm comm, size_t *sz)
 		dowarn("read: %s length", comms[comm]);
 		return(NULL);
 	} else if ((size_t)ssz != sizeof(size_t)) {
-		dowarnx("short read: %s length", comms[comm]);
+		warnx("short read: %s length", comms[comm]);
 		return(NULL);
 	} else if (*sz > SIZE_MAX - 1) {
-		dowarnx("integer overflow");
+		warnx("integer overflow");
 		return(NULL);
 	} else if (NULL == (p = calloc(1, *sz + 1))) {
 		dowarn("malloc");
@@ -144,7 +145,7 @@ readbuf(int fd, enum comm comm, size_t *sz)
 	}
 
 	if (lsz) {
-		dowarnx("couldn't read buffer: %s", comms[comm]);
+		warnx("couldn't read buffer: %s", comms[comm]);
 		free(p);
 		return(NULL);
 	}
@@ -171,7 +172,7 @@ writeop(int fd, enum comm comm, long op)
 	if ((ssz = write(fd, &op, sizeof(long))) < 0) 
 		dowarn("write: %s", comms[comm]);
 	else if ((size_t)ssz != sizeof(long))
-		dowarnx("short write: %s", comms[comm]);
+		warnx("short write: %s", comms[comm]);
 	else
 		rc = 1;
 
@@ -195,11 +196,11 @@ writebuf(int fd, enum comm comm, const void *v, size_t sz)
 	if ((ssz = write(fd, &sz, sizeof(size_t))) < 0) 
 		dowarn("write: %s length", comms[comm]);
 	else if ((size_t)ssz != sizeof(size_t))
-		dowarnx("short write: %s length", comms[comm]);
+		warnx("short write: %s length", comms[comm]);
 	else if ((ssz = write(fd, v, sz)) < 0)
 		dowarn("write: %s", comms[comm]);
 	else if ((size_t)ssz != sz)
-		dowarnx("short write: %s", comms[comm]);
+		warnx("short write: %s", comms[comm]);
 	else
 		rc = 1;
 
@@ -231,9 +232,9 @@ checkexit(pid_t pid, enum comp comp)
 
 	if ( ! WIFEXITED(c)) 
 #ifdef __linux__
-		dowarnx("bad exit: %s(%u)", compname(comp), pid);
+		warnx("bad exit: %s(%u)", compname(comp), pid);
 #else
-		dowarnx("bad exit: %s(%u) (%s)", 
+		warnx("bad exit: %s(%u) (%s)", 
 			compname(comp), pid, WIFSIGNALED(c) ? 
 			sys_signame[WTERMSIG(c)] : "not-a-signal");
 #endif
@@ -274,16 +275,16 @@ dropprivs(uid_t uid, gid_t gid)
 	if (setgroups(1, &gid) ||
 	    setresgid(gid, gid, gid) ||
 	    setresuid(uid, uid, uid)) {
-		dowarnx("drop privileges");
+		warnx("drop privileges");
 		return(0);
 	}
 
 	if (getgid() != gid || getegid() != gid) {
-		dowarnx("failed to drop gid");
+		warnx("failed to drop gid");
 		return(0);
 	}
 	if (getuid() != uid || geteuid() != uid) {
-		dowarnx("failed to drop uid");
+		warnx("failed to drop uid");
 		return(0);
 	}
 

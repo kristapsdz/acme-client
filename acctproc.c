@@ -21,6 +21,7 @@
 #include <sys/param.h>
 
 #include <assert.h>
+#include <err.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,7 +58,7 @@ bn2string(const BIGNUM *bn)
 		dowarn("malloc");
 		return(NULL);
 	} else if (len != BN_bn2bin(bn, (unsigned char *)buf)) {
-		dowarnx("BN_bn2bin");
+		warnx("BN_bn2bin");
 		free(buf);
 		return(NULL);
 	}
@@ -65,7 +66,7 @@ bn2string(const BIGNUM *bn)
 	/* Convert to base64url. */
 
 	if (NULL == (bbuf = base64buf_url(buf, len))) {
-		dowarnx("base64buf_url");
+		warnx("base64buf_url");
 		free(buf);
 		return(NULL);
 	}
@@ -93,17 +94,17 @@ op_thumbprint(int fd, RSA *r)
 	ctx = NULL;
 
 	if (NULL == (mod = bn2string(r->n))) {
-		dowarnx("bn2string");
+		warnx("bn2string");
 		goto out;
 	} else if (NULL == (exp = bn2string(r->e))) {
-		dowarnx("bn2string");
+		warnx("bn2string");
 		goto out;
 	}
 
 	/* Construct the thumbprint input itself. */
 
 	if (NULL == (thumb = json_fmt_thumb(exp, mod))) {
-		dowarnx("json_fmt_thumb");
+		warnx("json_fmt_thumb");
 		goto out;
 	}
 
@@ -116,19 +117,19 @@ op_thumbprint(int fd, RSA *r)
 		dowarn("malloc");
 		goto out;
 	} else if (NULL == (ctx = EVP_MD_CTX_create())) {
-		dowarnx("EVP_MD_CTX_create");
+		warnx("EVP_MD_CTX_create");
 		goto out;
 	} else if ( ! EVP_DigestInit_ex(ctx, EVP_sha256(), NULL)) {
-		dowarnx("EVP_SignInit_ex");
+		warnx("EVP_SignInit_ex");
 		goto out;
 	} else if ( ! EVP_DigestUpdate(ctx, thumb, strlen(thumb))) {
-		dowarnx("EVP_SignUpdate");
+		warnx("EVP_SignUpdate");
 		goto out;
 	} else if ( ! EVP_DigestFinal_ex(ctx, dig, &digsz)) {
-		dowarnx("EVP_SignFinal");
+		warnx("EVP_SignFinal");
 		goto out;
 	} else if (NULL == (dig64 = base64buf_url((char *)dig, digsz))) {
-		dowarnx("base64buf_url");
+		warnx("base64buf_url");
 		goto out;
 	} else if ( ! writestr(fd, COMM_THUMB, dig64))
 		goto out;
@@ -180,34 +181,34 @@ op_sign(int fd, RSA *r)
 	/* Extract relevant portions of our private key. */
 
 	if (NULL == (mod = bn2string(r->n))) {
-		dowarnx("bn2string");
+		warnx("bn2string");
 		goto out;
 	} else if (NULL == (exp = bn2string(r->e))) {
-		dowarnx("bn2string");
+		warnx("bn2string");
 		goto out;
 	} 
 	
 	/* Base64-encode the payload. */
 
 	if (NULL == (pay64 = base64buf_url(pay, strlen(pay)))) {
-		dowarnx("base64buf_url");
+		warnx("base64buf_url");
 		goto out;
 	}
 
 	/* Construct the public header. */
 
 	if (NULL == (head = json_fmt_header(exp, mod))) {
-		dowarnx("json_fmt_header");
+		warnx("json_fmt_header");
 		goto out;
 	}
 
 	/* Now the header combined with the nonce, then base64. */
 
 	if (NULL == (prot = json_fmt_protected(exp, mod, nonce))) {
-		dowarnx("json_fmt_protected");
+		warnx("json_fmt_protected");
 		goto out;
 	} else if (NULL == (prot64 = base64buf_url(prot, strlen(prot)))) {
-		dowarnx("base64buf_url");
+		warnx("base64buf_url");
 		goto out;
 	}
 
@@ -229,10 +230,10 @@ op_sign(int fd, RSA *r)
 	 */
 
 	if (NULL == (pkey = EVP_PKEY_new())) {
-		dowarnx("EVP_PKEY_new");
+		warnx("EVP_PKEY_new");
 		goto out;
 	} else if ( ! EVP_PKEY_assign_RSA(pkey, RSAPrivateKey_dup(r))) {
-		dowarnx("EVP_PKEY_assign_RSA");
+		warnx("EVP_PKEY_assign_RSA");
 		goto out;
 	} else if (NULL == (dig = malloc(EVP_PKEY_size(pkey)))) {
 		dowarn("malloc");
@@ -245,26 +246,26 @@ op_sign(int fd, RSA *r)
 	 */
 
 	if (NULL == (ctx = EVP_MD_CTX_create())) {
-		dowarnx("EVP_MD_CTX_create");
+		warnx("EVP_MD_CTX_create");
 		goto out;
 	} else if ( ! EVP_SignInit_ex(ctx, EVP_sha256(), NULL)) {
-		dowarnx("EVP_SignInit_ex");
+		warnx("EVP_SignInit_ex");
 		goto out;
 	} else if ( ! EVP_SignUpdate(ctx, sign, strlen(sign))) {
-		dowarnx("EVP_SignUpdate");
+		warnx("EVP_SignUpdate");
 		goto out;
 	} else if ( ! EVP_SignFinal(ctx, dig, &digsz, pkey)) {
-		dowarnx("EVP_SignFinal");
+		warnx("EVP_SignFinal");
 		goto out;
 	} else if (NULL == (dig64 = base64buf_url((char *)dig, digsz))) {
-		dowarnx("base64buf_url");
+		warnx("base64buf_url");
 		goto out;
 	}
 
 	/* Write back in the correct JSON format. */
 
 	if (NULL == (fin = json_fmt_signed(head, prot64, pay64, dig64))) {
-		dowarnx("json_fmt_signed");
+		warnx("json_fmt_signed");
 		goto out;
 	} else if ( ! writestr(fd, COMM_REQ, fin))
 		goto out;
@@ -321,20 +322,20 @@ acctproc(int netsock, const char *acctkey,
 	/* File-system, user, and sandbox jailing. */
 
 	if ( ! sandbox_before()) {
-		dowarnx("sandbox_before");
+		warnx("sandbox_before");
 		goto out;
 	}
 
 	ERR_load_crypto_strings();
 
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
-		dowarnx("dropfs");
+		warnx("dropfs");
 		goto out;
 	} else if ( ! dropprivs(uid, gid)) {
-		dowarnx("dropprivs");
+		warnx("dropprivs");
 		goto out;
 	} else if ( ! sandbox_after()) {
-		dowarnx("sandbox_after");
+		warnx("sandbox_after");
 		goto out;
 	}
 
@@ -351,23 +352,23 @@ acctproc(int netsock, const char *acctkey,
 
 	if (newacct) {
 		if (NULL == (bne = BN_new())) {
-			dowarnx("BN_new");
+			warnx("BN_new");
 			goto out;
 		} else if ( ! BN_set_word(bne, RSA_F4)) {
-			dowarnx("BN_set_word");
+			warnx("BN_set_word");
 			goto out;
 		} else if (NULL == (r = RSA_new())) {
-			dowarnx("RSA_new");
+			warnx("RSA_new");
 			goto out;
 		}
 		dodbg("%s: creating: %d bits", acctkey, KEY_BITS);
 		if ( ! RSA_generate_key_ex(r, KEY_BITS, bne, NULL)) {
-			dowarnx("RSA_generate_key_ex");
+			warnx("RSA_generate_key_ex");
 			goto out;
 		}
 		if ( ! PEM_write_RSAPrivateKey
 		    (f, r, NULL, 0, 0, NULL, NULL)) {
-			dowarnx("PEM_write_RSAPrivateKey");
+			warnx("PEM_write_RSAPrivateKey");
 			goto out;
 		}
 		BN_free(bne);
@@ -375,7 +376,7 @@ acctproc(int netsock, const char *acctkey,
 	} else {
 		r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
 		if (NULL == r) {
-			dowarnx("%s", acctkey);
+			warnx("%s", acctkey);
 			goto out;
 		}
 	}
@@ -402,7 +403,7 @@ acctproc(int netsock, const char *acctkey,
 			op = lval;
 
 		if (ACCT__MAX == op) {
-			dowarnx("unknown operation from netproc");
+			warnx("unknown operation from netproc");
 			goto out;
 		} else if (ACCT_STOP == op)
 			break;
@@ -411,12 +412,12 @@ acctproc(int netsock, const char *acctkey,
 		case (ACCT_SIGN):
 			if (op_sign(netsock, r))
 				break;
-			dowarnx("op_sign");
+			warnx("op_sign");
 			goto out;
 		case (ACCT_THUMBPRINT):
 			if (op_thumbprint(netsock, r))
 				break;
-			dowarnx("op_thumbprint");
+			warnx("op_thumbprint");
 			goto out;
 		default:
 			abort();

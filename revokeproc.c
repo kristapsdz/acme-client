@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/param.h>
 
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -60,7 +61,7 @@ X509expires(X509 *x)
 
 	if (time->type == V_ASN1_UTCTIME) {
 		if (time->length <= 2) {
-			dowarnx("invalid ASN1_TIME");
+			warnx("invalid ASN1_TIME");
 			return((time_t)-1);
 		}
 		t.tm_year = 
@@ -71,7 +72,7 @@ X509expires(X509 *x)
 		i = 2;
 	} else if (time->type == V_ASN1_GENERALIZEDTIME) {
 		if (time->length <= 4) {
-			dowarnx("invalid ASN1_TIME");
+			warnx("invalid ASN1_TIME");
 			return((time_t)-1);
 		}
 		t.tm_year = 
@@ -86,7 +87,7 @@ X509expires(X509 *x)
 	/* Now the post-year parts. */
 
 	if (time->length <= (int)i + 10) {
-		dowarnx("invalid ASN1_TIME");
+		warnx("invalid ASN1_TIME");
 		return((time_t)-1);
 	}
 
@@ -135,20 +136,20 @@ revokeproc(int fd, const char *certdir,
 	/* File-system and sandbox jailing. */
 
 	if ( ! sandbox_before()) {
-		dowarnx("sandbox_before");
+		warnx("sandbox_before");
 		goto out;
 	}
 
 	ERR_load_crypto_strings();
 
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
-		dowarnx("dropfs");
+		warnx("dropfs");
 		goto out;
 	} else if ( ! dropprivs(uid, gid)) {
-		dowarnx("dropprivs");
+		warnx("dropprivs");
 		goto out;
 	} else if ( ! sandbox_after()) {
-		dowarnx("sandbox_after");
+		warnx("sandbox_after");
 		goto out;
 	}
 
@@ -160,7 +161,7 @@ revokeproc(int fd, const char *certdir,
 	 */
 	
 	if (NULL == f && revoke) {
-		dowarnx("%s/%s: no certificate found",
+		warnx("%s/%s: no certificate found",
 			certdir, CERT_PEM);
 		(void)writeop(fd, COMM_REVOKE_RESP, REVOKE_OK);
 		goto out;
@@ -171,7 +172,7 @@ revokeproc(int fd, const char *certdir,
 	} 
 
 	if (NULL == (x = PEM_read_X509(f, NULL, NULL, NULL))) {
-		dowarnx("PEM_read_X509");
+		warnx("PEM_read_X509");
 		goto out;
 	} 
 
@@ -190,16 +191,16 @@ revokeproc(int fd, const char *certdir,
 			goto out;
 
 		if ((len = i2d_X509(x, NULL)) < 0) {
-			dowarnx("i2d_X509");
+			warnx("i2d_X509");
 			goto out;
 		} else if (NULL == (der = dercp = malloc(len))) {
 			dowarn("malloc");
 			goto out;
 		} else if (len != i2d_X509(x, (u_char **)&dercp)) {
-			dowarnx("i2d_X509");
+			warnx("i2d_X509");
 			goto out;
 		} else if (NULL == (der64 = base64buf_url(der, len))) {
-			dowarnx("base64buf_url");
+			warnx("base64buf_url");
 			goto out;
 		} else if (writestr(fd, COMM_CSR, der64)) 
 			rc = 1;
@@ -210,7 +211,7 @@ revokeproc(int fd, const char *certdir,
 	/* Read out the expiration date. */
 	
 	if ((time_t)-1 == (t = X509expires(x))) {
-		dowarnx("X509expires");
+		warnx("X509expires");
 		goto out;
 	}
 
@@ -226,7 +227,7 @@ revokeproc(int fd, const char *certdir,
 			(long long)(t - time(NULL)) / 24 / 60 / 60);
 
 	if (REVOKE_OK == rop && force) {
-		dowarnx("%s/%s: forcing renewal", certdir, CERT_PEM);
+		warnx("%s/%s: forcing renewal", certdir, CERT_PEM);
 		rop = REVOKE_EXP;
 	}
 
@@ -242,7 +243,7 @@ revokeproc(int fd, const char *certdir,
 		op = lval;
 
 	if (REVOKE__MAX == op) {
-		dowarnx("unknown operation from netproc");
+		warnx("unknown operation from netproc");
 		goto out;
 	} else if (REVOKE_STOP == op) {
 		rc = 1;

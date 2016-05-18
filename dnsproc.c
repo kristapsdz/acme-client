@@ -24,6 +24,7 @@
 
 #include <arpa/inet.h>
 
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -79,7 +80,7 @@ host_dns(const char *s, char vec[MAX_SERVERS_DNS][INET6_ADDRSTRLEN])
 		return(0);
 
 	if (error) {
-		dowarnx("%s: parse error: %s", 
+		warnx("%s: parse error: %s", 
 			s, gai_strerror(error));
 		return(-1);
 	}
@@ -145,13 +146,13 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 	 */
 
 	if ( ! sandbox_before()) {
-		dowarnx("sandbox_before");
+		warnx("sandbox_before");
 		goto out;
 	} else if ( ! dropprivs(uid, gid)) {
-		dowarnx("dropprivs");
+		warnx("dropprivs");
 		goto out;
 	} else if ( ! sandbox_after()) {
-		dowarnx("sandbox_after");
+		warnx("sandbox_after");
 		goto out;
 	}
 
@@ -168,7 +169,7 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 			op = lval;
 
 		if (DNS__MAX == op) {
-			dowarnx("unknown operation from netproc");
+			warnx("unknown operation from netproc");
 			goto out;
 		} else if (DNS_STOP == op)
 			break;

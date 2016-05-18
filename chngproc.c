@@ -22,6 +22,7 @@
 #include <sys/param.h>
 
 #include <assert.h>
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -54,13 +55,13 @@ chngproc(int netsock, const char *root, int remote)
 	/* File-system and sandbox jailing. */
 
 	if ( ! sandbox_before()) {
-		dowarnx("sandbox_before");
+		warnx("sandbox_before");
 		goto out;
 	} else if ( ! dropfs(root)) {
-		dowarnx("dropfs");
+		warnx("dropfs");
 		goto out;
 	} else if ( ! sandbox_after()) {
-		dowarnx("sandbox_after");
+		warnx("sandbox_after");
 		goto out;
 	}
 
@@ -77,7 +78,7 @@ chngproc(int netsock, const char *root, int remote)
 			op = lval;
 
 		if (CHNG__MAX == op) {
-			dowarnx("unknown operation from netproc");
+			warnx("unknown operation from netproc");
 			goto out;
 		} else if (CHNG_STOP == op)
 			break;

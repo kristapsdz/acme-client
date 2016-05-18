@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/param.h>
 
+#include <err.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -52,10 +53,10 @@ x509buf(X509 *x, size_t *sz)
 	/* Convert X509 to PEM in BIO. */
 
 	if (NULL == (bio = BIO_new(BIO_s_mem()))) {
-		dowarnx("BIO_new");
+		warnx("BIO_new");
 		return(NULL);
 	} else if ( ! PEM_write_bio_X509(bio, x)) {
-		dowarnx("PEM_write_bio_X509");
+		warnx("PEM_write_bio_X509");
 		BIO_free(bio);
 		return(NULL);
 	}
@@ -70,7 +71,7 @@ x509buf(X509 *x, size_t *sz)
 
 	ssz = BIO_read(bio, p, bio->num_write);
 	if (ssz < 0 || (unsigned)ssz != bio->num_write) {
-		dowarnx("BIO_read");
+		warnx("BIO_read");
 		BIO_free(bio);
 		return(NULL);
 	}
@@ -106,20 +107,20 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	/* File-system and sandbox jailing. */
 
 	if ( ! sandbox_before()) {
-		dowarnx("sandbox_before()");
+		warnx("sandbox_before()");
 		goto out;
 	}
 
 	ERR_load_crypto_strings();
 
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
-		dowarnx("dropfs");
+		warnx("dropfs");
 		goto out;
 	} else if ( ! dropprivs(uid, gid)) {
-		dowarnx("dropprivs");
+		warnx("dropprivs");
 		goto out;
 	} else if ( ! sandbox_after()) {
-		dowarnx("sandbox_after");
+		warnx("sandbox_after");
 		goto out;
 	}
 
@@ -135,7 +136,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 		rc = 1;
 		goto out;
 	} else if (CERT__MAX == op) {
-		dowarnx("unknown operation from netproc");
+		warnx("unknown operation from netproc");
 		goto out;
 	}
 
@@ -161,7 +162,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	csrcp = (u_char *)csr;
 	x = d2i_X509(NULL, (const u_char **)&csrcp, csrsz);
 	if (NULL == x) {
-		dowarnx("d2i_X509");
+		warnx("d2i_X509");
 		goto out;
 	}
 
@@ -191,7 +192,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	}
 
 	if (NULL == url) {
-		dowarnx("no CA issuer registered with certificate");
+		warnx("no CA issuer registered with certificate");
 		goto out;
 	}
 
@@ -219,7 +220,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 		chainx = d2i_X509(NULL, 
 			(const u_char **)&chaincp, chainsz);
 		if (NULL == chainx) {
-			dowarnx("d2i_X509");
+			warnx("d2i_X509");
 			goto out;
 		}
 		free(chain);
