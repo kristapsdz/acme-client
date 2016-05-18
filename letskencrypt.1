@@ -1,4 +1,4 @@
-.Dd $Mdocdate: May 17 2016 $
+.Dd $Mdocdate: May 18 2016 $
 .Dt LETSKENCRYPT 1
 .Os
 .Sh NAME
@@ -14,6 +14,7 @@
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
 .Op Fl k Ar domainkey
+.Op Fl u Ar user
 .Ar domain
 .Op Ar altnames...
 .Sh DESCRIPTION
@@ -45,6 +46,9 @@ and
 .Pa /etc/letsencrypt/privkey.pem
 for the account private key
 .Pq Fl f .
+It drops privileges to the
+.Dq nobody
+user.
 Its arguments are as follows:
 .Bl -tag -width Ds
 .It Fl F
@@ -76,6 +80,8 @@ client or with
 .Fl n .
 .It Fl k Ar domainkey
 The private key for the domain.
+.It Fl u Ar user
+User for dropping privileges.
 .It Ar domain
 The domain name.
 The only difference between this and the
@@ -222,10 +228,7 @@ Sandboxing is system-specific.
 .Bl -tag -width Ds
 .It DNS process.
 Manages domain name resolution.
-This is allowed full access to the file-system, but is privilege-dropped
-to the
-.Dq nobody
-user.
+This is allowed full access to the file-system, but is privilege-dropped.
 On
 .Ox , 
 the sandbox ensures that only DNS lookups are made; however, other
@@ -236,9 +239,7 @@ sandboxing.
 Manages communication with the Let's Encrypt server.
 This process is sandboxed and jailed in
 .Pa /var/empty ,
-and drops user privileges to the
-.Dq nobody
-user.
+and drops user privileges.
 .It Certificate process.
 Translates certificates into PEM files and transfers them to the file
 process.
@@ -246,9 +247,7 @@ Also extracts the CA issuer name from the certificate and transfers it
 to the network process for downloading.
 This process is sandboxed and jailed in
 .Pa /var/empty ,
-and drops user privileges to the
-.Dq nobody
-user.
+and drops user privileges.
 .It File process.
 Manages public certificate and certificate chain files.
 Each domain certificate is written into a temporary file then atomically
@@ -260,9 +259,7 @@ Reads and parses the RSA private key for the domain.
 This is used for creating the X509 request.
 After opening the private key file, this is sandboxed and jailed in
 .Pa /var/empty ,
-and drops user privileges to the
-.Dq nobody
-user.
+and drops user privileges.
 .It Account key process.
 Reads and parses the RSA private key for the account.
 This is responsible for signing messages submitted by the network
@@ -271,9 +268,7 @@ process and creating
 digests used by the challenge process.
 After opening the private key file, this is sandboxed and jailed in
 .Pa /var/empty ,
-and drops user privileges to the
-.Dq nobody
-user.
+and drops user privileges.
 .It Challenge process.
 This process creates and deletes challenge files.
 It is sandboxed and jailed in the challenge directory.
@@ -282,9 +277,7 @@ If found, reads and parses the X509 certificate to check whether it
 should be signed or not.
 After opening the certificate file, this is sandboxed and jailed in
 .Pa /var/empty ,
-and drops user privileges to the
-.Dq nobody
-user.
+and drops user privileges.
 .El
 .\" Not used in OpenBSD.
 .\" .Sh RETURN VALUES
