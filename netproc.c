@@ -560,27 +560,19 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	/* File-system, user, and sandbox jail. */
 
-#ifdef __APPLE__
-	if (-1 == sandbox_init(kSBXProfileNoWrite, 
- 	    SANDBOX_NAMED, NULL)) {
-		dowarnx("sandbox_init");
+	if ( ! sandbox_before()) {
+		dowarnx("sandbox_before");
 		goto out;
-	}
-#endif
-	if ( ! dropfs(PATH_VAR_EMPTY)) {
+	} else if ( ! dropfs(PATH_VAR_EMPTY)) {
 		dowarnx("dropfs");
 		goto out;
 	} else if ( ! dropprivs(uid, gid)) {
 		dowarnx("dropprivs");
 		goto out;
-	}
-
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio dns rpath inet", NULL)) {
-		dowarn("pledge");
+	} else if ( ! sandbox_after()) {
+		dowarnx("sandbox_after");
 		goto out;
 	}
-#endif
 
 	/* 
 	 * Wait until the acctproc, keyproc, and revokeproc have started

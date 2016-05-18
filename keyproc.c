@@ -96,14 +96,12 @@ keyproc(int netsock, const char *keyfile,
 	}
 
 	/* File-system, user, and sandbox jail. */
-
-#ifdef __APPLE__
-	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
- 	    SANDBOX_NAMED, NULL)) {
-		dowarn("sandbox_init"); 
+	
+	if ( ! sandbox_before()) {
+		dowarnx("sandbox_before");
 		goto error;
 	}
-#endif
+
 	ERR_load_crypto_strings();
 
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
@@ -112,14 +110,10 @@ keyproc(int netsock, const char *keyfile,
 	} else if ( ! dropprivs(uid, gid)) {
 		dowarnx("dropprivs");
 		goto error;
-	}
-
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio", NULL)) {
-		dowarn("pledge");
+	} else if ( ! sandbox_after()) {
+		dowarnx("sandbox_after");
 		goto error;
 	}
-#endif
 
 	/* 
 	 * Seed our PRNG with data from arc4random().

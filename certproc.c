@@ -105,13 +105,11 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 
 	/* File-system and sandbox jailing. */
 
-#ifdef __APPLE__
-	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
- 	    SANDBOX_NAMED, NULL)) {
-		dowarnx("sandbox_init");
+	if ( ! sandbox_before()) {
+		dowarnx("sandbox_before()");
 		goto out;
 	}
-#endif
+
 	ERR_load_crypto_strings();
 
 	if ( ! dropfs(PATH_VAR_EMPTY)) {
@@ -120,13 +118,10 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	} else if ( ! dropprivs(uid, gid)) {
 		dowarnx("dropprivs");
 		goto out;
-	}
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio", NULL)) {
-		dowarn("pledge");
+	} else if ( ! sandbox_after()) {
+		dowarnx("sandbox_after");
 		goto out;
 	}
-#endif
 
 	/* Read what the netproc wants us to do. */
 

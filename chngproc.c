@@ -53,23 +53,16 @@ chngproc(int netsock, const char *root, int remote)
 
 	/* File-system and sandbox jailing. */
 
-#ifdef __APPLE__
-	if (-1 == sandbox_init(kSBXProfileNoNetwork, 
- 	    SANDBOX_NAMED, NULL)) {
-		dowarnx("sandbox_init");
+	if ( ! sandbox_before()) {
+		dowarnx("sandbox_before");
 		goto out;
-	}
-#endif
-	if ( ! dropfs(root)) {
+	} else if ( ! dropfs(root)) {
 		dowarnx("dropfs");
 		goto out;
-	} 
-#if defined(__OpenBSD__) && OpenBSD >= 201605
-	if (-1 == pledge("stdio cpath wpath", NULL)) {
-		dowarn("pledge");
+	} else if ( ! sandbox_after()) {
+		dowarnx("sandbox_after");
 		goto out;
 	}
-#endif
 
 	/* 
 	 * Loop while we wait to get a thumbprint and token.
