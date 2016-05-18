@@ -15,7 +15,7 @@ It supports the following operations:
 
 * Account registration (see the -**n** flag).
 * Domain certificate signing.
-* Domain certificate revocation.
+* Domain certificate revocation (see the -**r** flag).
 
 This repository mirrors the master CVS repository: any source changes
 will occur on the master and be pushed periodically to GitHub.  If you
