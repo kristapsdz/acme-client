@@ -271,31 +271,12 @@ int
 dropprivs(uid_t uid, gid_t gid)
 {
 
-#if defined(__OpenBSD__)
 	if (setgroups(1, &gid) ||
 	    setresgid(gid, gid, gid) ||
 	    setresuid(uid, uid, uid)) {
-		dowarn("drop privileges");
+		dowarnx("drop privileges");
 		return(0);
 	}
-#else
-	if (-1 == setgroups(1, &gid)) {
-		dowarn("setgroups");
-		return(0); 
-	} else if (-1 == setgid(gid)) {
-		dowarn("setgid");
-		return(0); 
-	} else if (-1 == setegid(gid)) {
-		dowarn("setegid");
-		return(0); 
-	} else if (-1 == setuid(uid)) {
-		dowarn("setuid");
-		return(0); 
-	} else if (-1 == seteuid(uid)) {
-		dowarn("seteuid");
-		return(0); 
-	}
-#endif
 
 	if (getgid() != gid || getegid() != gid) {
 		dowarnx("failed to drop gid");
