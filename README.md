@@ -6,8 +6,9 @@ development**.  See
 [letskencrypt.1](http://kristaps.bsd.lv/letskencrypt/letskencrypt.1.html)
 for complete documentation and functionality.
 
-This repository is for the [OpenBSD](http://www.openbsd.org) version.
-For the portable version (Mac OS X, Linux, etc.) see
+This repository is for the [OpenBSD](http://www.openbsd.org) version and
+requires OpenBSD 5.9 or greater.  For the portable version (Mac OS X,
+Linux, older OpenBSD) see
 [letskencrypt-portable](letskencrypt-portable).
 
 It supports the following operations:

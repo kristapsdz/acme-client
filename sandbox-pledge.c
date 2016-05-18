@@ -18,8 +18,6 @@
 # include "config.h"
 #endif
 
-#include <sys/param.h>
-
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -40,7 +38,6 @@ int
 sandbox_after(void)
 {
 
-#if OpenBSD >= 201605
 	switch (proccomp) {
 	case (COMP_ACCOUNT):
 	case (COMP_CERT):
@@ -76,13 +73,12 @@ sandbox_after(void)
 		}
 		break;
 	case (COMP_NET):
-		/* FIXME: these aren't necessary. */
-		if (-1 == pledge("stdio dns rpath inet", NULL)) {
+		/* rpath required by libcurl */
+		if (-1 == pledge("stdio inet rpath", NULL)) {
 			dowarn("pledge");
 			return(0);
 		}
 		break;
 	}
-#endif
 	return(1);
 }
