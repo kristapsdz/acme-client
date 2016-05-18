@@ -18,6 +18,8 @@
 # include "config.h"
 #endif
 
+#include <sys/param.h>
+
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -30,46 +32,21 @@
 int
 sandbox_before(void)
 {
-#if defined(__APPLE__)
-	switch (proccomp) {
-	case (COMP_ACCOUNT):
-	case (COMP_CERT):
-	case (COMP_CHALLENGE):
-	case (COMP_FILE):
-	case (COMP_KEY):
-	case (COMP_REVOKE):
-	        if (-1 == sandbox_init
-		    (kSBXProfileNoNetwork, SANDBOX_NAMED, NULL)) {
-			dowarnx("sandbox_init");
-			return(0);
-	        }	
-		break;
-	case (COMP_DNS):
-	case (COMP_NET):
-	        if (-1 == sandbox_init
-		    (kSBXProfileNoWrite, SANDBOX_NAMED, NULL)) {
-			dowarnx("sandbox_init");
-			return(0);
-	        }	
-		break;
-	default:
-		/* Shouldn't ever get here. */
-		abort();
-	}
 
-#endif
 	return(1);
 }
 
 int
 sandbox_after(void)
 {
-#if defined(__OpenBSD__) && OpenBSD >= 201605
+
+#if OpenBSD >= 201605
 	switch (proccomp) {
 	case (COMP_ACCOUNT):
 	case (COMP_CERT):
 	case (COMP_KEY):
 	case (COMP_REVOKE):
+	case (COMP__MAX):
 		if (-1 == pledge("stdio", NULL)) {
 			dowarn("pledge");
 			return(0);
