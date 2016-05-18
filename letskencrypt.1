@@ -9,7 +9,7 @@
 .\" Not used in OpenBSD.
 .Sh SYNOPSIS
 .Nm letskencrypt
-.Op Fl Fvn
+.Op Fl Fnrv
 .Op Fl C Ar challengedir
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
@@ -26,9 +26,10 @@ and its alternate DNS names
 to a
 .Dq Let's Encrypt
 server for automated signing.
+It can also revoke previously-submitted signatures.
 It must be run as root.
 (Why?
-.Xr chroot 2 ) .
+.Xr chroot 2 . )
 .Pp
 By default, it uses
 .Pa /var/www/letsencrypt
@@ -46,14 +47,17 @@ for the account private key
 .Pq Fl f .
 Its arguments are as follows:
 .Bl -tag -width Ds
-.It Fl v
-Verbose operation.
-Specify twice to also trace communication and data transfers.
 .It Fl F
 Force updating the certificate signature even if it's too soon.
 .It Fl n
 Create a new account key.
 This will fail if a file already exists in the account key's place.
+.It Fl r
+Revoke the X509 certificate found in
+.Sx Certificates .
+.It Fl v
+Verbose operation.
+Specify twice to also trace communication and data transfers.
 .It Fl C Ar challengedir
 Where to register challenges.
 See
@@ -129,8 +133,21 @@ Extract the CA issuer from the X509 certificate.
 .It
 Download the certificate chain from the issuer.
 .El
-.
-.
+.Pp
+The revocation sequence is similar:
+.Bl -enum
+.It
+Request list of resources, manage RSA account key as in the case for
+signing.
+.It
+Read and extract the X509 certificate (if found).
+.It
+Create an X509 revocation request.
+.It
+Submit a request for revocation to the CA.
+.It
+Remove the certificate, the chain, and the full-chain.
+.El
 .Ss Challenges
 Let's Encrypt uses challenges to verify that the submitter has access to
 the registered domains.
@@ -164,8 +181,6 @@ This way, the files placed in
 .Pa /var/www/letsencrypt
 will be properly mapped by the web server when the Let's Encrypt
 responds to a challenge.
-.
-.
 .Ss Certificates
 Public certificates (domain certificate, chain, and the full-chain) are
 placed by default in
@@ -289,18 +304,7 @@ user.
 .\" .Sh STANDARDS
 .\" .Sh HISTORY
 .\" .Sh AUTHORS
-.Sh CAVEATS
-On Mac OS X and Linux, the DNS process is essentially unprotected except
-for a privilege drop.
-This is due to limitations in how DNS resolution occurs on these
-systems.
-Moreover, for Mac OS X, the sandbox for several components must be
-weakened from that of full-computation to no-network because the sandbox
-cannot be enacted within a
-.Xr chroot 2 .
-There is no sandbox at all for Linux. 
-.Pp
-In summary, running this on anything but OpenBSD is not advised.
+.\" .Sh CAVEATS
 .Sh BUGS
 The challenge and certificate processes retain their privileges, as I'm
 not sure which credentials to use otherwise.
