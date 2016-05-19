@@ -234,7 +234,6 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_CHALLENGE]) {
 		proccomp = COMP_CHALLENGE;
-		warnx("testing");
 		free(alts);
 		close(cert_fds[0]);
 		close(dns_fds[0]);
