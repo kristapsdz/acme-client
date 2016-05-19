@@ -77,13 +77,6 @@ Lastly, the poorly-named revocation process,
 [revokeproc.c](revokeproc.c), attempts to read the certificate on file
 and determine its expected expiration.
 
-By default, *letskencrypt* talks only to the [staging
-server](https://community.letsencrypt.org/t/testing-against-the-lets-encrypt-staging-environment/6763).
-You'll need to edit [netproc.c](netproc.c) if you'd prefer the real
-deal, but the system is still kinda young to be doing so.
-
-It's getting there...
-
 ## License
 
 All sources use the ISC (like OpenBSD) license.
