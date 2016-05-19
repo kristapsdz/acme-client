@@ -131,7 +131,7 @@ op_thumbprint(int fd, RSA *r)
 	} else if (NULL == (dig64 = base64buf_url((char *)dig, digsz))) {
 		warnx("base64buf_url");
 		goto out;
-	} else if ( ! writestr(fd, COMM_THUMB, dig64))
+	} else if (writestr(fd, COMM_THUMB, dig64) <= 0)
 		goto out;
 
 	rc = 1;
@@ -267,7 +267,7 @@ op_sign(int fd, RSA *r)
 	if (NULL == (fin = json_fmt_signed(head, prot64, pay64, dig64))) {
 		warnx("json_fmt_signed");
 		goto out;
-	} else if ( ! writestr(fd, COMM_REQ, fin))
+	} else if (writestr(fd, COMM_REQ, fin) <= 0)
 		goto out;
 
 	rc = 1;
@@ -386,7 +386,7 @@ acctproc(int netsock, const char *acctkey,
 
 	/* Notify the netproc that we've started up. */
 
-	if ( ! writeop(netsock, COMM_ACCT_STAT, ACCT_READY))
+	if (writeop(netsock, COMM_ACCT_STAT, ACCT_READY) <= 0)
 		goto out;
 
 	/*
