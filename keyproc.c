@@ -47,8 +47,8 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 	X509_EXTENSION 	*ex;
 	char		*cp;
 
-	if (-1 == asprintf(&cp, "DNS:%s", value)) {
-		warn("asprintf");
+	if (NULL == (cp = strdup(value))) {
+		warn("strdup");
 		return(0);
 	}
 	ex = X509V3_EXT_conf_nid(NULL, NULL, nid, cp);
@@ -70,22 +70,23 @@ int
 keyproc(int netsock, const char *keyfile, 
 	uid_t uid, gid_t gid, const char **alts, size_t altsz)
 {
-	char		*der64, *der, *dercp;
+	char		*der64, *der, *dercp, *sans, *san;
 	FILE		*f;
-	size_t		 i;
+	size_t		 i, sansz;
 	RSA		*r;
+	void		*pp;
 	EVP_PKEY	*evp;
 	X509_REQ	*x;
 	X509_NAME 	*name;
 	unsigned char	 rbuf[64];
-	int		 len, rc, nid;
+	int		 len, rc, cc, nid;
 	STACK_OF(X509_EXTENSION) *exts;
 
 	x = NULL;
 	evp = NULL;
 	r = NULL;
 	name = NULL;
-	der = der64 = NULL;
+	der = der64 = sans = san = NULL;
 	rc = 0;
 	exts = NULL;
 
@@ -194,12 +195,42 @@ keyproc(int netsock, const char *keyfile,
 			warnx("sk_X509_EXTENSION_new_null");
 			goto error;
 		}
-		for (i = 1; i < altsz; i++)
-			if ( ! add_ext(exts, nid, alts[i])) {
-				warnx("add_ext");
+		/* Initialise to empty string. */
+		if (NULL == (sans = strdup(""))) {
+			warn("strdup");
+			goto error;
+		}
+		sansz = strlen(sans) + 1;
+
+		/* 
+		 * For each SAN entry, append it to the string.
+		 * We need a single SAN entry for all of the SAN
+		 * domains: NOT an entry per domain!
+		 */
+
+		for (i = 1; i < altsz; i++) {
+			cc = asprintf(&san, "%sDNS:%s", 
+				i > 1 ? "," : "", alts[i]);
+			if (-1 == cc) {
+				warn("asprintf");
 				goto error;
 			}
-		if ( ! X509_REQ_add_extensions(x, exts)) {
+			pp = realloc(sans, sansz + strlen(san));
+			if (NULL == sans) {
+				warn("realloc");
+				goto error;
+			}
+			sans = pp;
+			sansz += strlen(san);
+			strlcat(sans, san, sansz);
+			free(san);
+			san = NULL;
+		}
+
+		if ( ! add_ext(exts, nid, sans)) {
+			warnx("add_ext");
+			goto error;
+		} else if ( ! X509_REQ_add_extensions(x, exts)) {
 			warnx("X509_REQ_add_extensions");
 			goto error;
 		}
@@ -244,6 +275,8 @@ error:
 		fclose(f);
 	free(der);
 	free(der64);
+	free(sans);
+	free(san);
 	if (NULL != x)
 		X509_REQ_free(x);
 	if (NULL != r)
