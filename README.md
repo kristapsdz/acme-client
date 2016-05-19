@@ -22,9 +22,6 @@ will occur on the master and be pushed periodically to GitHub.  If you
 have bug reports or patches, either file them here or e-mail them to me.
 Feature requests will be ignored unless joined by a patch.
 
-The system is registered as a [Coverity
-project](https://scan.coverity.com/projects/letskencrypt).
-
 ## Installation
 
 To use *letskencrypt*, just download and run `make` and `make install`
