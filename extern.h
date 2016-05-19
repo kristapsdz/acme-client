@@ -218,10 +218,9 @@ char		*base64buf_url(const char *, size_t);
  * JSON parsing routines.
  * Keep this all in on place, though it's only used by one file.
  */
-struct json	*json_alloc(void);
+struct json	*json_parse(const char *, size_t);
 void		 json_reset(struct json *);
 void		 json_free(struct json *);
-size_t		 jsonbody(void *, size_t, size_t, void *);
 int		 json_parse_response(struct json *);
 void		 json_free_challenge(struct chng *);
 int		 json_parse_challenge(struct json *, struct chng *);

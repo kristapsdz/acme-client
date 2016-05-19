@@ -18,6 +18,7 @@
 # include "config.h"
 #endif
 
+#include <assert.h>
 #include <err.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -82,7 +83,7 @@ json_getstr(json_object *parent, const char *name)
  * Initialise the JSON object we're going to use multiple time in
  * communicating with the ACME server.
  */
-struct json *
+static struct json *
 json_alloc(void)
 {
 	struct json	*p;
@@ -242,30 +243,30 @@ json_free_capaths(struct capaths *p)
 }
 
 /*
- * Pass an HTTP response body directly to the JSON parser.
- * This will fail once the JSON object has been created (which is the
- * correct operation).
+ * Parse an HTTP response body.
  */
-size_t 
-jsonbody(void *ptr, size_t sz, size_t nm, void *arg)
+struct json *
+json_parse(const char *buf, size_t sz)
 {
-	struct json	*json = arg;
-	enum json_tokener_error er;
+	enum json_tokener_error  er;
+	struct json		*json;
 
-	if (NULL != json->obj)
-		return(0);
-
-	doddbg("received: [%.*s]", (int)(nm * sz), (char *)ptr);
-
-	/* This will be non-NULL when we finish. */
-	json->obj = json_tokener_parse_ex(json->tok, ptr, nm * sz);
+	if (NULL == (json = json_alloc())) {
+		warnx("json_alloc");
+		return(NULL);
+	}
+	
+	json->obj = json_tokener_parse_ex(json->tok, buf, sz);
 	er = json_tokener_get_error(json->tok);
+	if (er != json_tokener_success) {
+		/* According to their docs... */
+		warnx("json_tokener_parse_ex: %s", 
+			json_tokener_error_desc(er));
+		json_free(json);
+		return(NULL);
+	}
 
-	if (er == json_tokener_success || 
-	    er == json_tokener_continue)
-		return(sz * nm);
-
-	return(0);
+	return(json);
 }
 
 /*
