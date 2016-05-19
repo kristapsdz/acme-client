@@ -181,7 +181,7 @@ int		 revokeproc(int, const char *, uid_t, gid_t, int, int);
 int		 fileproc(int, const char *);
 int		 keyproc(int, const char *, uid_t, gid_t, 
 			const char **, size_t);
-int		 netproc(int, int, int, int, int, int, int, int,
+int		 netproc(int, int, int, int, int, int, int, int, int,
 			uid_t, gid_t, const char *const *, size_t);
 
 /*
