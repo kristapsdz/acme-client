@@ -9,7 +9,7 @@
 .\" Not used in OpenBSD.
 .Sh SYNOPSIS
 .Nm letskencrypt
-.Op Fl Fnrv
+.Op Fl Fnrsv
 .Op Fl C Ar challengedir
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
@@ -58,6 +58,11 @@ Create a new account key.
 This will fail if a file already exists in the account key's place.
 .It Fl r
 Revoke the X509 certificate found in
+.Sx Certificates .
+.It Fl s
+Use the
+.Dq Let's Encrypt
+staging server instead of the real thing.
 .Sx Certificates .
 .It Fl v
 Verbose operation.
