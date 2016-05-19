@@ -263,9 +263,9 @@ keyproc(int netsock, const char *keyfile,
 
 	/* Write that we're ready, then write. */
        
-	if ( ! writeop(netsock, COMM_KEY_STAT, KEY_READY)) 
+	if (writeop(netsock, COMM_KEY_STAT, KEY_READY) <= 0) 
 		goto error;
-	else if ( ! writestr(netsock, COMM_CERT, der64)) 
+	else if (writestr(netsock, COMM_CERT, der64) <= 0) 
 		goto error;
 
 	rc = 1;

@@ -143,7 +143,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	/* Pass revocation right through to fileproc. */
 
 	if (CERT_REVOKE == op) {
-		if (writeop(filesock, COMM_CHAIN_OP, FILE_REMOVE))
+		if (writeop(filesock, COMM_CHAIN_OP, FILE_REMOVE) > 0)
 			rc = 1;
 		goto out;
 	}
@@ -196,7 +196,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 
 	/* Write the CA issuer to the netsock. */
 
-	if ( ! writestr(netsock, COMM_ISSUER, url))
+	if (writestr(netsock, COMM_ISSUER, url) <= 0)
 		goto out;
 
 	/* Read the full-chain back from the netsock. */
@@ -226,9 +226,9 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 			goto out;
 	} 
 
-	if ( ! writeop(filesock, COMM_CHAIN_OP, FILE_CREATE))
+	if (writeop(filesock, COMM_CHAIN_OP, FILE_CREATE) <= 0)
 		goto out;
-	else if ( ! writebuf(filesock, COMM_CHAIN, chain, chainsz))
+	else if (writebuf(filesock, COMM_CHAIN, chain, chainsz) <= 0)
 		goto out;
 
 	/* Next, convert the X509 to a buffer and send that. */
@@ -236,7 +236,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	free(chain);
 	if (NULL == (chain = x509buf(x, &chainsz)))
 		goto out;
-	if ( ! writebuf(filesock, COMM_CSR, chain, chainsz))
+	if (writebuf(filesock, COMM_CSR, chain, chainsz) <= 0)
 		goto out;
 
 	rc = 1;

@@ -155,7 +155,7 @@ chngproc(int netsock, const char *root, int remote)
 
 		/* Write our acknowledgement. */
 
-		if ( ! writeop(netsock, COMM_CHNG_ACK, CHNG_ACK))
+		if (writeop(netsock, COMM_CHNG_ACK, CHNG_ACK) <= 0)
 			goto out;
 	}
 

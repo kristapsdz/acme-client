@@ -166,7 +166,7 @@ revokeproc(int fd, const char *certdir,
 		(void)writeop(fd, COMM_REVOKE_RESP, REVOKE_OK);
 		goto out;
 	} else if (NULL == f && ! revoke) {
-		if (writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP))
+		if (writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP) > 0)
 			rc = 1;
 		goto out;
 	} 
@@ -187,7 +187,7 @@ revokeproc(int fd, const char *certdir,
 
 		/* First, tell netproc we're online. */
 
-		if ( ! writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP)) 
+		if (writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP) <= 0) 
 			goto out;
 
 		if ((len = i2d_X509(x, NULL)) < 0) {
@@ -202,7 +202,7 @@ revokeproc(int fd, const char *certdir,
 		} else if (NULL == (der64 = base64buf_url(der, len))) {
 			warnx("base64buf_url");
 			goto out;
-		} else if (writestr(fd, COMM_CSR, der64)) 
+		} else if (writestr(fd, COMM_CSR, der64) > 0) 
 			rc = 1;
 
 		goto out;
@@ -233,7 +233,7 @@ revokeproc(int fd, const char *certdir,
 
 	/* We can re-submit it given RENEW_ALLOW time before. */
 
-	if ( ! writeop(fd, COMM_REVOKE_RESP, rop))
+	if (writeop(fd, COMM_REVOKE_RESP, rop) <= 0)
 		goto out;
 
 	op = REVOKE__MAX;

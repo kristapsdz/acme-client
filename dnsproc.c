@@ -178,10 +178,10 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 			goto out;
 		if ((vsz = host_dns(look, v)) < 0)
 			goto out;
-		if ( ! writeop(nfd, COMM_DNSLEN, vsz)) 
+		if (writeop(nfd, COMM_DNSLEN, vsz) <= 0) 
 			goto out;
 		for (i = 0; i < (size_t)vsz; i++) 
-			if ( ! writestr(nfd, COMM_DNSA, v[i]))
+			if (writestr(nfd, COMM_DNSA, v[i]) <= 0)
 				goto out;
 
 		free(look);

@@ -164,9 +164,9 @@ urlresolve(int fd, const char *url)
 
 	dodbg("%s: resolving", host);
 
-	if ( ! writeop(fd, COMM_DNS, DNS_LOOKUP))
+	if (writeop(fd, COMM_DNS, DNS_LOOKUP) <= 0)
 		goto out;
-	else if ( ! writestr(fd, COMM_DNSQ, host))
+	else if (writestr(fd, COMM_DNSQ, host) <= 0)
 		goto out;
 
 	if ((lval = readop(fd, COMM_DNSLEN)) < 0)
@@ -328,13 +328,13 @@ sreq(struct conn *c, const char *addr, const char *req, long *code)
 	 * This will create the proper JSON object we need.
 	 */
 
-	if ( ! writeop(c->fd, COMM_ACCT, ACCT_SIGN)) {
+	if (writeop(c->fd, COMM_ACCT, ACCT_SIGN) <= 0) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestr(c->fd, COMM_PAY, req)) {
+	} else if (writestr(c->fd, COMM_PAY, req) <= 0) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestr(c->fd, COMM_NONCE, nonce)) {
+	} else if (writestr(c->fd, COMM_NONCE, nonce) <= 0) {
 		free(nonce);
 		return(0);
 	}
@@ -731,7 +731,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 			goto out;
 		if ( ! dorevoke(&c, paths.revokecert, cert)) 
 			goto out;
-		else if (writeop(cfd, COMM_CSR_OP, CERT_REVOKE))
+		else if (writeop(cfd, COMM_CSR_OP, CERT_REVOKE) > 0)
 			rc = 1;
 		goto out;
 	} 
@@ -755,7 +755,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	 * which will be orchestrated by the chngproc.
 	 */
 
-	if ( ! writeop(afd, COMM_ACCT, ACCT_THUMBPRINT))
+	if (writeop(afd, COMM_ACCT, ACCT_THUMBPRINT) <= 0)
 		goto out;
 	else if (NULL == (thumb = readstr(afd, COMM_THUMB)))
 		goto out;
@@ -763,11 +763,11 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	/* We'll now ask chngproc to build the challenge. */
 
 	for (i = 0; i < altsz; i++) {
-		if ( ! writeop(Cfd, COMM_CHNG_OP, CHNG_SYN))
+		if (writeop(Cfd, COMM_CHNG_OP, CHNG_SYN) <= 0)
 			goto out;
-		else if ( ! writestr(Cfd, COMM_THUMB, thumb))
+		else if (writestr(Cfd, COMM_THUMB, thumb) <= 0)
 			goto out;
-		else if ( ! writestr(Cfd, COMM_TOK, chngs[i].token))
+		else if (writestr(Cfd, COMM_TOK, chngs[i].token) <= 0)
 			goto out;
 
 		/* Read that the challenge has been made. */
@@ -807,7 +807,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	 * The challenge process will remove all of the files.
 	 */
 
-	if ( ! writeop(Cfd, COMM_CHNG_OP, CHNG_STOP))
+	if (writeop(Cfd, COMM_CHNG_OP, CHNG_STOP) <= 0)
 		goto out;
 
 	/* Wait to receive the certificate itself. */
@@ -822,9 +822,9 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	if ( ! docert(&c, paths.newcert, cert)) 
 		goto out;
-	else if ( ! writeop(cfd, COMM_CSR_OP, CERT_UPDATE))
+	else if (writeop(cfd, COMM_CSR_OP, CERT_UPDATE) <= 0)
 		goto out;
-	else if ( ! writebuf(cfd, COMM_CSR, c.buf.buf, c.buf.sz))
+	else if (writebuf(cfd, COMM_CSR, c.buf.buf, c.buf.sz) <= 0)
 		goto out;
 
 	/* 
@@ -842,7 +842,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		goto out;
 	else if ( ! dofullchain(&c, url))
 		goto out;
-	else if ( ! writebuf(cfd, COMM_CHAIN, c.buf.buf, c.buf.sz))
+	else if (writebuf(cfd, COMM_CHAIN, c.buf.buf, c.buf.sz) <= 0)
 		goto out;
 
 	rc = 1;
