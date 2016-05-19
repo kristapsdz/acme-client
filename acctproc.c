@@ -111,6 +111,8 @@ op_thumbprint(int fd, RSA *r)
 	/*
 	 * Compute the SHA256 digest of the thumbprint then
 	 * base64-encode the digest itself.
+	 * If the reader is closed when we write, ignore it (we'll pick
+	 * it up in the read loop).
 	 */
 
 	if (NULL == (dig = malloc(EVP_MAX_MD_SIZE))) {
@@ -131,7 +133,7 @@ op_thumbprint(int fd, RSA *r)
 	} else if (NULL == (dig64 = base64buf_url((char *)dig, digsz))) {
 		warnx("base64buf_url");
 		goto out;
-	} else if (writestr(fd, COMM_THUMB, dig64) <= 0)
+	} else if (writestr(fd, COMM_THUMB, dig64) < 0)
 		goto out;
 
 	rc = 1;
@@ -262,12 +264,16 @@ op_sign(int fd, RSA *r)
 		goto out;
 	}
 
-	/* Write back in the correct JSON format. */
+	/* 
+	 * Write back in the correct JSON format. 
+	 * If the reader is closed, just ignore it (we'll pick it up
+	 * when we next enter the read loop).
+	 */
 
 	if (NULL == (fin = json_fmt_signed(head, prot64, pay64, dig64))) {
 		warnx("json_fmt_signed");
 		goto out;
-	} else if (writestr(fd, COMM_REQ, fin) <= 0)
+	} else if (writestr(fd, COMM_REQ, fin) < 0)
 		goto out;
 
 	rc = 1;
@@ -302,7 +308,7 @@ acctproc(int netsock, const char *acctkey,
 	enum acctop	 op;
 	unsigned char	 rbuf[64];
 	BIGNUM		*bne;
-	int		 rc;
+	int		 rc, cc;
 
 	f = NULL;
 	r = NULL;
@@ -386,7 +392,9 @@ acctproc(int netsock, const char *acctkey,
 
 	/* Notify the netproc that we've started up. */
 
-	if (writeop(netsock, COMM_ACCT_STAT, ACCT_READY) <= 0)
+	if (0 == (cc = writeop(netsock, COMM_ACCT_STAT, ACCT_READY)))
+		rc = 1;
+	if (cc <= 0)
 		goto out;
 
 	/*
