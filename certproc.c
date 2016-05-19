@@ -87,7 +87,7 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	char		*csr, *chain, *url;
 	unsigned char	*csrcp, *chaincp;
 	size_t		 csrsz, chainsz;
-	int		 i, rc, idx;
+	int		 i, rc, idx, cc;
 	enum certop	 op;
 	long		 lval;
 	X509		*x, *chainx;
@@ -140,10 +140,13 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 		goto out;
 	}
 
-	/* Pass revocation right through to fileproc. */
+	/* 
+	 * Pass revocation right through to fileproc. 
+	 * If the reader is terminated, ignore it.
+	 */
 
 	if (CERT_REVOKE == op) {
-		if (writeop(filesock, COMM_CHAIN_OP, FILE_REMOVE) > 0)
+		if (writeop(filesock, COMM_CHAIN_OP, FILE_REMOVE) >= 0)
 			rc = 1;
 		goto out;
 	}
@@ -226,17 +229,26 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 			goto out;
 	} 
 
-	if (writeop(filesock, COMM_CHAIN_OP, FILE_CREATE) <= 0)
+	/* Allow reader termination to just push us out. */
+
+	if (0 == (cc = writeop(filesock, COMM_CHAIN_OP, FILE_CREATE)))
+		rc = 1;
+	if (cc <= 0)
 		goto out;
-	else if (writebuf(filesock, COMM_CHAIN, chain, chainsz) <= 0)
+	if (0 == (cc = writebuf(filesock, COMM_CHAIN, chain, chainsz)))
+		rc = 1;
+	if (cc <= 0)
 		goto out;
 
-	/* Next, convert the X509 to a buffer and send that. */
+	/* 
+	 * Next, convert the X509 to a buffer and send that. 
+	 * Reader failure doesn't change anything.
+	 */
 
 	free(chain);
 	if (NULL == (chain = x509buf(x, &chainsz)))
 		goto out;
-	if (writebuf(filesock, COMM_CSR, chain, chainsz) <= 0)
+	if (writebuf(filesock, COMM_CSR, chain, chainsz) < 0)
 		goto out;
 
 	rc = 1;
