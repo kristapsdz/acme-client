@@ -59,41 +59,41 @@ main(int argc, char *argv[])
 	acctkey = "/etc/letsencrypt/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
-	while (-1 != (c = getopt(argc, argv, "Fnf:c:vC:k:rtu:"))) 
+	while (-1 != (c = getopt(argc, argv, "Fnrtvf:c:C:k:u:"))) 
 		switch (c) {
-		case ('F'):
-			force = 1;
-			break;
-		case ('n'):
-			newacct = 1;
+		case ('c'):
+			certdir = optarg;
 			break;
 		case ('C'):
 			chngdir = optarg;
 			break;
-		case ('k'):
-			keyfile = optarg;
-			break;
-		case ('c'):
-			certdir = optarg;
-			break;
 		case ('f'):
 			acctkey = optarg;
 			break;
-		case ('v'):
-			verbose = verbose ? 2 : 1;
+		case ('F'):
+			force = 1;
+			break;
+		case ('k'):
+			keyfile = optarg;
+			break;
+		case ('n'):
+			newacct = 1;
 			break;
 		case ('r'):
 			revoke = 1;
 			break;
-		case ('u'):
-			nobody = optarg;
-			break;
 		case ('t'):
 			/*
-			 * Undocumented feature.
+			 / Undocumented feature.
 			 * Don't use it.
 			 */
 			remote = 1;
+			break;
+		case ('u'):
+			nobody = optarg;
+			break;
+		case ('v'):
+			verbose = verbose ? 2 : 1;
 			break;
 		default:
 			goto usage;
@@ -170,8 +170,7 @@ main(int argc, char *argv[])
 		c = netproc(key_fds[1], acct_fds[1], 
 			chng_fds[1], cert_fds[1], 
 			dns_fds[1], rvk_fds[1], 
-			newacct, revoke, 
-			nobody_uid, nobody_gid,
+			newacct, revoke, nobody_uid, nobody_gid,
 			(const char *const *)alts, altsz);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
