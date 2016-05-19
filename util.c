@@ -166,47 +166,66 @@ readbuf(int fd, enum comm comm, size_t *sz)
 
 /*
  * Wring a long-value to a communication pipe.
- * Returns zero if the write failed or the pipe is not open, otherwise
- * return non-zero.
+ * Returns 0 if the reader has terminated, -1 on error, 1 on success.
  */
 int
 writeop(int fd, enum comm comm, long op)
 {
-	void	(*sig)(int);
+	void	(*sigfp)(int);
 	ssize_t	 ssz;
-	int	 rc;
+	int	 er;
 
-	rc = 0;
-	/* Catch a closed pipe. */
-	sig = signal(SIGPIPE, sigpipe);
+	sigfp = signal(SIGPIPE, sigpipe);
 
-	if ((ssz = write(fd, &op, sizeof(long))) < 0) 
-		warn("write: %s", comms[comm]);
-	else if ((size_t)ssz != sizeof(long))
+	if ((ssz = write(fd, &op, sizeof(long))) < 0) {
+		if (EPIPE != (er = errno))
+			warn("write: %s", comms[comm]);
+		signal(SIGPIPE, sigfp);
+		return(EPIPE == er ? 0 : -1);
+	}
+
+	signal(SIGPIPE, sigfp);
+
+	if ((size_t)ssz != sizeof(long)) {
 		warnx("short write: %s", comms[comm]);
-	else
-		rc = 1;
+		return(-1);
+	} 
 
-	/* Reinstate signal handler. */
-	signal(SIGPIPE, sig);
-	sig = 0;
-	return(rc);
+	return(1);
 }
 
+/*
+ * Fully write the given buffer.
+ * Returns 0 if the reader has terminated, -1 on error, 1 on success.
+ */
 int
 writebuf(int fd, enum comm comm, const void *v, size_t sz)
 {
 	ssize_t	 ssz;
-	int	 rc;
-	void	(*sig)(int);
+	int	 er, rc;
+	void	(*sigfp)(int);
 
-	rc = 0;
-	/* Catch a closed pipe. */
-	sig = signal(SIGPIPE, sigpipe);
+	rc = -1;
 
-	if ((ssz = write(fd, &sz, sizeof(size_t))) < 0) 
-		warn("write: %s length", comms[comm]);
-	else if ((size_t)ssz != sizeof(size_t))
+	/*
+	 * First, try to write the length.
+	 * If the other end of the pipe has closed, we allow the short
+	 * write to propogate as a return value of zero.
+	 * To detect this, catch SIGPIPE.
+	 */
+
+	sigfp = signal(SIGPIPE, sigpipe);
+
+	if ((ssz = write(fd, &sz, sizeof(size_t))) < 0) {
+		if (EPIPE != (er = errno))
+			warn("write: %s length", comms[comm]);
+		signal(SIGPIPE, sigfp);
+		return(EPIPE == er ? 0 : -1);
+	}
+
+	/* Now write errors cause us to bail. */
+
+	if ((size_t)ssz != sizeof(size_t)) 
 		warnx("short write: %s length", comms[comm]);
 	else if ((ssz = write(fd, v, sz)) < 0)
 		warn("write: %s", comms[comm]);
@@ -215,9 +234,7 @@ writebuf(int fd, enum comm comm, const void *v, size_t sz)
 	else
 		rc = 1;
 
-	/* Reinstate signal handler. */
-	signal(SIGPIPE, sig);
-	sig = 0;
+	signal(SIGPIPE, sigfp);
 	return(rc);
 }
 
