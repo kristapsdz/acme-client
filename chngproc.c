@@ -44,7 +44,7 @@ chngproc(int netsock, const char *root, int remote)
 	char		**fs;
 	size_t		  i, fsz;
 	void		 *pp;
-	int		  fd;
+	int		  fd, cc;
 
 	rc = 0;
 	th = tok = fmt = NULL;
@@ -153,9 +153,15 @@ chngproc(int netsock, const char *root, int remote)
 
 		dodbg("%s/%s: created", root, fs[fsz - 1]);
 
-		/* Write our acknowledgement. */
+		/* 
+		 * Write our acknowledgement. 
+		 * Ignore reader failure.
+		 */
 
-		if (writeop(netsock, COMM_CHNG_ACK, CHNG_ACK) <= 0)
+		cc = writeop(netsock, COMM_CHNG_ACK, CHNG_ACK);
+		if (0 == cc)
+			break;
+		if (cc < 0)
 			goto out;
 	}
 
