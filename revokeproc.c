@@ -104,7 +104,7 @@ int
 revokeproc(int fd, const char *certdir, 
 	uid_t uid, gid_t gid, int force, int revoke)
 {
-	int		 rc;
+	int		 rc, cc;
 	long		 lval;
 	FILE		*f;
 	char		*path, *der, *dercp, *der64;
@@ -158,6 +158,7 @@ revokeproc(int fd, const char *certdir,
 	 * haven't submitted it yet, so obviously we can mark that it
 	 * has expired and we should renew it.
 	 * If we're revoking, however, then that's an error!
+	 * Ignore if the reader isn't reading in either case.
 	 */
 	
 	if (NULL == f && revoke) {
@@ -166,7 +167,7 @@ revokeproc(int fd, const char *certdir,
 		(void)writeop(fd, COMM_REVOKE_RESP, REVOKE_OK);
 		goto out;
 	} else if (NULL == f && ! revoke) {
-		if (writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP) > 0)
+		if (writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP) >= 0)
 			rc = 1;
 		goto out;
 	} 
@@ -185,9 +186,15 @@ revokeproc(int fd, const char *certdir,
 	if (revoke) {
 		dodbg("%s/%s: revocation", certdir, CERT_PEM);
 
-		/* First, tell netproc we're online. */
+		/* 
+		 * First, tell netproc we're online. 
+		 * If they're down, then just exit without warning.
+		 */
 
-		if (writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP) <= 0) 
+		cc = writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP);
+		if (0 == cc)
+			rc = 1;
+		if (cc <= 0)
 			goto out;
 
 		if ((len = i2d_X509(x, NULL)) < 0) {
@@ -231,9 +238,14 @@ revokeproc(int fd, const char *certdir,
 		rop = REVOKE_EXP;
 	}
 
-	/* We can re-submit it given RENEW_ALLOW time before. */
+	/* 
+	 * We can re-submit it given RENEW_ALLOW time before.
+	 * If netproc is down, just exit.
+	 */
 
-	if (writeop(fd, COMM_REVOKE_RESP, rop) <= 0)
+	if (0 == (cc = writeop(fd, COMM_REVOKE_RESP, rop))) 
+		rc = 1;
+	if (cc <= 0)
 		goto out;
 
 	op = REVOKE__MAX;
@@ -249,8 +261,6 @@ revokeproc(int fd, const char *certdir,
 		rc = 1;
 		goto out;
 	}
-
-	/* TODO: if asking for cert, return it for revocation. */
 
 	rc = 1;
 out:
