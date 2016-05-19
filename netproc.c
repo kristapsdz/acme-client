@@ -855,6 +855,7 @@ out:
 	close(afd);
 	close(Cfd);
 	close(dfd);
+	close(rfd);
 	free(cert);
 	free(url);
 	free(thumb);
