@@ -42,7 +42,8 @@ main(int argc, char *argv[])
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
 	pid_t		  pids[COMP__MAX];
-	int		  c, rc, newacct, remote, revoke, force;
+	int		  c, rc, newacct, remote, revoke, force,
+			  staging;
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, altsz;
@@ -53,13 +54,13 @@ main(int argc, char *argv[])
 
 	alts = NULL;
 	nobody = NOBODY_USER;
-	newacct = remote = revoke = verbose = force = 0;
+	newacct = remote = revoke = verbose = force = staging = 0;
 	certdir = "/etc/ssl/letsencrypt";
 	keyfile = "/etc/ssl/letsencrypt/private/privkey.pem";
 	acctkey = "/etc/letsencrypt/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
-	while (-1 != (c = getopt(argc, argv, "Fnrtvf:c:C:k:u:"))) 
+	while (-1 != (c = getopt(argc, argv, "Fnrstvf:c:C:k:u:"))) 
 		switch (c) {
 		case ('c'):
 			certdir = optarg;
@@ -81,6 +82,9 @@ main(int argc, char *argv[])
 			break;
 		case ('r'):
 			revoke = 1;
+			break;
+		case ('s'):
+			staging = 1;
 			break;
 		case ('t'):
 			/*
@@ -170,7 +174,8 @@ main(int argc, char *argv[])
 		c = netproc(key_fds[1], acct_fds[1], 
 			chng_fds[1], cert_fds[1], 
 			dns_fds[1], rvk_fds[1], 
-			newacct, revoke, nobody_uid, nobody_gid,
+			newacct, revoke, staging,
+			nobody_uid, nobody_gid,
 			(const char *const *)alts, altsz);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);

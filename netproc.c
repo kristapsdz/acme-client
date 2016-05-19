@@ -35,11 +35,8 @@
 
 #include "extern.h"
 
-#if 0
-# define URL_CA "https://acme-v01.api.letsencrypt.org/directory"
-#else
-# define URL_CA "https://acme-staging.api.letsencrypt.org/directory"
-#endif
+#define URL_REAL_CA "https://acme-v01.api.letsencrypt.org/directory"
+#define URL_STAGE_CA "https://acme-staging.api.letsencrypt.org/directory"
 #define URL_LICENSE "https://letsencrypt.org" \
 		    "/documents/LE-SA-v1.0.1-July-27-2015.pdf"
 
@@ -626,7 +623,7 @@ dofullchain(struct conn *c, const char *addr)
  */
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
-	int newacct, int revoke, uid_t uid, gid_t gid, 
+	int newacct, int revoke, int staging, uid_t uid, gid_t gid, 
 	const char *const *alts, size_t altsz)
 {
 	int		 rc;
@@ -708,19 +705,19 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		warn("curl_easy_init");
 		goto out;
 	}
+
 	c.fd = afd;
+	c.na = staging ? URL_STAGE_CA : URL_REAL_CA;
 
 	/*
 	 * Look up the domain of the ACME server.
 	 * We'll use this ourselves instead of having libcurl do the DNS
 	 * resolution itself.
 	 */
-	if (NULL == (c.hosts = urlresolve(dfd, URL_CA))) 
+	if (NULL == (c.hosts = urlresolve(dfd, c.na))) 
 		goto out;
-	else if ( ! dodirs(&c, URL_CA, &paths))
+	else if ( ! dodirs(&c, c.na, &paths))
 		goto out;
-
-	c.na = URL_CA;
 
 	/*
 	 * If we're meant to revoke, then wait for revokeproc to send us
