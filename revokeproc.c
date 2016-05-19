@@ -209,7 +209,7 @@ revokeproc(int fd, const char *certdir,
 		} else if (NULL == (der64 = base64buf_url(der, len))) {
 			warnx("base64buf_url");
 			goto out;
-		} else if (writestr(fd, COMM_CSR, der64) > 0) 
+		} else if (writestr(fd, COMM_CSR, der64) >= 0) 
 			rc = 1;
 
 		goto out;
