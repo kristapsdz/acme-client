@@ -143,12 +143,10 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 	/* Pass revocation right through to fileproc. */
 
 	if (CERT_REVOKE == op) {
-		dodbg("revoke certificate");
 		if (writeop(filesock, COMM_CHAIN_OP, FILE_REMOVE))
 			rc = 1;
 		goto out;
 	}
-	dodbg("new certificate");
 
 	/*
 	 * Wait until we receive the DER encoded (signed) certificate

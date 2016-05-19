@@ -115,19 +115,19 @@ fileproc(int certsock, const char *certdir)
 			warn("%s/%s", certdir, CERT_PEM);
 			goto out;
 		} else
-			dodbg("%s: unlinked", CERT_PEM);
+			dodbg("%s/%s: unlinked", certdir, CERT_PEM);
 
 		if (-1 == unlink(CHAIN_PEM) && ENOENT != errno) {
 			warn("%s/%s", certdir, CHAIN_PEM);
 			goto out;
 		} else
-			dodbg("%s: unlinked", CHAIN_PEM);
+			dodbg("%s/%s: unlinked", certdir, CHAIN_PEM);
 
 		if (-1 == unlink(FCHAIN_PEM) && ENOENT != errno) {
 			warn("%s/%s", certdir, FCHAIN_PEM);
 			goto out;
 		} else
-			dodbg("%s: unlinked", FCHAIN_PEM);
+			dodbg("%s/%s: unlinked", certdir, FCHAIN_PEM);
 
 		rc = 1;
 		goto out;
@@ -145,7 +145,7 @@ fileproc(int certsock, const char *certdir)
 	if ( ! serialise(CHAIN_BAK, CHAIN_PEM, ch, chsz, NULL, 0))
 		goto out;
 
-	dodbg("%s: created", CHAIN_PEM);
+	dodbg("%s/%s: created", certdir, CHAIN_PEM);
 
 	/*
 	 * Next, wait until we receive the DER encoded (signed)
@@ -159,7 +159,7 @@ fileproc(int certsock, const char *certdir)
 	if ( ! serialise(CERT_BAK, CERT_PEM, csr, csz, NULL, 0))
 		goto out;
 
-	dodbg("%s: created", CERT_PEM);
+	dodbg("%s/%s: created", certdir, CERT_PEM);
 
 	/*
 	 * Finally, create the full-chain file.
@@ -169,7 +169,7 @@ fileproc(int certsock, const char *certdir)
 	if ( ! serialise(FCHAIN_BAK, FCHAIN_PEM, csr, csz, ch, chsz))
 		goto out;
 
-	dodbg("%s: created", FCHAIN_PEM);
+	dodbg("%s/%s: created", certdir, FCHAIN_PEM);
 
 	rc = 1;
 out:
