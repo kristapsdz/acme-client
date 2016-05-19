@@ -54,6 +54,15 @@ struct	buf {
 };
 
 /*
+ * Used for CURL communications.
+ */
+struct	conn {
+	CURL		  *c; /* CURL connection */
+	int		   fd; /* acctproc handle */
+	struct curl_slist *hosts; /* valid hosts */
+};
+
+/*
  * Reset the contents of a buffer prior to transfer.
  * This can be called regardless of whether buf is NULL.
  */
@@ -236,34 +245,34 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
  * On non-zero return, stuffs the HTTP code into "code".
  */
 static int
-nreq(CURL *c, const char *addr, long *code, 
-	struct json *json, struct buf *buf, struct curl_slist *hosts)
+nreq(struct conn *c, const char *addr, long *code, 
+	struct json *json, struct buf *buf)
 {
 	CURLcode	 res;
 
 	buf_reset(buf);
 	json_reset(json);
-	curl_easy_reset(c);
-	curl_easy_setopt(c, CURLOPT_RESOLVE, hosts);
-	curl_easy_setopt(c, CURLOPT_URL, addr);
-	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_reset(c->c);
+	curl_easy_setopt(c->c, CURLOPT_RESOLVE, c->hosts);
+	curl_easy_setopt(c->c, CURLOPT_URL, addr);
+	curl_easy_setopt(c->c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+	curl_easy_setopt(c->c, CURLOPT_SSL_VERIFYPEER, 0L);
 	if (verbose > 1)
-		curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
+		curl_easy_setopt(c->c, CURLOPT_VERBOSE, 1L);
 	if (NULL != json) {
-		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
-		curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
+		curl_easy_setopt(c->c, CURLOPT_WRITEFUNCTION, jsonbody);
+		curl_easy_setopt(c->c, CURLOPT_WRITEDATA, json);
 	} else if (NULL != buf) {
-		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, netbody);
-		curl_easy_setopt(c, CURLOPT_WRITEDATA, buf);
+		curl_easy_setopt(c->c, CURLOPT_WRITEFUNCTION, netbody);
+		curl_easy_setopt(c->c, CURLOPT_WRITEDATA, buf);
 	}
 
-	if (CURLE_OK != (res = curl_easy_perform(c))) {
+	if (CURLE_OK != (res = curl_easy_perform(c->c))) {
 	      warnx("%s: %s", addr, curl_easy_strerror(res));
 	      return(0);
 	}
 
-	curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, code);
+	curl_easy_getinfo(c->c, CURLINFO_RESPONSE_CODE, code);
 	return(1);
 }
 
@@ -274,9 +283,8 @@ nreq(CURL *c, const char *addr, long *code,
  * and buf is non-NULL, buf is used as an opaque buffer.
  */
 static int
-sreq(int fd, CURL *c, const char *addr, const char *req, 
-	long *code, struct json *json, struct buf *buf,
-	struct curl_slist *hosts)
+sreq(struct conn *c, const char *addr, const char *req, 
+	long *code, struct json *json, struct buf *buf)
 {
 	char		*nonce, *reqsn;
 	CURLcode	 res;
@@ -285,16 +293,16 @@ sreq(int fd, CURL *c, const char *addr, const char *req,
 
 	/* Grab our nonce by querying the CA. */
 
-	curl_easy_reset(c);
-	curl_easy_setopt(c, CURLOPT_RESOLVE, hosts);
-	curl_easy_setopt(c, CURLOPT_URL, URL_CA);
-	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(c, CURLOPT_NOBODY, 1L);
-	curl_easy_setopt(c, CURLOPT_HEADERFUNCTION, netheaders);
-	curl_easy_setopt(c, CURLOPT_HEADERDATA, &nonce);
+	curl_easy_reset(c->c);
+	curl_easy_setopt(c->c, CURLOPT_RESOLVE, c->hosts);
+	curl_easy_setopt(c->c, CURLOPT_URL, URL_CA);
+	curl_easy_setopt(c->c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+	curl_easy_setopt(c->c, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(c->c, CURLOPT_NOBODY, 1L);
+	curl_easy_setopt(c->c, CURLOPT_HEADERFUNCTION, netheaders);
+	curl_easy_setopt(c->c, CURLOPT_HEADERDATA, &nonce);
 
-	if (CURLE_OK != (res = curl_easy_perform(c))) {
+	if (CURLE_OK != (res = curl_easy_perform(c->c))) {
 		warnx("%s: %s", URL_CA, curl_easy_strerror(res));
 		free(nonce);
 		return(0);
@@ -308,46 +316,46 @@ sreq(int fd, CURL *c, const char *addr, const char *req,
 	 * This will create the proper JSON object we need.
 	 */
 
-	if ( ! writeop(fd, COMM_ACCT, ACCT_SIGN)) {
+	if ( ! writeop(c->fd, COMM_ACCT, ACCT_SIGN)) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestr(fd, COMM_PAY, req)) {
+	} else if ( ! writestr(c->fd, COMM_PAY, req)) {
 		free(nonce);
 		return(0);
-	} else if ( ! writestr(fd, COMM_NONCE, nonce)) {
+	} else if ( ! writestr(c->fd, COMM_NONCE, nonce)) {
 		free(nonce);
 		return(0);
 	}
 	free(nonce);
-	if (NULL == (reqsn = readstr(fd, COMM_REQ)))
+	if (NULL == (reqsn = readstr(c->fd, COMM_REQ)))
 		return(0);
 
 	/* Now send the signed payload to the CA. */
 
 	buf_reset(buf);
 	json_reset(json);
-	curl_easy_reset(c);
-	curl_easy_setopt(c, CURLOPT_URL, addr);
-	curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(c, CURLOPT_POSTFIELDS, reqsn);
+	curl_easy_reset(c->c);
+	curl_easy_setopt(c->c, CURLOPT_URL, addr);
+	curl_easy_setopt(c->c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+	curl_easy_setopt(c->c, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(c->c, CURLOPT_POSTFIELDS, reqsn);
 	if (verbose > 1)
-		curl_easy_setopt(c, CURLOPT_VERBOSE, 1L);
+		curl_easy_setopt(c->c, CURLOPT_VERBOSE, 1L);
 	if (NULL != json) {
-		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, jsonbody);
-		curl_easy_setopt(c, CURLOPT_WRITEDATA, json);
+		curl_easy_setopt(c->c, CURLOPT_WRITEFUNCTION, jsonbody);
+		curl_easy_setopt(c->c, CURLOPT_WRITEDATA, json);
 	} else if (NULL != buf) {
-		curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, netbody);
-		curl_easy_setopt(c, CURLOPT_WRITEDATA, buf);
+		curl_easy_setopt(c->c, CURLOPT_WRITEFUNCTION, netbody);
+		curl_easy_setopt(c->c, CURLOPT_WRITEDATA, buf);
 	}
 
-	if (CURLE_OK != (res = curl_easy_perform(c))) {
+	if (CURLE_OK != (res = curl_easy_perform(c->c))) {
 	      warnx("%s: %s", addr, curl_easy_strerror(res));
 	      free(reqsn);
 	      return(0);
 	}
 
-	curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, code);
+	curl_easy_getinfo(c->c, CURLINFO_RESPONSE_CODE, code);
 	free(reqsn);
 	return(1);
 }
@@ -358,8 +366,7 @@ sreq(int fd, CURL *c, const char *addr, const char *req,
  * Returns non-zero on success.
  */
 static int
-donewreg(CURL *c, int fd, struct json *json, const struct capaths *p,
-	struct curl_slist *hosts)
+donewreg(struct conn *c, struct json *json, const struct capaths *p)
 {
 	int	 rc;
 	char	*req;
@@ -370,7 +377,7 @@ donewreg(CURL *c, int fd, struct json *json, const struct capaths *p,
 
 	if (NULL == (req = json_fmt_newreg(URL_LICENSE)))
 		warnx("json_fmt_newreg");
-	else if ( ! sreq(fd, c, p->newreg, req, &lc, json, NULL, hosts))
+	else if ( ! sreq(c, p->newreg, req, &lc, json, NULL))
 		warnx("%s: bad comm", p->newreg);
 	else if (200 != lc && 201 != lc)
 		warnx("%s: bad HTTP: %ld", p->newreg, lc);
@@ -387,8 +394,8 @@ donewreg(CURL *c, int fd, struct json *json, const struct capaths *p,
  * On non-zero exit, fills in "chng" with the challenge.
  */
 static int
-dochngreq(CURL *c, int fd, struct json *json, const char *alt, 
-	struct chng *chng, const struct capaths *p, struct curl_slist *hosts)
+dochngreq(struct conn *c, struct json *json, const char *alt, 
+	struct chng *chng, const struct capaths *p)
 {
 	int	 rc;
 	char	*req;
@@ -399,7 +406,7 @@ dochngreq(CURL *c, int fd, struct json *json, const char *alt,
 
 	if (NULL == (req = json_fmt_newauthz(alt)))
 		warnx("json_fmt_newauthz");
-	else if ( ! sreq(fd, c, p->newauthz, req, &lc, json, NULL, hosts))
+	else if ( ! sreq(c, p->newauthz, req, &lc, json, NULL))
 		warnx("%s: bad comm", p->newauthz);
 	else if (200 != lc && 201 != lc)
 		warnx("%s: bad HTTP: %ld", p->newauthz, lc);
@@ -416,8 +423,8 @@ dochngreq(CURL *c, int fd, struct json *json, const char *alt,
  * Note to the CA that a challenge response is in place.
  */
 static int
-dochngresp(CURL *c, int fd, struct json *json, 
-	const struct chng *chng, const char *th, struct curl_slist *hosts)
+dochngresp(struct conn *c, struct json *json, 
+	const struct chng *chng, const char *th)
 {
 	int	 rc;
 	long	 lc;
@@ -428,7 +435,7 @@ dochngresp(CURL *c, int fd, struct json *json,
 
 	if (NULL == (req = json_fmt_challenge(chng->token, th)))
 		warnx("json_fmt_challenge");
-	else if ( ! sreq(fd, c, chng->uri, req, &lc, json, NULL, hosts))
+	else if ( ! sreq(c, chng->uri, req, &lc, json, NULL))
 		warnx("%s: bad comm", chng->uri);
 	else if (200 != lc && 201 != lc && 202 != lc) 
 		warnx("%s: bad HTTP: %ld", chng->uri, lc);
@@ -445,15 +452,14 @@ dochngresp(CURL *c, int fd, struct json *json,
  * time between checks, but this happens in the caller.
  */
 static int
-dochngcheck(CURL *c, struct json *json, struct chng *chng,
-	struct curl_slist *hosts)
+dochngcheck(struct conn *c, struct json *json, struct chng *chng)
 {
 	int	 cc;
 	long	 lc;
 
 	dodbg("%s: status", chng->uri);
 
-	if ( ! nreq(c, chng->uri, &lc, json, NULL, hosts)) {
+	if ( ! nreq(c, chng->uri, &lc, json, NULL)) {
 		warnx("%s: bad comm", chng->uri);
 		return(0);
 	} else if (200 != lc && 201 != lc && 202 != lc) {
@@ -469,8 +475,7 @@ dochngcheck(CURL *c, struct json *json, struct chng *chng,
 }
 
 static int
-dorevoke(CURL *c, int fd, const char *addr, 
-	const char *cert, struct curl_slist *hosts)
+dorevoke(struct conn *c, const char *addr, const char *cert)
 {
 	char		*req;
 	int		 rc;
@@ -484,7 +489,7 @@ dorevoke(CURL *c, int fd, const char *addr,
 
 	if (NULL == (req = json_fmt_revokecert(cert)))
 		warnx("json_fmt_revokecert");
-	else if ( ! sreq(fd, c, addr, req, &lc, NULL, &buf, hosts))
+	else if ( ! sreq(c, addr, req, &lc, NULL, &buf))
 		warnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc && 409 != lc)
 		warnx("%s: bad HTTP: %ld", addr, lc);
@@ -504,8 +509,7 @@ dorevoke(CURL *c, int fd, const char *addr,
  * This, upon success, will return the signed CA.
  */
 static int
-docert(CURL *c, int fd, const char *addr, struct buf *buf, 
-	const char *cert, struct curl_slist *hosts)
+docert(struct conn *c, const char *addr, struct buf *buf, const char *cert)
 {
 	char	*req;
 	int	 rc;
@@ -516,7 +520,7 @@ docert(CURL *c, int fd, const char *addr, struct buf *buf,
 
 	if (NULL == (req = json_fmt_newcert(cert)))
 		warnx("json_fmt_newcert");
-	else if ( ! sreq(fd, c, addr, req, &lc, NULL, buf, hosts))
+	else if ( ! sreq(c, addr, req, &lc, NULL, buf))
 		warnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc)
 		warnx("%s: bad HTTP: %ld", addr, lc);
@@ -542,22 +546,20 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	int		 rc;
 	size_t		 i;
 	char		*cert, *thumb, *url;
-	CURL		*c;
+	struct conn	 c;
 	struct buf	 buf;
 	struct json	*json;
 	struct capaths	 paths;
 	struct chng 	*chngs;
 	long		 http, lval;
-	struct curl_slist *hosts;
 
 	rc = 0;
 	memset(&paths, 0, sizeof(struct capaths));
 	memset(&buf, 0, sizeof(struct buf));
+	memset(&c, 0, sizeof(struct conn));
 	url = cert = thumb = NULL;
 	json = NULL;
-	c = NULL;
 	chngs = NULL;
-	hosts = NULL;
 
 	/* File-system, user, and sandbox jail. */
 
@@ -618,23 +620,24 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	if (NULL == chngs) {
 		warn("calloc");
 		goto out;
-	} else if (NULL == (c = curl_easy_init())) {
+	} else if (NULL == (c.c = curl_easy_init())) {
 		warn("curl_easy_init");
 		goto out;
 	} else if (NULL == (json = json_alloc())) {
 		warnx("json_alloc");
 		goto out;
 	}
+	c.fd = afd;
 
 	/*
 	 * Look up the domain of the ACME server.
 	 * We'll use this ourselves instead of having libcurl do the DNS
 	 * resolution itself.
 	 */
-	if (NULL == (hosts = urlresolve(dfd, URL_CA))) 
+	if (NULL == (c.hosts = urlresolve(dfd, URL_CA))) 
 		goto out;
 	dodbg("%s: requesting directories", URL_CA);
-	if ( ! nreq(c, URL_CA, &http, json, NULL, hosts)) {
+	if ( ! nreq(&c, URL_CA, &http, json, NULL)) {
 		warnx("%s: bad comm", URL_CA);
 		goto out;
 	} else if (200 != http && 201 != http) {
@@ -655,8 +658,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	if (revoke) {
 		if (NULL == (cert = readstr(rfd, COMM_CSR)))
 			goto out;
-
-		if ( ! dorevoke(c, afd, paths.revokecert, cert, hosts)) 
+		if ( ! dorevoke(&c, paths.revokecert, cert)) 
 			goto out;
 		else if (writeop(cfd, COMM_CSR_OP, CERT_REVOKE))
 			rc = 1;
@@ -666,14 +668,14 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	/* If new, register with the CA server. */
 
-	if (newacct && ! donewreg(c, afd, json, &paths, hosts))
+	if (newacct && ! donewreg(&c, json, &paths))
 		goto out;
 
 	/* Pre-authorise all domains with CA server. */
 
 	for (i = 0; i < altsz; i++)
-		if ( ! dochngreq(c, afd, json, 
-		    alts[i], &chngs[i], &paths, hosts))
+		if ( ! dochngreq(&c, json, 
+		    alts[i], &chngs[i], &paths))
 			goto out;
 
 	/*
@@ -705,7 +707,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 		/* Write to the CA that it's ready. */
 
-		if ( ! dochngresp(c, afd, json, &chngs[i], thumb, hosts))
+		if ( ! dochngresp(&c, json, &chngs[i], thumb))
 			goto out;
 	}
 
@@ -726,7 +728,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 		/* Sleep before every attempt. */
 		sleep(RETRY_DELAY);
-		if ( ! dochngcheck(c, json, &chngs[i], hosts))
+		if ( ! dochngcheck(&c, json, &chngs[i]))
 			goto out;
 	}
 
@@ -748,7 +750,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	 * copy, and ship that into the certificate process for copying.
 	 */
 
-	if ( ! docert(c, afd, paths.newcert, &buf, cert, hosts)) 
+	if ( ! docert(&c, paths.newcert, &buf, cert)) 
 		goto out;
 	else if ( ! writeop(cfd, COMM_CSR_OP, CERT_UPDATE))
 		goto out;
@@ -763,11 +765,11 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	if (NULL == (url = readstr(cfd, COMM_ISSUER)))
 		goto out;
-	curl_slist_free_all(hosts);
-	if (NULL == (hosts = urlresolve(dfd, url))) 
+	curl_slist_free_all(c.hosts);
+	if (NULL == (c.hosts = urlresolve(dfd, url))) 
 		goto out;
 	dodbg("%s: requesting full-chain", url);
-	if ( ! nreq(c, url, &http, NULL, &buf, hosts)) {
+	if ( ! nreq(&c, url, &http, NULL, &buf)) {
 		warnx("%s: bad comm", url);
 		goto out;
 	} else if (200 != http && 201 != http) {
@@ -787,9 +789,9 @@ out:
 	free(url);
 	free(thumb);
 	free(buf.buf);
-	if (NULL != c)
-		curl_easy_cleanup(c);
-	curl_slist_free_all(hosts);
+	if (NULL != c.c)
+		curl_easy_cleanup(c.c);
+	curl_slist_free_all(c.hosts);
 	curl_global_cleanup();
 	json_free(json);
 	if (NULL != chngs)
