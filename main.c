@@ -336,10 +336,10 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_REVOKE]) {
 		proccomp = COMP_REVOKE;
-		free(alts);
 		c = revokeproc(rvk_fds[0], certdir, 
-			nobody_uid, nobody_gid, 
-			force, revoke);
+			nobody_uid, nobody_gid, force, revoke,
+			(const char *const *)alts, altsz);
+		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
