@@ -100,6 +100,10 @@ X509expires(X509 *x)
 	return(mktime(&t));
 }
 
+/*
+ * TODO: see that the domains given the application are the same as
+ * those listed on the certificate.
+ */
 int
 revokeproc(int fd, const char *certdir, 
 	uid_t uid, gid_t gid, int force, int revoke)
@@ -135,23 +139,17 @@ revokeproc(int fd, const char *certdir,
 
 	/* File-system and sandbox jailing. */
 
-	if ( ! sandbox_before()) {
-		warnx("sandbox_before");
+	if ( ! sandbox_before())
 		goto out;
-	}
 
 	ERR_load_crypto_strings();
 
-	if ( ! dropfs(PATH_VAR_EMPTY)) {
-		warnx("dropfs");
+	if ( ! dropfs(PATH_VAR_EMPTY))
 		goto out;
-	} else if ( ! dropprivs(uid, gid)) {
-		warnx("dropprivs");
+	else if ( ! dropprivs(uid, gid))
 		goto out;
-	} else if ( ! sandbox_after()) {
-		warnx("sandbox_after");
+	else if ( ! sandbox_after())
 		goto out;
-	}
 
 	/*
 	 * If we couldn't open the certificate, it doesn't exist so we

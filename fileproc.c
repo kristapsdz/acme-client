@@ -81,16 +81,12 @@ fileproc(int certsock, const char *certdir)
 
 	/* File-system and sandbox jailing. */
 
-	if ( ! sandbox_before()) {
-		warnx("sandbox_before");
+	if ( ! sandbox_before())
 		goto out;
-	} else if ( ! dropfs(certdir)) {
-		warnx("dropfs");
+	else if ( ! dropfs(certdir))
 		goto out;
-	} else if ( ! sandbox_after()) {
-		warnx("sandbox_after");
+	else if ( ! sandbox_after())
 		goto out;
-	}
 
 	/* Read our operation. */
 
