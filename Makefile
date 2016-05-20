@@ -1,3 +1,4 @@
+PREFIX	 = /usr/local
 CFLAGS	+= -g -W -Wall -Wno-deprecated-declarations `curl-config --cflags`
 OBJS 	 = acctproc.o \
 	   base64.o \
