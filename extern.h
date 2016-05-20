@@ -177,7 +177,8 @@ int		 acctproc(int, const char *, int, uid_t, gid_t);
 int		 certproc(int, int, uid_t, gid_t);
 int		 chngproc(int, const char *, int);
 int		 dnsproc(int, uid_t, gid_t);
-int		 revokeproc(int, const char *, uid_t, gid_t, int, int);
+int		 revokeproc(int, const char *, uid_t, gid_t, 
+			int, int, const char *const *, size_t);
 int		 fileproc(int, const char *);
 int		 keyproc(int, const char *, uid_t, gid_t, 
 			const char **, size_t);

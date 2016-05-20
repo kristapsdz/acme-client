@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/param.h>
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -32,6 +33,7 @@
 
 #include <openssl/pem.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 #include <openssl/engine.h>
 
 #include "extern.h"
@@ -100,27 +102,32 @@ X509expires(X509 *x)
 	return(mktime(&t));
 }
 
-/*
- * TODO: see that the domains given the application are the same as
- * those listed on the certificate.
- */
 int
 revokeproc(int fd, const char *certdir, 
-	uid_t uid, gid_t gid, int force, int revoke)
+	uid_t uid, gid_t gid, int force, int revoke,
+	const char *const *alts, size_t altsz)
 {
-	int		 rc, cc;
+	int		 rc, cc, i, extsz, ssz;
 	long		 lval;
 	FILE		*f;
-	char		*path, *der, *dercp, *der64;
+	size_t		*found;
+	char		*path, *der, *dercp, *der64, *san, *str, *tok;
 	X509		*x;
 	enum revokeop	 op, rop;
 	time_t		 t;
 	int		 len;
+	X509_EXTENSION	*ex;
+	ASN1_OBJECT	*obj;
+	BIO		*bio;
+	size_t		 j;
 
+	found = NULL;
+	bio = NULL;
 	der = der64 = NULL;
 	rc = 0;
 	f = NULL;
 	path = NULL;
+	san = NULL;
 	x = NULL;
 
 	/*
@@ -175,6 +182,104 @@ revokeproc(int fd, const char *certdir,
 		goto out;
 	} 
 
+	/* Read out the expiration date. */
+	
+	if ((time_t)-1 == (t = X509expires(x))) {
+		warnx("X509expires");
+		goto out;
+	}
+
+	/*
+	 * Next, the long process to make sure that the SAN entries
+	 * listed with the certificate fully cover those passed on the
+	 * comamnd line.
+	 */
+
+	extsz = NULL != x->cert_info->extensions ? 
+		sk_X509_EXTENSION_num(x->cert_info->extensions) : 0;
+
+	/* Scan til we find the SAN NID. */
+
+	for (i = 0; i < extsz; i++) {
+		ex = sk_X509_EXTENSION_value
+			(x->cert_info->extensions, i);
+		assert(NULL != ex);
+		obj = X509_EXTENSION_get_object(ex);
+		assert(NULL != obj);
+		if (NID_subject_alt_name != OBJ_obj2nid(obj))
+			continue;
+
+		if (NULL != san) {
+			warnx("%s/%s: two SAN entries", 
+				certdir, CERT_PEM);
+			goto out;
+		}
+
+		bio = BIO_new(BIO_s_mem());
+		if (NULL == bio) {
+			warnx("BIO_new");
+			goto out;
+		} else if ( ! X509V3_EXT_print(bio, ex, 0, 0)) {
+			warnx("X509V3_EXT_print");
+			goto out;
+		} else if (NULL == (san = malloc(bio->num_write))) {
+			warn("malloc");
+			goto out;
+		} 
+		ssz = BIO_read(bio, san, bio->num_write);
+		if (ssz < 0 || (unsigned)ssz != bio->num_write) {
+			warnx("BIO_read");
+			goto out;
+		}
+	}
+
+	if (NULL == san) {
+		warnx("%s/%s: does not have a SAN entry", certdir, CERT_PEM);
+		goto out;
+	} 
+	
+	/* An array of buckets: the number of entries found. */
+
+	if (NULL == (found = calloc(altsz, sizeof(size_t)))) {
+		warn("calloc");
+		goto out;
+	}
+
+	/* 
+	 * Parse the SAN line.
+	 * Make sure that all of the domains are represented only once.
+	 */
+
+	str = san;
+	while (NULL != (tok = strsep(&str, ","))) {
+		if ('\0' == *tok)
+			continue;
+		if (strncmp(tok, "DNS:", 4))
+			continue;
+		tok += 4;
+		for (j = 0; j < altsz; j++)
+			if (0 == strcmp(tok, alts[j]))
+				break;
+		if (j == altsz) {
+			warnx("%s/%s: unknown SAN entry: %s",
+				certdir, CERT_PEM, tok);
+			goto out;
+		}
+		if (found[j]++) {
+			warnx("%s/%s: duplicate SAN entry: %s",
+				certdir, CERT_PEM, tok);
+			goto out;
+		}
+	}
+
+	for (j = 0; j < altsz; j++) {
+		if (found[j])
+			continue;
+		warnx("%s/%s: domain not listed: %s",
+			certdir, CERT_PEM, alts[j]);
+		goto out;
+	}
+
 	/*
 	 * If we're going to revoke, write the certificate to the
 	 * netproc in DER and base64-encoded format.
@@ -210,13 +315,6 @@ revokeproc(int fd, const char *certdir,
 		} else if (writestr(fd, COMM_CSR, der64) >= 0) 
 			rc = 1;
 
-		goto out;
-	}
-
-	/* Read out the expiration date. */
-	
-	if ((time_t)-1 == (t = X509expires(x))) {
-		warnx("X509expires");
 		goto out;
 	}
 
@@ -267,8 +365,12 @@ out:
 		fclose(f);
 	if (NULL != x)
 		X509_free(x);
+	if (NULL != bio)
+		BIO_free(bio);
+	free(san);
 	free(path);
 	free(der);
+	free(found);
 	free(der64);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
