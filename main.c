@@ -46,7 +46,7 @@ main(int argc, char *argv[])
 			  staging;
 	extern int	  verbose;
 	extern enum comp  proccomp;
-	size_t		  i, altsz;
+	size_t		  i, altsz, ne;
 	const char	**alts;
 	struct passwd	 *passent;
 	uid_t		  nobody_uid;
@@ -126,6 +126,34 @@ main(int argc, char *argv[])
 		errx(EXIT_FAILURE, "%s: bad user", nobody);
 	nobody_uid = passent->pw_uid;
 	nobody_gid = passent->pw_gid;
+
+	/* 
+	 * Do some quick checks to see if our paths exist. 
+	 * This will be done in the children, but we might as well check
+	 * now before the fork.
+	 */
+
+	ne = 0;
+
+	if (-1 == access(certdir, R_OK)) {
+		warnx("%s: -c directory must exist", certdir);
+		ne++;
+	}
+	if (-1 == access(keyfile, R_OK)) {
+		warnx("%s: -k file must exist", keyfile);
+		ne++;
+	}
+	if (-1 == access(chngdir, R_OK)) {
+		warnx("%s: -C directory must exist", chngdir);
+		ne++;
+	}
+	if (0 == newacct && -1 == access(acctkey, R_OK)) {
+		warnx("%s: -f file must exist", acctkey);
+		ne++;
+	}
+
+	if (ne > 0)
+		exit(EXIT_FAILURE);
 
 	/* Set the zeroth altname as our domain. */
 
