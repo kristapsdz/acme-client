@@ -210,7 +210,7 @@ keyproc(int netsock, const char *keyfile,
 				goto out;
 			}
 			pp = realloc(sans, sansz + strlen(san));
-			if (NULL == sans) {
+			if (NULL == pp) {
 				warn("realloc");
 				goto out;
 			}
