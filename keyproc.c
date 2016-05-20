@@ -99,23 +99,17 @@ keyproc(int netsock, const char *keyfile,
 
 	/* File-system, user, and sandbox jail. */
 	
-	if ( ! sandbox_before()) {
-		warnx("sandbox_before");
+	if ( ! sandbox_before())
 		goto out;
-	}
 
 	ERR_load_crypto_strings();
 
-	if ( ! dropfs(PATH_VAR_EMPTY)) {
-		warnx("dropfs");
+	if ( ! dropfs(PATH_VAR_EMPTY))
 		goto out;
-	} else if ( ! dropprivs(uid, gid)) {
-		warnx("dropprivs");
+	else if ( ! dropprivs(uid, gid))
 		goto out;
-	} else if ( ! sandbox_after()) {
-		warnx("sandbox_after");
+	else if ( ! sandbox_after())
 		goto out;
-	}
 
 	/* 
 	 * Seed our PRNG with data from arc4random().

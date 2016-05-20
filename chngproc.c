@@ -54,16 +54,12 @@ chngproc(int netsock, const char *root, int remote)
 
 	/* File-system and sandbox jailing. */
 
-	if ( ! sandbox_before()) {
-		warnx("sandbox_before");
+	if ( ! sandbox_before())
 		goto out;
-	} else if ( ! dropfs(root)) {
-		warnx("dropfs");
+	else if ( ! dropfs(root))
 		goto out;
-	} else if ( ! sandbox_after()) {
-		warnx("sandbox_after");
+	else if ( ! sandbox_after())
 		goto out;
-	}
 
 	/* 
 	 * Loop while we wait to get a thumbprint and token.

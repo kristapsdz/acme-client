@@ -348,15 +348,13 @@ main(int argc, char *argv[])
 	/* Jail: sandbox, file-system, user. */
 
 	if ( ! sandbox_before())
-		errx(EXIT_FAILURE, "sandbox_before");
-	if (-1 == chroot(PATH_VAR_EMPTY))
-		err(EXIT_FAILURE, "%s: chroot", PATH_VAR_EMPTY);
-	if (-1 == chdir("/"))
-		err(EXIT_FAILURE, "/: chdir");
-	if ( ! dropprivs(nobody_uid, nobody_gid))
-		errx(EXIT_FAILURE, "dropprivs");
-	if ( ! sandbox_after())
-		errx(EXIT_FAILURE, "sandbox_after");
+		exit(EXIT_FAILURE);
+	else if ( ! dropfs(PATH_VAR_EMPTY))
+		exit(EXIT_FAILURE);
+	else if ( ! dropprivs(nobody_uid, nobody_gid))
+		exit(EXIT_FAILURE);
+	else if ( ! sandbox_after())
+		exit(EXIT_FAILURE);
 
 	/*
 	 * Collect our subprocesses.

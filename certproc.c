@@ -106,23 +106,17 @@ certproc(int netsock, int filesock, uid_t uid, gid_t gid)
 
 	/* File-system and sandbox jailing. */
 
-	if ( ! sandbox_before()) {
-		warnx("sandbox_before()");
+	if ( ! sandbox_before())
 		goto out;
-	}
 
 	ERR_load_crypto_strings();
 
-	if ( ! dropfs(PATH_VAR_EMPTY)) {
-		warnx("dropfs");
+	if ( ! dropfs(PATH_VAR_EMPTY))
 		goto out;
-	} else if ( ! dropprivs(uid, gid)) {
-		warnx("dropprivs");
+	else if ( ! dropprivs(uid, gid))
 		goto out;
-	} else if ( ! sandbox_after()) {
-		warnx("sandbox_after");
+	else if ( ! sandbox_after())
 		goto out;
-	}
 
 	/* Read what the netproc wants us to do. */
 

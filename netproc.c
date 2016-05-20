@@ -642,19 +642,14 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	/* File-system, user, and sandbox jail. */
 
-	if ( ! sandbox_before()) {
-		warnx("sandbox_before");
+	if ( ! sandbox_before()) 
 		goto out;
-	} else if ( ! dropfs(PATH_VAR_EMPTY)) {
-		warnx("dropfs");
+	else if ( ! dropfs(PATH_VAR_EMPTY))
 		goto out;
-	} else if ( ! dropprivs(uid, gid)) {
-		warnx("dropprivs");
+	else if ( ! dropprivs(uid, gid))
 		goto out;
-	} else if ( ! sandbox_after()) {
-		warnx("sandbox_after");
+	else if ( ! sandbox_after())
 		goto out;
-	}
 
 	/* 
 	 * Wait until the acctproc, keyproc, and revokeproc have started

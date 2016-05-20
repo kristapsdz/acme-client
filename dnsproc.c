@@ -123,7 +123,7 @@ host_dns(const char *s, char vec[MAX_SERVERS_DNS][INET6_ADDRSTRLEN])
 int
 dnsproc(int nfd, uid_t uid, gid_t gid)
 {
-	int		 rc;
+	int		 rc, cc;
 	char		*look;
 	char		 v[MAX_SERVERS_DNS][INET6_ADDRSTRLEN];
 	long		 lval;
@@ -145,16 +145,12 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 	 * mystery meat.
 	 */
 
-	if ( ! sandbox_before()) {
-		warnx("sandbox_before");
+	if ( ! sandbox_before())
 		goto out;
-	} else if ( ! dropprivs(uid, gid)) {
-		warnx("dropprivs");
+	else if ( ! dropprivs(uid, gid))
 		goto out;
-	} else if ( ! sandbox_after()) {
-		warnx("sandbox_after");
+	else if ( ! sandbox_after()) 
 		goto out;
-	}
 
 	/*
 	 * This is simple: just loop on a request operation, and each
@@ -178,7 +174,9 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 			goto out;
 		if ((vsz = host_dns(look, v)) < 0)
 			goto out;
-		if (writeop(nfd, COMM_DNSLEN, vsz) <= 0) 
+		if (0 == (cc = writeop(nfd, COMM_DNSLEN, vsz)))
+			break;
+		else if (cc < 0)
 			goto out;
 		for (i = 0; i < (size_t)vsz; i++) 
 			if (writestr(nfd, COMM_DNSA, v[i]) <= 0)
