@@ -222,8 +222,8 @@ revokeproc(int fd, const char *certdir,
 		} else if ( ! X509V3_EXT_print(bio, ex, 0, 0)) {
 			warnx("X509V3_EXT_print");
 			goto out;
-		} else if (NULL == (san = malloc(bio->num_write))) {
-			warn("malloc");
+		} else if (NULL == (san = calloc(1, bio->num_write + 1))) {
+			warn("calloc");
 			goto out;
 		} 
 		ssz = BIO_read(bio, san, bio->num_write);

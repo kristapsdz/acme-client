@@ -61,10 +61,13 @@ x509buf(X509 *x, size_t *sz)
 		return(NULL);
 	}
 
-	/* Now convert bio to string. */
+	/* 
+	 * Now convert bio to string. 
+	 * Make into nil-terminated, just in case.
+	 */
 
-	if (NULL == (p = malloc(bio->num_write))) {
-		warn("malloc");
+	if (NULL == (p = calloc(1, bio->num_write + 1))) {
+		warn("calloc");
 		BIO_free(bio);
 		return(NULL);
 	} 
