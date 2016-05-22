@@ -165,7 +165,7 @@ struct	capaths {
 	char		*revokecert; /* revoke certificate */
 };
 
-struct	json;
+struct	jsmnn;
 
 __BEGIN_DECLS
 
@@ -219,14 +219,13 @@ char		*base64buf_url(const char *, size_t);
  * JSON parsing routines.
  * Keep this all in on place, though it's only used by one file.
  */
-struct json	*json_parse(const char *, size_t);
-void		 json_reset(struct json *);
-void		 json_free(struct json *);
-int		 json_parse_response(struct json *);
+struct jsmnn	*json_parse(const char *, size_t);
+void		 json_free(struct jsmnn *);
+int		 json_parse_response(struct jsmnn *);
 void		 json_free_challenge(struct chng *);
-int		 json_parse_challenge(struct json *, struct chng *);
+int		 json_parse_challenge(struct jsmnn *, struct chng *);
 void		 json_free_capaths(struct capaths *);
-int		 json_parse_capaths(struct json *, struct capaths *);
+int		 json_parse_capaths(struct jsmnn *, struct capaths *);
 
 char		*json_fmt_challenge(const char *, const char *);
 char		*json_fmt_newauthz(const char *);

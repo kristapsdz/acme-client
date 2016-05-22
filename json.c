@@ -26,38 +26,224 @@
 #include <string.h>
 #include <unistd.h>
 
-#ifdef __linux__
-# include <json/json.h>
-#else
-# include <json-c/json.h>
-#endif
-
+#include "jsmn.h"
 #include "extern.h"
 
+struct	jsmnp;
+
 /*
- * The ACME server always serves up JSON.
- * This is used to parse the response as it comes over the wire.
+ * A node in the JSMN parse tree.
+ * Each of this corresponds to an object in the original JSMN token
+ * list, although the contents have been extracted properly.
  */
-struct	json {
-	struct json_tokener	*tok; /* tokeniser */
-	struct json_object	*obj; /* result (NULL if pending) */
+struct 	jsmnn {
+	struct parse	*p; /* parser object */
+	union {
+		char *str; /* JSMN_PRIMITIVE, JSMN_STRING */
+		struct jsmnp *obj; /* JSMN_OBJECT */
+		struct jsmnn **array; /* JSMN_ARRAY */
+	} d;
+	size_t		 fields; /* entries in "d" */
+	jsmntype_t	 type; /* type of node */
 };
+
+/*
+ * Objects consist of node pairs: the left-hand side (before the colon)
+ * and the right-hand side---the data.
+ */
+struct	jsmnp {
+	struct jsmnn	*lhs; /* left of colon */
+	struct jsmnn	*rhs; /* right of colon */
+};
+
+/*
+ * Object for converting the JSMN token array into a tree.
+ */
+struct	parse {
+	struct jsmnn	*nodes; /* all nodes */
+	size_t		 cur; /* current number */
+	size_t		 max; /* nodes in "nodes" */
+};
+
+/*
+ * Recursive part for convertin a JSMN token array into a tree.
+ * See "example/jsondump.c" for its construction (it's the same except
+ * for how it handles allocation errors).
+ */
+static ssize_t
+build(struct parse *parse, struct jsmnn **np, 
+	jsmntok_t *t, const char *js, size_t sz)
+{
+	size_t	 	 i, j;
+	struct jsmnn	*n;
+	ssize_t		 tmp;
+
+	if (0 == sz)
+		return(0);
+
+	assert(parse->cur < parse->max);
+	n = *np = &parse->nodes[parse->cur++];
+	n->p = parse;
+	n->type = t->type;
+
+	switch (t->type) {
+	case (JSMN_STRING):
+		/* FALLTHROUGH */
+	case (JSMN_PRIMITIVE):
+		n->fields = 1;
+		n->d.str = strndup
+			(js + t->start, 
+			 t->end - t->start);
+		if (NULL == n->d.str) 
+			break;
+		return(1);
+	case (JSMN_OBJECT):
+		n->fields = t->size;
+		n->d.obj = calloc(n->fields, 
+			sizeof(struct jsmnp));
+		if (NULL == n->d.obj)
+			break;
+		for (i = j = 0; i < (size_t)t->size; i++) {
+			tmp = build(parse, 
+				&n->d.obj[i].lhs, 
+				t + 1 + j, js, sz - j);
+			if (tmp < 0)
+				break;
+			j += tmp;
+			tmp = build(parse, 
+				&n->d.obj[i].rhs, 
+				t + 1 + j, js, sz - j);
+			if (tmp < 0)
+				break;
+			j += tmp;
+		}
+		if (i < (size_t)t->size)
+			break;
+		return(j + 1);
+	case (JSMN_ARRAY):
+		n->fields = t->size;
+		n->d.array = calloc(n->fields, 
+			sizeof(struct jsmnp *));
+		if (NULL == n->d.array)
+			break;
+		for (i = j = 0; i < (size_t)t->size; i++) {
+			tmp = build(parse, 
+				&n->d.array[i], 
+				t + 1 + j, js, sz - j);
+			if (tmp < 0)
+				break;
+			j += tmp;
+		}
+		if (i < (size_t)t->size)
+			break;
+		return(j + 1);
+	default:
+		break;
+	}
+
+	return(-1);
+}
+
+/*
+ * Fully free up a parse sequence.
+ * This handles all nodes sequentially, not recursively.
+ */
+static void
+jsmnparse_free(struct parse *p)
+{
+	size_t	 i;
+
+	if (NULL == p)
+		return;
+	for (i = 0; i < p->max; i++)
+		if (JSMN_ARRAY == p->nodes[i].type)
+			free(p->nodes[i].d.array);
+		else if (JSMN_OBJECT == p->nodes[i].type)
+			free(p->nodes[i].d.obj);
+		else if (JSMN_PRIMITIVE == p->nodes[i].type)
+			free(p->nodes[i].d.str);
+		else if (JSMN_STRING == p->nodes[i].type)
+			free(p->nodes[i].d.str);
+	free(p->nodes);
+	free(p);
+}
+
+/*
+ * Allocate a tree representation of "t".
+ * This returns NULL on allocation failure, in which case all resources
+ * allocated along the way are freed already.
+ */
+struct jsmnn *
+jsmntree_alloc(jsmntok_t *t, const char *js, size_t sz)
+{
+	struct jsmnn	*first;
+	struct parse	*p;
+
+	p = calloc(1, sizeof(struct parse));
+	if (NULL == p)
+		return(NULL);
+
+	p->max = sz;
+	p->nodes = calloc(p->max, sizeof(struct jsmnn));
+	if (NULL == p->nodes) {
+		free(p);
+		return(NULL);
+	}
+
+	if (build(p, &first, t, js, sz) < 0) {
+		jsmnparse_free(p);
+		first = NULL;
+	}
+
+	return(first);
+}
+
+/*
+ * Call through to free parse contents.
+ */
+void
+json_free(struct jsmnn *first)
+{
+
+	if (NULL != first)
+		jsmnparse_free(first->p);
+}
+
+/*
+ * Just check that the array object is in fact an object.
+ */
+static struct jsmnn *
+json_getarrayobj(struct jsmnn *n)
+{
+
+	return (JSMN_OBJECT != n->type ? NULL : n);
+}
 
 /*
  * Extract an array from the returned JSON object, making sure that it's
  * the correct type.
  * Returns NULL on failure.
  */
-static json_object *
-json_getarray(json_object *parent, const char *name)
+static struct jsmnn *
+json_getarray(struct jsmnn *n, const char *name)
 {
-	json_object	*p;
+	size_t	 	 i;
 
-	if (json_object_object_get_ex(parent, name, &p) &&
-	    json_type_array == json_object_get_type(p))
-		return(p);
-
-	return(NULL);
+	if (JSMN_OBJECT != n->type)
+		return(NULL);
+	for (i = 0; i < n->fields; i++) {
+		if (JSMN_STRING != n->d.obj[i].lhs->type &&
+		    JSMN_PRIMITIVE != n->d.obj[i].lhs->type)
+			continue;
+		else if (strcmp(name, n->d.obj[i].lhs->d.str))
+			continue;
+		break;
+	}
+	if (i == n->fields)
+		return(NULL);
+	if (JSMN_ARRAY != n->d.obj[i].rhs->type)
+		return(NULL);
+	return(n->d.obj[i].rhs);
 }
 
 /*
@@ -66,60 +252,35 @@ json_getarray(json_object *parent, const char *name)
  * Returns NULL on failure.
  */
 static char *
-json_getstr(json_object *parent, const char *name)
+json_getstr(struct jsmnn *n, const char *name)
 {
-	json_object	*p;
+	size_t	 	 i;
 	char		*cp;
 
-	if (json_object_object_get_ex(parent, name, &p) &&
-	    json_type_string == json_object_get_type(p) &&
-	    NULL != (cp = strdup(json_object_get_string(p))))
-		return(cp);
-
-	return(NULL);
-}
-
-/*
- * Initialise the JSON object we're going to use multiple time in
- * communicating with the ACME server.
- */
-static struct json *
-json_alloc(void)
-{
-	struct json	*p;
-
-	if (NULL == (p = calloc(1, sizeof(struct json))))
+	if (JSMN_OBJECT != n->type)
+		return(NULL);
+	for (i = 0; i < n->fields; i++) {
+		if (JSMN_STRING != n->d.obj[i].lhs->type &&
+		    JSMN_PRIMITIVE != n->d.obj[i].lhs->type)
+			continue;
+		else if (strcmp(name, n->d.obj[i].lhs->d.str))
+			continue;
+		break;
+	}
+	if (i == n->fields)
+		return(NULL);
+	if (JSMN_STRING != n->d.obj[i].rhs->type &&
+	    JSMN_PRIMITIVE != n->d.obj[i].rhs->type)
 		return(NULL);
 
-	if (NULL == (p->tok = json_tokener_new())) {
-		free(p);
-		return(NULL);
-	}
-
-	return(p);
+	cp = strdup(n->d.obj[i].rhs->d.str);
+	if (NULL == cp)
+		warn("strdup");
+	return(cp);
 }
 
 /*
- * Reset the JSON object between communications with the ACME server.
- * This should be called prior to each invocation, and can be called
- * multiple times around json_free and json_alloc.
- * It's ok for p to be NULL.
- */
-void
-json_reset(struct json *p)
-{
-
-	if (NULL == p)
-		return;
-	json_tokener_reset(p->tok);
-	if (NULL != p->obj) {
-		json_object_put(p->obj);
-		p->obj = NULL;
-	}
-}
-
-/*
- * Completely free the challeng response body.
+ * Completely free the challenge response body.
  */
 void
 json_free_challenge(struct chng *p)
@@ -131,34 +292,18 @@ json_free_challenge(struct chng *p)
 }
 
 /*
- * Completely free the paths response body.
- */
-void
-json_free(struct json *p)
-{
-
-	if (NULL == p)
-		return;
-	if (NULL != p->tok)
-		json_tokener_free(p->tok);
-	if (NULL != p->obj)
-		json_object_put(p->obj);
-	free(p);
-}
-
-/*
  * Parse the response from the ACME server when we're waiting to see
  * whether the challenge has been ok.
  */
 int
-json_parse_response(struct json *json)
+json_parse_response(struct jsmnn *n)
 {
 	char		*resp;
 	int		 rc;
 
-	if (NULL == json->obj)
+	if (NULL == n)
 		return(-1);
-	if (NULL == (resp = json_getstr(json->obj, "status")))
+	if (NULL == (resp = json_getstr(n, "status")))
 		return(-1);
 
 	if (0 == strcmp(resp, "valid")) 
@@ -178,22 +323,27 @@ json_parse_response(struct json *json)
  * We only care about the HTTP-01 response.
  */
 int
-json_parse_challenge(struct json *json, struct chng *p)
+json_parse_challenge(struct jsmnn *n, struct chng *p)
 {
-	json_object	*array, *obj;
-	int		 sz, i, rc;
+	struct jsmnn	*array, *obj;
+	size_t		 i;
+	int		 rc;
 	char		*type;
 
-	if (NULL == json->obj)
+	if (NULL == n)
 		return(0);
 
-	array = json_getarray(json->obj, "challenges");
+	array = json_getarray(n, "challenges");
 	if (NULL == array)
 		return(0);
-	sz = json_object_array_length(array);
-	for (i = 0; i < sz; i++) {
-		obj = json_object_array_get_idx(array, i);
+
+	for (i = 0; i < array->fields; i++) {
+		obj = json_getarrayobj(array->d.array[i]);
+		if (NULL == obj)
+			continue;
 		type = json_getstr(obj, "type");
+		if (NULL == type)
+			continue;
 		rc = strcmp(type, "http-01");
 		free(type);
 		if (rc)
@@ -209,18 +359,19 @@ json_parse_challenge(struct json *json, struct chng *p)
 
 /*
  * Extract the CA paths from the JSON response object.
+ * Return zero on failure, non-zero on success.
  */
 int
-json_parse_capaths(struct json *json, struct capaths *p)
+json_parse_capaths(struct jsmnn *n, struct capaths *p)
 {
 
-	if (NULL == json->obj)
+	if (NULL == n)
 		return(0);
 
-	p->newauthz = json_getstr(json->obj, "new-authz");
-	p->newcert = json_getstr(json->obj, "new-cert");
-	p->newreg = json_getstr(json->obj, "new-reg");
-	p->revokecert = json_getstr(json->obj, "revoke-cert");
+	p->newauthz = json_getstr(n, "new-authz");
+	p->newcert = json_getstr(n, "new-cert");
+	p->newreg = json_getstr(n, "new-reg");
+	p->revokecert = json_getstr(n, "revoke-cert");
 
 	return(NULL != p->newauthz &&
 	       NULL != p->newcert &&
@@ -243,30 +394,47 @@ json_free_capaths(struct capaths *p)
 }
 
 /*
- * Parse an HTTP response body.
+ * Parse an HTTP response body from a buffer of size "sz".
+ * Returns an opaque pointer on success, otherwise NULL on error.
  */
-struct json *
+struct jsmnn *
 json_parse(const char *buf, size_t sz)
 {
-	enum json_tokener_error  er;
-	struct json		*json;
-
-	if (NULL == (json = json_alloc())) {
-		warnx("json_alloc");
-		return(NULL);
-	}
+	struct jsmnn	*n;
+	jsmn_parser	 p;
+	jsmntok_t	*tok;
+	int		 r;
+	size_t		 tokcount;
 	
-	json->obj = json_tokener_parse_ex(json->tok, buf, sz);
-	er = json_tokener_get_error(json->tok);
-	if (er != json_tokener_success) {
-		/* According to their docs... */
-		warnx("json_tokener_parse_ex: %s", 
-			json_tokener_error_desc(er));
-		json_free(json);
+	jsmn_init(&p);
+	tokcount = 128;
+
+	/* Do this until we don't need any more tokens. */
+again:
+	tok = calloc(tokcount, sizeof(jsmntok_t));
+	if (NULL == tok) {
+		warn("calloc");
 		return(NULL);
 	}
 
-	return(json);
+	/* Actually try to parse the JOSN into the tokens. */
+
+	r = jsmn_parse(&p, buf, sz, tok, tokcount);
+	if (r < 0 && JSMN_ERROR_NOMEM == r) {
+		tokcount *= 2;
+		free(tok);
+		goto again;
+	} else if (r < 0) {
+		warnx("jsmn_parse: %d", r);
+		free(tok);
+		return(NULL);
+	}
+
+	/* Now parse the tokens into a tree. */
+
+	n = jsmntree_alloc(tok, buf, r);
+	free(tok);
+	return(n);
 }
 
 /*

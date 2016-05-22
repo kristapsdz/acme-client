@@ -410,7 +410,7 @@ dochngreq(struct conn *c, const char *alt,
 	int		 rc;
 	char		*req;
 	long		 lc;
-	struct json	*j;
+	struct jsmnn	*j;
 
 	j = NULL;
 	rc = 0;
@@ -474,7 +474,7 @@ dochngcheck(struct conn *c, struct chng *chng)
 {
 	int		 cc;
 	long		 lc;
-	struct json	*j;
+	struct jsmnn	*j;
 
 	dodbg("%s: status", chng->uri);
 
@@ -567,7 +567,7 @@ docert(struct conn *c, const char *addr, const char *cert)
 static int
 dodirs(struct conn *c, const char *addr, struct capaths *paths)
 {
-	struct json	*j;
+	struct jsmnn	*j;
 	long		 lc;
 	int		 rc;
 
