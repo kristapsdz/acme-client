@@ -19,5 +19,9 @@ Feature requests will be ignored unless joined by a patch.
 
 ## License
 
-All sources use the ISC (like OpenBSD) license.
+Sources use the ISC (like OpenBSD) license.
 See the [LICENSE.md](LICENSE.md) file for details.
+
+The [jsmn.c](jsmn.c) and [jsmn.h](jsmn.h) files use the MIT license.
+See [https://github.com/zserge/jsmn](https://github.com/zserge/jsmn) for
+details.
