@@ -271,6 +271,9 @@ again:
 
 	tls_config_set_protocols(http->cfg, TLS_PROTOCOLS_ALL);
 
+	/* FIXME: is this necessary? */
+	tls_config_insecure_noverifycert(http->cfg);
+
 	if (-1 == tls_config_set_ciphers(http->cfg, "compat")) {
 	        warn("tls_config_set_ciphers");
 		goto err;
@@ -285,8 +288,9 @@ again:
 
 	if (0 != tls_connect_socket
 	     (http->ctx, http->fd, http->host)) {
-		warnx("%s: tls_connect_socket: %s", 
-			http->src.ip, tls_error(http->ctx));
+		warnx("%s: tls_connect_socket: %s, %s", 
+			http->src.ip, http->host, 
+			tls_error(http->ctx));
 		goto err;
 	}
 
