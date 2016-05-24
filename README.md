@@ -2,14 +2,14 @@
 
 *letskencrypt* is yet another [Let's Encrypt](https://letsencrypt.org)
 client, but one with a strong focus on security.  **It is still under
-development**. 
+development**.
 
-See [kristaps.bsd.lv/letskencrypt](https://kristaps.bsd.lv/letskencrypt) for
-complete documentation and stable releases.
-
-This repository is for the [OpenBSD](http://www.openbsd.org) version and
-requires OpenBSD 5.9 or greater.  For the portable version (Mac OS X,
-Linux, FreeBSD, older OpenBSD) see
+Please see
+[kristaps.bsd.lv/letskencrypt](https://kristaps.bsd.lv/letskencrypt) for
+stable releases: this repository is for current development of the the
+[OpenBSD](http://www.openbsd.org) version, requiring requires OpenBSD
+5.9 or greater.  For the portable version (Mac OS X, Linux, FreeBSD,
+older OpenBSD) see
 [letskencrypt-portable](https://github.com/kristapsdz/letskencrypt-portable).
 
 This repository mirrors the master CVS repository: any source changes
