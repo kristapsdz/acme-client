@@ -31,27 +31,8 @@
 #include <tls.h>
 #include <unistd.h>
 
+#include "http.h"
 #include "extern.h"
-
-struct	http;
-
-struct	source {
-	int	 family; /* 4 (PF_INET) or 6 (PF_INET6) */
-	char	*ip; /* IPV4 or IPV6 address */
-};
-
-typedef	ssize_t (*writefp)(const void *, size_t, const struct http *);
-typedef	ssize_t (*readfp)(char *, size_t, const struct http *);
-
-/* 
- * HTTP/S header pair.
- * There's also a cooked-up pair, "Status", with the status code.
- * Both strings are nil-terminated.
- */
-struct	httphead {
-	const char	*key;
-	const char	*val;
-};
 
 /*
  * A buffer for transferring HTTP/S data.
@@ -316,21 +297,33 @@ err:
 }
 
 struct httpxfer *
-http_open(const struct http *http)
+http_open(const struct http *http, const void *p, size_t psz)
 {
 	char		*req;
 	int		 c;
 	struct httpxfer	*trans;
 
-	c = asprintf(&req, 
-		"GET %s HTTP/1.0\r\n"
-		"Host: %s\r\n"
-		"\r\n",
-		http->path, http->host);
+	if (NULL == p) {
+		c = asprintf(&req, 
+			"GET %s HTTP/1.0\r\n"
+			"Host: %s\r\n"
+			"\r\n",
+			http->path, http->host);
+	} else {
+		c = asprintf(&req, 
+			"POST %s HTTP/1.0\r\n"
+			"Host: %s\r\n"
+			"Content-Length: %zu\r\n"
+			"\r\n",
+			http->path, http->host, psz);
+	}
 	if (-1 == c) {
 		warn("asprintf");
 		return(NULL);
 	} else if ( ! http_write(req, c, http)) {
+		free(req);
+		return(NULL);
+	} else if (NULL != p && ! http_write(p, psz, http)) {
 		free(req);
 		return(NULL);
 	}
@@ -370,6 +363,10 @@ http_body_read(const struct http *http,
 	char		 buf[BUFSIZ];
 	ssize_t		 ssz;
 	void		*pp;
+	size_t		 szp;
+
+	if (NULL == sz)
+		sz = &szp;
 
 	/* Have we already parsed this? */
 
@@ -401,6 +398,48 @@ http_body_read(const struct http *http,
 	return(trans->bbuf);
 }
 
+struct httphead *
+http_head_get(const char *v, struct httphead *h, size_t hsz)
+{
+	size_t	 i;
+
+	for (i = 0; i < hsz; i++) {
+		if (strcmp(h[i].key, v))
+			continue;
+		return(&h[i]);
+	}
+	return(NULL);
+}
+
+/*
+ * Look through the headers and determine our HTTP code.
+ * This will return -1 on failure, otherwise the code.
+ */
+int
+http_head_status(const struct http *http,
+	struct httphead *h, size_t sz)
+{
+	int		 rc;
+	unsigned int	 code;
+	struct httphead *st;
+
+	if (NULL == (st = http_head_get("Status", h, sz))) {
+		warnx("%s: no status header", http->src.ip);
+		return(-1);
+	}
+
+	rc = sscanf(st->val, "%*s %u %*s", &code);
+	if (rc < 0) {
+		warn("sscanf");
+		return(-1);
+	} else if (1 != rc) {
+		warnx("%s: cannot convert status header",
+			http->src.ip);
+		return(-1);
+	}
+	return(code);
+}
+
 /*
  * Parse headers from the transfer.
  * Malformed headers are skipped.
@@ -414,11 +453,15 @@ http_body_read(const struct http *http,
  * internally, this returns NULL.
  */
 struct httphead *
-http_head_parse(struct httpxfer *trans, size_t *sz)
+http_head_parse(const struct http *http,
+	struct httpxfer *trans, size_t *sz)
 {
-	size_t		 hsz;
+	size_t		 hsz, szp;
 	struct httphead	*h;
 	char		*cp, *ep, *ccp, *buf;
+
+	if (NULL == sz)
+		sz = &szp;
 
 	/*
 	 * If we've already parsed the headers, return the
@@ -475,8 +518,11 @@ http_head_parse(struct httpxfer *trans, size_t *sz)
 		}
 
 		/* Skip bad headers. */
-		if (NULL == (ccp = strchr(cp, ':')))
+		if (NULL == (ccp = strchr(cp, ':'))) {
+			warnx("%s: header without separator",
+				http->src.ip);
 			continue;
+		}
 
 		*ccp++ = '\0';
 		while (isspace((int)*ccp))
@@ -506,6 +552,10 @@ http_head_read(const struct http *http,
 	ssize_t		 ssz;
 	char		*ep;
 	void		*pp;
+	size_t		 szp;
+
+	if (NULL == sz)
+		sz = &szp;
 
 	/* Have we already parsed this? */
 
@@ -578,52 +628,107 @@ http_head_read(const struct http *http,
 	return(trans->hbuf);
 }
 
+void
+http_get_free(struct httpget *g)
+{
+
+	if (NULL == g)
+		return;
+	http_close(g->xfer);
+	http_free(g->http);
+	free(g);
+}
+
+struct httpget *
+http_get(const struct source *addrs, size_t addrsz,
+	const char *domain, short port, const char *path,
+	const void *post, size_t postsz)
+{
+	struct http	*h;
+	struct httpxfer	*x;
+	struct httpget	*g;
+	struct httphead	*head;
+	size_t		 headsz;
+	int		 code;
+
+	h = http_alloc(addrs, addrsz, domain, port, path);
+	if (NULL == h)
+		return(NULL);
+
+	if (NULL == (x = http_open(h, post, postsz))) {
+		http_free(h);
+		return(NULL);
+	} else if (NULL == http_head_read(h, x, NULL)) {
+		http_close(x);
+		http_free(h);
+		return(NULL);
+	} else if (NULL == http_body_read(h, x, NULL)) {
+		http_close(x);
+		http_free(h);
+		return(NULL);
+	} 
+	
+	if (NULL == (head = http_head_parse(h, x, &headsz))) {
+		http_close(x);
+		http_free(h);
+		return(NULL);
+	} else if ((code = http_head_status(h, head, headsz)) < 0) {
+		http_close(x);
+		http_free(h);
+		return(NULL);
+	}
+
+	if (NULL == (g = calloc(1, sizeof(struct httpget)))) {
+		warn("calloc");
+		http_close(x);
+		http_free(h);
+		return(NULL);
+	}
+
+	g->code = code;
+	g->xfer = x;
+	g->http = h;
+	return(g);
+}
+
 #if 0
 int
 main(void)
 {
-	struct http	*h;
-	struct httpxfer	*x;
-	char		*body, *head;
-	size_t		 bodysz, headsz;
+	struct httpget	*g;
+	struct httphead	*httph;
+	size_t		 i, httphsz;
 	struct source	 addrs[2];
+	size_t		 addrsz;
 
-	/*addrs[0].ip = "2a00:1450:400a:806::2004";
-	addrs[0].family = 6;
-	addrs[1].ip = "193.135.3.123";
-	addrs[1].family = 4;*/
+#if 0
 	addrs[0].ip = "127.0.0.1";
 	addrs[0].family = 4;
+	addrsz = 1;
+#else
+	addrs[0].ip = "2a00:1450:400a:806::2004";
+	addrs[0].family = 6;
+	addrs[1].ip = "193.135.3.123";
+	addrs[1].family = 4;
+	addrsz = 2;
+#endif
 
-	h = http_alloc(addrs, 1, 
-		"localhost", 80, "/index.html");
+#if 0
+	g = http_get(addrs, addrsz, "localhost", 80, "/index.html");
+#else
+	g = http_get(addrs, addrsz, "www.google.ch", 80, "/index.html", NULL, 0);
+#endif
 
-	if (NULL == h) 
-		errx(EXIT_FAILURE, "http_alloc");
+	if (NULL == g) 
+		errx(EXIT_FAILURE, "http_get");
 
-	if (NULL == (x = http_open(h))) {
-		warnx("http_open");
-		http_free(h);
-		return(EXIT_FAILURE);
-	}
+	httph = http_head_parse(g->http, g->xfer, &httphsz);
+	warnx("code: %d", g->code);
 
-	if (NULL == (head = http_head_read(h, x, &headsz))) {
-		warnx("http_head_read");
-		http_close(x);
-		http_free(h);
-		return(EXIT_FAILURE);
-	} else if (NULL == (body = http_body_read(h, x, &bodysz))) {
-		warnx("http_body_read");
-		http_close(x);
-		http_free(h);
-		return(EXIT_FAILURE);
-	}
+	for (i = 0; i < httphsz; i++) 
+		warnx("head: [%s]=[%s]", httph[i].key, httph[i].val);
 
-	warnx("head: [%.*s]", (int)headsz, head);
-	warnx("body: [%.*s]", (int)bodysz, body);
-
-	http_close(x);
-	http_free(h);
+	http_get_free(g);
 	return(EXIT_SUCCESS);
 }
 #endif
