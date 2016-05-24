@@ -64,8 +64,9 @@ static	const char *const comms[COMM__MAX] = {
 	"chain-op", /* COMM_CHAIN_OP */
 	"dns", /* COMM_DNS */
 	"dnsq", /* COMM_DNSQ */
-	"dnsa", /* COMM_DNSA */
-	"dnslen", /* COMM_DNSLEN */
+	"dns-address", /* COMM_DNSA */
+	"dns-family", /* COMM_DNSF */
+	"dns-length", /* COMM_DNSLEN */
 	"keyproc-status", /* COMM_KEY_STAT */
 	"revoke-op", /* COMM_REVOKE_OP */
 	"revoke-check", /* COMM_REVOKE_CHECK */
