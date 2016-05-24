@@ -19,6 +19,7 @@
 #endif
 
 #include <sys/socket.h>
+#include <sys/param.h>
 #include <arpa/inet.h>
 
 #include <ctype.h>
