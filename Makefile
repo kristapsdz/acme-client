@@ -18,7 +18,7 @@ OBJS 	 = acctproc.o \
 	   util.o
 
 letskencrypt: $(OBJS)
-	$(CC) -o $@ $(OBJS) -tls -lssl -lcrypto
+	$(CC) -o $@ $(OBJS) -ltls -lssl -lcrypto
 
 jsmn.o json.o: jsmn.h
 
