@@ -19,6 +19,8 @@
 
 #define	PATH_VAR_EMPTY "/var/empty"
 
+#define MAX_SERVERS_DNS 8
+
 #define	CERT_PEM "cert.pem"
 #define	CERT_BAK "cert.pem~"
 #define	CHAIN_PEM "chain.pem"
@@ -133,6 +135,7 @@ enum	comm {
 	COMM_DNS,
 	COMM_DNSQ,
 	COMM_DNSA,
+	COMM_DNSF,
 	COMM_DNSLEN,
 	COMM_KEY_STAT,
 	COMM_REVOKE_OP,
