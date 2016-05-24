@@ -87,7 +87,7 @@ dosyswrite(const void *buf, size_t sz, const struct http *http)
 	return(rc);
 }
 
-#if defined(__OpenBSD__) && OpenBSD <= 201510
+#if defined(TLS_READ_AGAIN) && defined(TLS_WRITE_AGAIN)
 /*
  * Old-style libtls calls.
  * These changed between 5.8 and 5.9.
