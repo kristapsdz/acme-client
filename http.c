@@ -86,21 +86,75 @@ dosyswrite(const void *buf, size_t sz, const struct http *http)
 	return(rc);
 }
 
+#if defined(__OpenBSD__) && OpenBSD <= 201510
+/*
+ * Old-style libtls calls.
+ * These changed between 5.8 and 5.9.
+ */
 static ssize_t
 dotlsread(char *buf, size_t sz, const struct http *http)
 {
-	int	 rc;
+	size_t	out;
+	int	rc;
 
-	rc = tls_read(http->ctx, buf, sz);
-	if (rc < 0)
-		warn("%s: tls_read", http->src.ip);
-	return(rc);
+	do 
+		rc = tls_read(http->ctx, buf, sz, &out);
+	while (TLS_READ_AGAIN == rc ||
+	       TLS_WRITE_AGAIN == rc);
+
+	if (rc < 0) {
+		warn("%s: tls_read: %s", 
+			http->src.ip, 
+			tls_error(http->ctx));
+		return(-1);
+	}
+	return(out);
 }
 
 static ssize_t
 dotlswrite(const void *buf, size_t sz, const struct http *http)
 {
 	int	 rc;
+	size_t	 out;
+
+	do
+		rc = tls_write(http->ctx, buf, sz, &out);
+	while (TLS_READ_AGAIN == rc ||
+	       TLS_READ_AGAIN == rc);
+
+	if (rc < 0) {
+		warnx("%s: tls_write: %s", 
+			http->src.ip, 
+			tls_error(http->ctx));
+		return(-1);
+	}
+	return(out);
+}
+#else
+/*
+ * New-style libtls calls.
+ */
+static ssize_t
+dotlsread(char *buf, size_t sz, const struct http *http)
+{
+	ssize_t	 rc;
+
+	do
+		rc = tls_read(http->ctx, buf, sz);
+	while (TLS_WANT_POLLIN == rc ||
+	       TLS_WANT_POLLOUT == rc);
+
+	if (rc < 0)
+		warnx("%s: tls_read: %s", 
+			http->src.ip, 
+			tls_error(http->ctx));
+	return(rc);
+}
+
+static ssize_t
+dotlswrite(const void *buf, size_t sz, const struct http *http)
+{
+	ssize_t	 rc;
 
 	do
 		rc = tls_write(http->ctx, buf, sz);
@@ -109,9 +163,11 @@ dotlswrite(const void *buf, size_t sz, const struct http *http)
 
 	if (rc < 0)
 		warnx("%s: tls_write: %s", 
-			http->src.ip, tls_error(http->ctx));
+			http->src.ip, 
+			tls_error(http->ctx));
 	return(rc);
 }
+#endif
 
 static ssize_t
 http_read(char *buf, size_t sz, const struct http *http)
