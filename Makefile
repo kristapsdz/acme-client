@@ -7,6 +7,7 @@ OBJS 	 = acctproc.o \
 	   dbg.o \
 	   dnsproc.o \
 	   fileproc.o \
+	   http.o \
 	   jsmn.o \
 	   json.o \
 	   keyproc.o \
@@ -17,9 +18,11 @@ OBJS 	 = acctproc.o \
 	   util.o
 
 letskencrypt: $(OBJS)
-	$(CC) -o $@ $(OBJS) -lssl -lcrypto `curl-config --libs` 
+	$(CC) -o $@ $(OBJS) -tls -lssl -lcrypto
 
 jsmn.o json.o: jsmn.h
+
+http.o netproc.o: http.h
 
 install: letskencrypt
 	mkdir -p $(PREFIX)/bin
