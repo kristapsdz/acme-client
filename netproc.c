@@ -22,6 +22,7 @@
 #include <sys/wait.h>
 #include <sys/param.h>
 
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
@@ -31,8 +32,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <curl/curl.h>
-
+#include "http.h"
 #include "extern.h"
 
 #define URL_REAL_CA "https://acme-v01.api.letsencrypt.org/directory"
@@ -55,28 +55,11 @@ struct	buf {
  * Used for CURL communications.
  */
 struct	conn {
-	CURL		  *c; /* CURL connection */
 	const char	  *na; /* nonce authority */
 	int		   fd; /* acctproc handle */
+	int		   dfd; /* dnsproc handle */
 	struct buf	   buf; /* transfer buffer */
-	struct curl_slist *hosts; /* valid hosts */
 };
-
-/*
- * Reset the contents of a buffer prior to transfer.
- * This can be called regardless of whether buf is NULL.
- */
-static void
-buf_reset(struct buf *buf)
-{
-
-	if (NULL == buf) 
-		return;
-
-	free(buf->buf);
-	buf->buf = NULL;
-	buf->sz = 0;
-}
 
 /*
  * If something goes wrong, we dump the current transfer's data as a
@@ -107,7 +90,7 @@ buf_dump(struct buf *buf)
  * This returns NULL on failure.
  */
 static char *
-url2host(const char *host, short *port)
+url2host(const char *host, short *port, char **path)
 {
 	char	*url, *ep;
 
@@ -132,134 +115,57 @@ url2host(const char *host, short *port)
 
 	/* Terminate path part. */
 
-	if (NULL != (ep = strchr(url, '/')))
+	if (NULL != (ep = strchr(url, '/'))) {
+		*path = strdup(ep);
 		*ep = '\0';
+	} else
+		*path = strdup("");
 
+	if (NULL == *path) {
+		warn("strdup");
+		free(url);
+		return(NULL);
+	}
+ 
 	return(url);
 }
 
-/*
- * Given a url, translate it into a domain, resolve the address of the
- * domain, then fill in a curl_slist in the format CURL wants for its
- * internal resolver lookups.
- */
-static struct curl_slist *
-urlresolve(int fd, const char *url)
+static ssize_t
+urlresolve(int fd, const char *host, struct source *v)
 {
-	char	  	  *host, *addr, *buf;
-	int	  	   rc, cc;
-	size_t	  	   i;
-	short	  	   port;
+	char	  	  *addr;
+	size_t	  	   i, sz;
 	long	  	   lval;
-	struct curl_slist *hosts;
-
-	host = buf = addr = NULL;
-	hosts = NULL;
-	rc = 0;
-
-	if (NULL == (host = url2host(url, &port))) {
-		warnx("%s: url2host", url);
-		goto out;
-	}
 
 	dodbg("%s: resolving", host);
 
 	if (writeop(fd, COMM_DNS, DNS_LOOKUP) <= 0)
-		goto out;
+		return(-1);
 	else if (writestr(fd, COMM_DNSQ, host) <= 0)
-		goto out;
+		return(-1);
+	else if ((lval = readop(fd, COMM_DNSLEN)) < 0)
+		return(-1);
 
-	if ((lval = readop(fd, COMM_DNSLEN)) < 0)
-		goto out;
+	sz = lval;
+	assert(sz <= MAX_SERVERS_DNS);
 
-	for (i = 0; i < (size_t)lval; i++) {
-		if (NULL == (addr = readstr(fd, COMM_DNSA))) 
-			goto out;
-
-		/* XXX XXX XXX */
-		if (i > 0) {
-			free(addr);
-			addr = NULL;
-			continue;
-		}
-
-		cc = asprintf(&buf, "%s:%hd:%s", host, port, addr);
-		if (-1 == cc) {
-			warn("asprintf");
-			buf = NULL;
-			goto out;
-		}
-
-		hosts = curl_slist_append(hosts, buf);
-		if (NULL == hosts) {
-			warnx("curl_slist_append");
-			goto out;
-		}
-
-		free(buf);
-		free(addr);
-		buf = addr = NULL;
+	for (i = 0; i < sz; i++) {
+		memset(&v[i], 0, sizeof(struct source));
+		if ((lval = readop(fd, COMM_DNSF)) < 0)
+			goto err;
+		else if (4 != lval && 6 != lval)
+			goto err;
+		else if (NULL == (addr = readstr(fd, COMM_DNSA))) 
+			goto err;
+		v[i].family = lval;
+		v[i].ip = addr;
 	}
 
-	rc = 1;
-out:
-	if (0 == rc) {
-		curl_slist_free_all(hosts);
-		hosts = NULL;
-	}
-	free(host);
-	free(buf);
-	free(addr);
-	return(hosts);
-}
-
-/*
- * Handle response data from the server.
- */
-static size_t 
-netbody(void *ptr, size_t sz, size_t nm, void *arg)
-{
-	struct buf	*buf = arg;
-	size_t		 nsz;
-	void		*pp;
-
-	/* FIXME: check for overflow. */
-	nsz = sz * nm;
-	pp = realloc(buf->buf, buf->sz + nsz + 1);
-	if (NULL == pp) {
-		warn("realloc");
-		return(0);
-	}
-	buf->buf = pp;
-	memcpy(buf->buf + buf->sz, ptr, nsz);
-	buf->sz += nsz;
-	buf->buf[buf->sz] = '\0';
-	return(nsz);
-}
-
-/*
- * Look for, extract, and duplicate the Replay-Nonce header.
- * Ignore all other headers.
- */
-static size_t 
-netheaders(void *ptr, size_t sz, size_t nm, void *arg)
-{
-	char		**noncep = arg;
-	size_t		  nsz, psz;
-
-	nsz = sz * nm;
-	if (strncmp(ptr, "Replay-Nonce: ", 14)) 
-		return(nsz);
-
-	if (NULL == (*noncep = strdup((char *)ptr + 14))) {
-		warn("strdup");
-		return(0);
-	} else if ((psz = strlen(*noncep)) < 2) {
-		warnx("short nonce");
-		return(0);
-	}
-	(*noncep)[psz - 2] = '\0';
-	return(nsz);
+	return(sz);
+err:
+	for (i = 0; i < sz; i++)
+		free(v[i].ip);
+	return(-1);
 }
 
 /*
@@ -269,23 +175,41 @@ netheaders(void *ptr, size_t sz, size_t nm, void *arg)
 static int
 nreq(struct conn *c, const char *addr, long *code)
 {
-	CURLcode	 res;
+	struct httpget	*g;
+	struct source	 src[MAX_SERVERS_DNS];
+	char		*host, *path;
+	short		 port;
+	size_t		 srcsz;
+	ssize_t		 ssz;
 
-	buf_reset(&c->buf);
-	curl_easy_reset(c->c);
-	curl_easy_setopt(c->c, CURLOPT_RESOLVE, c->hosts);
-	curl_easy_setopt(c->c, CURLOPT_URL, addr);
-	curl_easy_setopt(c->c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-	curl_easy_setopt(c->c, CURLOPT_SSL_VERIFYPEER, 0L);
-	if (verbose > 1)
-		curl_easy_setopt(c->c, CURLOPT_VERBOSE, 1L);
-	curl_easy_setopt(c->c, CURLOPT_WRITEFUNCTION, netbody);
-	curl_easy_setopt(c->c, CURLOPT_WRITEDATA, &c->buf);
-	if (CURLE_OK != (res = curl_easy_perform(c->c))) {
-	      warnx("%s: %s", addr, curl_easy_strerror(res));
-	      return(0);
+	warnx("%s: parsing", addr);
+	if (NULL == (host = url2host(addr, &port, &path)))
+		return(0);
+	warnx("%s: parsed: [%s][:%hd][%s]", addr, host, port, path);
+
+	if ((ssz = urlresolve(c->dfd, host, src)) < 0) {
+		free(host);
+		free(path);
+		return(0);
 	}
-	curl_easy_getinfo(c->c, CURLINFO_RESPONSE_CODE, code);
+	srcsz = ssz;
+	warnx("%s: resolved %zu entries", host, srcsz);
+
+	g = http_get(src, srcsz, host, port, path, NULL, 0);
+	free(host);
+	free(path);
+	if (NULL == g)
+		return(0);
+
+	*code = g->code;
+	free(c->buf.buf);
+	c->buf.buf = strdup(http_body_read
+		(g->http, g->xfer, &c->buf.sz));
+	http_get_free(g);
+	if (NULL == c->buf.buf) {
+		warn("strdup");
+		return(0);
+	}
 	return(1);
 }
 
@@ -298,30 +222,43 @@ nreq(struct conn *c, const char *addr, long *code)
 static int
 sreq(struct conn *c, const char *addr, const char *req, long *code)
 {
-	char		*nonce, *reqsn;
-	CURLcode	 res;
+	struct httpget	*g;
+	struct source	 src[MAX_SERVERS_DNS];
+	char		*host, *path, *nonce, *reqsn;
+	short		 port;
+	size_t		 srcsz, hsz;
+	struct httphead	*h, *hs;
+	ssize_t		 ssz;
 
-	nonce = NULL;
-
-	/* Grab our nonce by querying the CA. */
-
-	curl_easy_reset(c->c);
-	curl_easy_setopt(c->c, CURLOPT_RESOLVE, c->hosts);
-	curl_easy_setopt(c->c, CURLOPT_URL, c->na);
-	curl_easy_setopt(c->c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-	curl_easy_setopt(c->c, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(c->c, CURLOPT_NOBODY, 1L);
-	curl_easy_setopt(c->c, CURLOPT_HEADERFUNCTION, netheaders);
-	curl_easy_setopt(c->c, CURLOPT_HEADERDATA, &nonce);
-
-	if (CURLE_OK != (res = curl_easy_perform(c->c))) {
-		warnx("%s: %s", c->na, curl_easy_strerror(res));
-		free(nonce);
+	if (NULL == (host = url2host(c->na, &port, &path)))
 		return(0);
-	} else if (NULL == nonce) {
-		warnx("%s: no replay nonce", c->na);
+
+	if ((ssz = urlresolve(c->dfd, host, src)) < 0) {
+		free(host);
+		free(path);
 		return(0);
 	}
+	srcsz = ssz;
+
+	g = http_get(src, srcsz, host, port, path, NULL, 0);
+	free(host);
+	free(path);
+	if (NULL == g)
+		return(0);
+
+	hs = http_head_parse(g->http, g->xfer, &hsz);
+	assert(NULL != hs);
+	h = http_head_get("Replay-Nonce", hs, hsz);
+	if (NULL == h) {
+		warnx("%s: no replay nonce", c->na);
+		http_get_free(g);
+		return(0);
+	} else if (NULL == (nonce = strdup(h->val))) {
+		warn("strdup");
+		http_get_free(g);
+		return(0);
+	}
+	http_get_free(g);
 
 	/* 
 	 * Send the nonce and request payload to the acctproc.
@@ -344,25 +281,37 @@ sreq(struct conn *c, const char *addr, const char *req, long *code)
 
 	/* Now send the signed payload to the CA. */
 
-	buf_reset(&c->buf);
-	curl_easy_reset(c->c);
-	curl_easy_setopt(c->c, CURLOPT_URL, addr);
-	curl_easy_setopt(c->c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-	curl_easy_setopt(c->c, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(c->c, CURLOPT_POSTFIELDS, reqsn);
-	if (verbose > 1)
-		curl_easy_setopt(c->c, CURLOPT_VERBOSE, 1L);
-	curl_easy_setopt(c->c, CURLOPT_WRITEFUNCTION, netbody);
-	curl_easy_setopt(c->c, CURLOPT_WRITEDATA, &c->buf);
-
-	if (CURLE_OK != (res = curl_easy_perform(c->c))) {
-	      warnx("%s: %s", addr, curl_easy_strerror(res));
-	      free(reqsn);
-	      return(0);
+	if (NULL == (host = url2host(addr, &port, &path))) {
+		free(reqsn);
+		return(0);
 	}
 
-	curl_easy_getinfo(c->c, CURLINFO_RESPONSE_CODE, code);
+	if ((ssz = urlresolve(c->dfd, host, src)) < 0) {
+		free(host);
+		free(path);
+		free(reqsn);
+		return(0);
+	}
+	srcsz = ssz;
+
+	g = http_get(src, srcsz, host, 
+		port, path, reqsn, strlen(reqsn));
+	free(host);
+	free(path);
 	free(reqsn);
+
+	if (NULL == g)
+		return(0);
+
+	*code = g->code;
+	free(c->buf.buf);
+	c->buf.buf = strdup(http_body_read
+		(g->http, g->xfer, &c->buf.sz));
+	http_get_free(g);
+	if (NULL == c->buf.buf) {
+		warn("strdup");
+		return(0);
+	}
 	return(1);
 }
 
@@ -696,11 +645,9 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	if (NULL == chngs) {
 		warn("calloc");
 		goto out;
-	} else if (NULL == (c.c = curl_easy_init())) {
-		warn("curl_easy_init");
-		goto out;
 	}
 
+	c.dfd = dfd;
 	c.fd = afd;
 	c.na = staging ? URL_STAGE_CA : URL_REAL_CA;
 
@@ -709,9 +656,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	 * We'll use this ourselves instead of having libcurl do the DNS
 	 * resolution itself.
 	 */
-	if (NULL == (c.hosts = urlresolve(dfd, c.na))) 
-		goto out;
-	else if ( ! dodirs(&c, c.na, &paths))
+	if ( ! dodirs(&c, c.na, &paths))
 		goto out;
 
 	/*
@@ -730,7 +675,6 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 			rc = 1;
 		goto out;
 	} 
-
 
 	/* If new, register with the CA server. */
 
@@ -828,12 +772,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	 * Write this chain directly back to the certproc.
 	 */
 
-	curl_slist_free_all(c.hosts);
-	c.hosts = NULL;
-
 	if (NULL == (url = readstr(cfd, COMM_ISSUER)))
-		goto out;
-	else if (NULL == (c.hosts = urlresolve(dfd, url))) 
 		goto out;
 	else if ( ! dofullchain(&c, url))
 		goto out;
@@ -852,10 +791,6 @@ out:
 	free(url);
 	free(thumb);
 	free(c.buf.buf);
-	if (NULL != c.c)
-		curl_easy_cleanup(c.c);
-	curl_slist_free_all(c.hosts);
-	curl_global_cleanup();
 	if (NULL != chngs)
 		for (i = 0; i < altsz; i++)
 			json_free_challenge(&chngs[i]);
