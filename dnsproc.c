@@ -36,7 +36,10 @@
 
 #include "extern.h"
 
-#define MAX_SERVERS_DNS 8
+struct	addr {
+	int	 family; /* 4 for PF_INET, 6 for PF_INET6 */
+	char	 ip[INET6_ADDRSTRLEN];
+};
 
 /*
  * This is a modified version of host_dns in config.c of OpenBSD's ntpd.
@@ -57,7 +60,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 static ssize_t
-host_dns(const char *s, char vec[MAX_SERVERS_DNS][INET6_ADDRSTRLEN]) 
+host_dns(const char *s, struct addr *vec)
 {
 	struct addrinfo		 hints, *res0, *res;
 	int			 error;
@@ -88,30 +91,25 @@ host_dns(const char *s, char vec[MAX_SERVERS_DNS][INET6_ADDRSTRLEN])
 	for (vecsz = 0, res = res0; 
 	     NULL != res && vecsz < MAX_SERVERS_DNS; 
 	     res = res->ai_next) {
-		/* 
-		 * FIXME.
-		 * libcurl only seems to support a single address per
-		 * host in its list of resolutions.
-		 * This needs further examination.
-		 */
-		if (res->ai_family != AF_INET)
-			continue;
-		/*if (res->ai_family != AF_INET &&
+		if (res->ai_family != AF_INET &&
 		    res->ai_family != AF_INET6)
-			continue;*/
+			continue;
 
 		sa = res->ai_addr;
 
-		if (AF_INET == res->ai_family)
+		if (AF_INET == res->ai_family) {
+			vec[vecsz].family = 4;
 			inet_ntop(AF_INET, 
 				&(((struct sockaddr_in *)sa)->sin_addr), 
-				vec[vecsz], INET6_ADDRSTRLEN);
-		else
+				vec[vecsz].ip, INET6_ADDRSTRLEN);
+		} else {
+			vec[vecsz].family = 6;
 			inet_ntop(AF_INET6, 
 				&(((struct sockaddr_in6 *)sa)->sin6_addr), 
-				vec[vecsz], INET6_ADDRSTRLEN);
+				vec[vecsz].ip, INET6_ADDRSTRLEN);
+		}
 
-		dodbg("%s: DNS: %s", s, vec[vecsz]);
+		dodbg("%s: DNS: %s", s, vec[vecsz].ip);
 		vecsz++;
 		break;
 	}
@@ -125,7 +123,7 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 {
 	int		 rc, cc;
 	char		*look;
-	char		 v[MAX_SERVERS_DNS][INET6_ADDRSTRLEN];
+	struct addr	 v[MAX_SERVERS_DNS];
 	long		 lval;
 	size_t		 i;
 	ssize_t		 vsz;
@@ -178,9 +176,12 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 			break;
 		else if (cc < 0)
 			goto out;
-		for (i = 0; i < (size_t)vsz; i++) 
-			if (writestr(nfd, COMM_DNSA, v[i]) <= 0)
+		for (i = 0; i < (size_t)vsz; i++) { 
+			if (writeop(nfd, COMM_DNSF, v[i].family) <= 0)
 				goto out;
+			if (writestr(nfd, COMM_DNSA, v[i].ip) <= 0)
+				goto out;
+		}
 
 		free(look);
 		look = NULL;
