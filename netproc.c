@@ -203,11 +203,13 @@ nreq(struct conn *c, const char *addr, long *code)
 
 	*code = g->code;
 	free(c->buf.buf);
-	c->buf.buf = strdup(http_body_read
-		(g->http, g->xfer, &c->buf.sz));
+
+	(void)http_body_read(g->http, g->xfer, &c->buf.sz);
+	c->buf.buf = malloc(c->buf.sz);	
+	memcpy(c->buf.buf, http_body_read(g->http, g->xfer, NULL), c->buf.sz);
 	http_get_free(g);
 	if (NULL == c->buf.buf) {
-		warn("strdup");
+		warn("malloc");
 		return(0);
 	}
 	return(1);
@@ -305,11 +307,12 @@ sreq(struct conn *c, const char *addr, const char *req, long *code)
 
 	*code = g->code;
 	free(c->buf.buf);
-	c->buf.buf = strdup(http_body_read
-		(g->http, g->xfer, &c->buf.sz));
+	(void)http_body_read(g->http, g->xfer, &c->buf.sz);
+	c->buf.buf = malloc(c->buf.sz);	
+	memcpy(c->buf.buf, http_body_read(g->http, g->xfer, NULL), c->buf.sz);
 	http_get_free(g);
 	if (NULL == c->buf.buf) {
-		warn("strdup");
+		warn("malloc");
 		return(0);
 	}
 	return(1);
