@@ -130,14 +130,18 @@ url2host(const char *host, short *port, char **path)
 	return(url);
 }
 
+/*
+ * Contact dnsproc and resolve a host.
+ * Place the answers in "v" and return the number of answers, which can
+ * be at most MAX_SERVERS_DNS.
+ * Return <0 on failure.
+ */
 static ssize_t
 urlresolve(int fd, const char *host, struct source *v)
 {
 	char	  	  *addr;
 	size_t	  	   i, sz;
 	long	  	   lval;
-
-	dodbg("%s: resolving", host);
 
 	if (writeop(fd, COMM_DNS, DNS_LOOKUP) <= 0)
 		return(-1);
@@ -169,11 +173,12 @@ err:
 }
 
 /*
- * Send a "regular" HTTP GET message to "addr".
- * On non-zero return, stuffs the HTTP code into "code".
+ * Send a "regular" HTTP GET message to "addr" and stuff the response
+ * into the connection buffer.
+ * Return the HTTP error code or <0 on failure.
  */
-static int
-nreq(struct conn *c, const char *addr, long *code)
+static long
+nreq(struct conn *c, const char *addr)
 {
 	struct httpget	*g;
 	struct source	 src[MAX_SERVERS_DNS];
@@ -181,84 +186,80 @@ nreq(struct conn *c, const char *addr, long *code)
 	short		 port;
 	size_t		 srcsz;
 	ssize_t		 ssz;
+	long		 code;
 
-	warnx("%s: parsing", addr);
 	if (NULL == (host = url2host(addr, &port, &path)))
-		return(0);
-	warnx("%s: parsed: [%s][:%hd][%s]", addr, host, port, path);
+		return(-1);
 
 	if ((ssz = urlresolve(c->dfd, host, src)) < 0) {
 		free(host);
 		free(path);
-		return(0);
+		return(-1);
 	}
 	srcsz = ssz;
-	warnx("%s: resolved %zu entries", host, srcsz);
 
 	g = http_get(src, srcsz, host, port, path, NULL, 0);
 	free(host);
 	free(path);
 	if (NULL == g)
-		return(0);
+		return(-1);
 
-	*code = g->code;
+	code = g->code;
+
+	/* Copy the body part into our buffer. */
+
 	free(c->buf.buf);
-
-	(void)http_body_read(g->http, g->xfer, &c->buf.sz);
+	c->buf.sz = g->bodypartsz;
 	c->buf.buf = malloc(c->buf.sz);	
-	memcpy(c->buf.buf, http_body_read(g->http, g->xfer, NULL), c->buf.sz);
+	memcpy(c->buf.buf, g->bodypart, c->buf.sz);
 	http_get_free(g);
 	if (NULL == c->buf.buf) {
 		warn("malloc");
-		return(0);
+		return(-1);
 	}
-	return(1);
+	return(code);
 }
 
 /*
  * Create and send a signed communication to the ACME server.
- * On non-zero return, stuffs the HTTP response into "code".
- * If json is non-NULL, it's used to store any response body; if NULL
- * and buf is non-NULL, buf is used as an opaque buffer.
+ * Stuff the response into the communication buffer.
+ * Return <0 on failure on the HTTP error code otherwise.
  */
-static int
-sreq(struct conn *c, const char *addr, const char *req, long *code)
+static long
+sreq(struct conn *c, const char *addr, const char *req)
 {
 	struct httpget	*g;
 	struct source	 src[MAX_SERVERS_DNS];
 	char		*host, *path, *nonce, *reqsn;
 	short		 port;
-	size_t		 srcsz, hsz;
-	struct httphead	*h, *hs;
+	struct httphead	*h;
 	ssize_t		 ssz;
+	long		 code;
 
 	if (NULL == (host = url2host(c->na, &port, &path)))
-		return(0);
+		return(-1);
 
 	if ((ssz = urlresolve(c->dfd, host, src)) < 0) {
 		free(host);
 		free(path);
-		return(0);
+		return(-1);
 	}
-	srcsz = ssz;
 
-	g = http_get(src, srcsz, host, port, path, NULL, 0);
+	g = http_get(src, (size_t)ssz, host, port, path, NULL, 0);
 	free(host);
 	free(path);
 	if (NULL == g)
-		return(0);
+		return(-1);
 
-	hs = http_head_parse(g->http, g->xfer, &hsz);
-	assert(NULL != hs);
-	h = http_head_get("Replay-Nonce", hs, hsz);
+	h = http_head_get("Replay-Nonce", g->head, g->headsz);
 	if (NULL == h) {
 		warnx("%s: no replay nonce", c->na);
 		http_get_free(g);
-		return(0);
+		return(-1);
 	} else if (NULL == (nonce = strdup(h->val))) {
 		warn("strdup");
 		http_get_free(g);
-		return(0);
+		return(-1);
 	}
 	http_get_free(g);
 
@@ -269,53 +270,56 @@ sreq(struct conn *c, const char *addr, const char *req, long *code)
 
 	if (writeop(c->fd, COMM_ACCT, ACCT_SIGN) <= 0) {
 		free(nonce);
-		return(0);
+		return(-1);
 	} else if (writestr(c->fd, COMM_PAY, req) <= 0) {
 		free(nonce);
-		return(0);
+		return(-1);
 	} else if (writestr(c->fd, COMM_NONCE, nonce) <= 0) {
 		free(nonce);
-		return(0);
+		return(-1);
 	}
 	free(nonce);
+
+	/* Now read back the signed payload. */
+
 	if (NULL == (reqsn = readstr(c->fd, COMM_REQ)))
-		return(0);
+		return(-1);
 
 	/* Now send the signed payload to the CA. */
 
 	if (NULL == (host = url2host(addr, &port, &path))) {
 		free(reqsn);
-		return(0);
-	}
-
-	if ((ssz = urlresolve(c->dfd, host, src)) < 0) {
+		return(-1);
+	} else if ((ssz = urlresolve(c->dfd, host, src)) < 0) {
 		free(host);
 		free(path);
 		free(reqsn);
-		return(0);
+		return(-1);
 	}
-	srcsz = ssz;
 
-	g = http_get(src, srcsz, host, 
+	g = http_get(src, (size_t)ssz, host, 
 		port, path, reqsn, strlen(reqsn));
+
 	free(host);
 	free(path);
 	free(reqsn);
-
 	if (NULL == g)
-		return(0);
+		return(-1);
 
-	*code = g->code;
+	/* Stuff response into parse buffer. */
+
+	code = g->code;
+
 	free(c->buf.buf);
-	(void)http_body_read(g->http, g->xfer, &c->buf.sz);
+	c->buf.sz = g->bodypartsz;
 	c->buf.buf = malloc(c->buf.sz);	
-	memcpy(c->buf.buf, http_body_read(g->http, g->xfer, NULL), c->buf.sz);
+	memcpy(c->buf.buf, g->bodypart, c->buf.sz);
 	http_get_free(g);
 	if (NULL == c->buf.buf) {
 		warn("malloc");
-		return(0);
+		return(-1);
 	}
-	return(1);
+	return(code);
 }
 
 /*
@@ -335,7 +339,7 @@ donewreg(struct conn *c, const struct capaths *p)
 
 	if (NULL == (req = json_fmt_newreg(URL_LICENSE)))
 		warnx("json_fmt_newreg");
-	else if ( ! sreq(c, p->newreg, req, &lc))
+	else if ((lc = sreq(c, p->newreg, req)) < 0)
 		warnx("%s: bad comm", p->newreg);
 	else if (200 != lc && 201 != lc)
 		warnx("%s: bad HTTP: %ld", p->newreg, lc);
@@ -370,7 +374,7 @@ dochngreq(struct conn *c, const char *alt,
 
 	if (NULL == (req = json_fmt_newauthz(alt)))
 		warnx("json_fmt_newauthz");
-	else if ( ! sreq(c, p->newauthz, req, &lc))
+	else if ((lc = sreq(c, p->newauthz, req)) < 0)
 		warnx("%s: bad comm", p->newauthz);
 	else if (200 != lc && 201 != lc)
 		warnx("%s: bad HTTP: %ld", p->newauthz, lc);
@@ -403,7 +407,7 @@ dochngresp(struct conn *c, const struct chng *chng, const char *th)
 
 	if (NULL == (req = json_fmt_challenge(chng->token, th)))
 		warnx("json_fmt_challenge");
-	else if ( ! sreq(c, chng->uri, req, &lc))
+	else if ((lc = sreq(c, chng->uri, req)) < 0)
 		warnx("%s: bad comm", chng->uri);
 	else if (200 != lc && 201 != lc && 202 != lc) 
 		warnx("%s: bad HTTP: %ld", chng->uri, lc);
@@ -430,7 +434,7 @@ dochngcheck(struct conn *c, struct chng *chng)
 
 	dodbg("%s: status", chng->uri);
 
-	if ( ! nreq(c, chng->uri, &lc)) {
+	if ((lc = nreq(c, chng->uri)) < 0) {
 		warnx("%s: bad comm", chng->uri);
 		return(0);
 	} else if (200 != lc && 201 != lc && 202 != lc) {
@@ -466,7 +470,7 @@ dorevoke(struct conn *c, const char *addr, const char *cert)
 
 	if (NULL == (req = json_fmt_revokecert(cert)))
 		warnx("json_fmt_revokecert");
-	else if ( ! sreq(c, addr, req, &lc))
+	else if ((lc = sreq(c, addr, req)) < 0)
 		warnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc && 409 != lc)
 		warnx("%s: bad HTTP: %ld", addr, lc);
@@ -498,7 +502,7 @@ docert(struct conn *c, const char *addr, const char *cert)
 
 	if (NULL == (req = json_fmt_newcert(cert)))
 		warnx("json_fmt_newcert");
-	else if ( ! sreq(c, addr, req, &lc))
+	else if ((lc = sreq(c, addr, req)) < 0)
 		warnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc)
 		warnx("%s: bad HTTP: %ld", addr, lc);
@@ -527,7 +531,7 @@ dodirs(struct conn *c, const char *addr, struct capaths *paths)
 	rc = 0;
 	dodbg("%s: directories", addr);
 
-	if ( ! nreq(c, addr, &lc))
+	if ((lc = nreq(c, addr)) < 0)
 		warnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc)
 		warnx("%s: bad HTTP: %ld", addr, lc);
@@ -556,7 +560,7 @@ dofullchain(struct conn *c, const char *addr)
 	rc = 0;
 	dodbg("%s: full chain", addr);
 
-	if ( ! nreq(c, addr, &lc))
+	if ((lc = nreq(c, addr)) < 0)
 		warnx("%s: bad comm", addr);
 	else if (200 != lc && 201 != lc)
 		warnx("%s: bad HTTP: %ld", addr, lc);
