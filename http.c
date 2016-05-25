@@ -208,10 +208,12 @@ void
 http_disconnect(struct http *http)
 {
 
+	if (-1 == http->fd)
+		return;
 	if (NULL != http->ctx && -1 == tls_close(http->ctx))
 		warnx("%s: tls_close: %s",
 			http->src.ip, tls_error(http->ctx));
-	if (-1 != http->fd && -1 == close(http->fd))
+	if (-1 == close(http->fd))
 		warn("%s: close", http->src.ip);
 	http->fd = -1;
 }
