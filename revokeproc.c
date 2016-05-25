@@ -22,6 +22,7 @@
 #include <sys/param.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -254,6 +255,8 @@ revokeproc(int fd, const char *certdir,
 	while (NULL != (tok = strsep(&str, ","))) {
 		if ('\0' == *tok)
 			continue;
+		while (isspace((int)*tok))
+			tok++;
 		if (strncmp(tok, "DNS:", 4))
 			continue;
 		tok += 4;
