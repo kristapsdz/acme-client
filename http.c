@@ -204,18 +204,36 @@ http_write(const void *buf, size_t sz, const struct http *http)
 	return(xfer);
 }
 
+/*
+ * Between 5.8 and 5.9, libtls changed its semantics.
+ * In the old way, tls_close() will close the underlying file
+ * descriptors.
+ * In the new way, it won't.
+ */
 void
 http_disconnect(struct http *http)
 {
 
-	if (-1 == http->fd)
-		return;
-	if (NULL != http->ctx && -1 == tls_close(http->ctx))
-		warnx("%s: tls_close: %s",
-			http->src.ip, tls_error(http->ctx));
-	if (-1 == close(http->fd))
-		warn("%s: close", http->src.ip);
+	if (NULL != http->ctx) {
+		/* TLS connection. */
+		if (-1 == tls_close(http->ctx))
+			warnx("%s: tls_close: %s",
+				http->src.ip, 
+				tls_error(http->ctx));
+		if (NULL != http->ctx)
+			tls_free(http->ctx);
+#if ! defined(TLS_READ_AGAIN) && ! defined(TLS_WRITE_AGAIN)
+		if (-1 == close(http->fd))
+			warn("%s: close", http->src.ip);
+#endif
+	} else if (-1 != http->fd) {
+		/* Non-TLS connection. */
+		if (-1 == close(http->fd))
+			warn("%s: close", http->src.ip);
+	}
+
 	http->fd = -1;
+	http->ctx = NULL;
 }
 
 void
@@ -225,8 +243,6 @@ http_free(struct http *http)
 	if (NULL == http)
 		return;
 	http_disconnect(http);
-	if (NULL != http->ctx)
-		tls_free(http->ctx);
 	if (NULL != http->cfg)
 		tls_config_free(http->cfg);
 	free(http->host);
