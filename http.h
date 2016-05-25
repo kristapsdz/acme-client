@@ -43,10 +43,22 @@ struct	httphead {
 	const char	*val;
 };
 
+/*
+ * Grab all information from a transfer.
+ * DO NOT free any parts of this, and editing the parts (e.g., changing
+ * the underlying strings) will persist; so in short, don't.
+ * All of these values will be set upon http_get() success.
+ */
 struct	httpget {
-	struct httpxfer	*xfer;
-	struct http	*http;
-	int		 code;
+	struct httpxfer	*xfer; /* underlying transfer */
+	struct http	*http; /* underlying connection */
+	int		 code; /* return code */
+	struct httphead	*head; /* headers */
+	size_t		 headsz; /* number of headers */
+	char		*headpart; /* header buffer */
+	size_t		 headpartsz; /* size of headpart */
+	char		*bodypart; /* body buffer */
+	size_t		 bodypartsz; /* size of bodypart */
 };
 
 __BEGIN_DECLS
@@ -63,6 +75,7 @@ struct http	*http_alloc(const struct source *, size_t,
 void		 http_free(struct http *);
 struct httpxfer	*http_open(const struct http *, const void *, size_t);
 void		 http_close(struct httpxfer *);
+void		 http_disconnect(struct http *);
 
 /* Access. */
 char		*http_head_read(const struct http *, 
