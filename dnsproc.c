@@ -122,7 +122,7 @@ int
 dnsproc(int nfd, uid_t uid, gid_t gid)
 {
 	int		 rc, cc;
-	char		*look;
+	char		*look, *last;
 	struct addr	 v[MAX_SERVERS_DNS];
 	long		 lval;
 	size_t		 i;
@@ -130,7 +130,7 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 	enum dnsop	 op;
 
 	rc = 0;
-	look = NULL;
+	look = last = NULL;
 
 	/*
 	 * Why don't we chroot() here?
@@ -153,6 +153,7 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 	/*
 	 * This is simple: just loop on a request operation, and each
 	 * time we write back zero or more entries.
+	 * Also do a simple trick and cache the last lookup.
 	 */
 
 	for (;;) {
@@ -170,8 +171,25 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 
 		if (NULL == (look = readstr(nfd, COMM_DNSQ)))
 			goto out;
-		if ((vsz = host_dns(look, v)) < 0)
-			goto out;
+
+		/* 
+		 * Check if we're asked to repeat the lookup.
+		 * If not, request it from host_dns().
+		 */
+
+		if (NULL == last || strcmp(look, last)) {
+			if ((vsz = host_dns(look, v)) < 0)
+				goto out;
+
+			free(last);
+			last = look;
+			look = NULL;
+		} else {
+			dodbg("%s: cached", look);
+			free(look);
+			look = NULL;
+		}
+
 		if (0 == (cc = writeop(nfd, COMM_DNSLEN, vsz)))
 			break;
 		else if (cc < 0)
@@ -182,14 +200,12 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 			if (writestr(nfd, COMM_DNSA, v[i].ip) <= 0)
 				goto out;
 		}
-
-		free(look);
-		look = NULL;
 	}
 
 	rc = 1;
 out:
 	close(nfd);
 	free(look);
+	free(last);
 	return(rc);
 }
