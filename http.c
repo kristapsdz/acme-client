@@ -45,9 +45,9 @@ struct	httpxfer {
 	char		*bbuf; /* body transfer buffer */
 	size_t		 bbufsz; /* body buffer size */
 	int		 bodyok; /* body has been parsed */
-	char		*headbuf;
-	struct httphead	*head;
-	size_t		 headsz;
+	char		*headbuf; /* lookaside buffer for headers */
+	struct httphead	*head; /* parsed headers */
+	size_t		 headsz; /* number of headers */
 };
 
 /*
@@ -205,19 +205,28 @@ http_write(const void *buf, size_t sz, const struct http *http)
 }
 
 void
+http_disconnect(struct http *http)
+{
+
+	if (NULL != http->ctx && -1 == tls_close(http->ctx))
+		warnx("%s: tls_close: %s",
+			http->src.ip, tls_error(http->ctx));
+	if (-1 != http->fd && -1 == close(http->fd))
+		warn("%s: close", http->src.ip);
+	http->fd = -1;
+}
+
+void
 http_free(struct http *http)
 {
 
 	if (NULL == http)
 		return;
-	if (NULL != http->cfg)
-		tls_config_free(http->cfg);
-	if (NULL != http->ctx)
-		tls_close(http->ctx);
+	http_disconnect(http);
 	if (NULL != http->ctx)
 		tls_free(http->ctx);
-	if (-1 != http->fd)
-		close(http->fd);
+	if (NULL != http->cfg)
+		tls_config_free(http->cfg);
 	free(http->host);
 	free(http->path);
 	free(http->src.ip);
@@ -709,8 +718,9 @@ http_get(const struct source *addrs, size_t addrsz,
 	struct httpxfer	*x;
 	struct httpget	*g;
 	struct httphead	*head;
-	size_t		 headsz;
+	size_t		 headsz, bodsz, headrsz;
 	int		 code;
+	char		*bod, *headr;
 
 	h = http_alloc(addrs, addrsz, domain, port, path);
 	if (NULL == h)
@@ -719,15 +729,17 @@ http_get(const struct source *addrs, size_t addrsz,
 	if (NULL == (x = http_open(h, post, postsz))) {
 		http_free(h);
 		return(NULL);
-	} else if (NULL == http_head_read(h, x, NULL)) {
+	} else if (NULL == (headr = http_head_read(h, x, &headrsz))) {
 		http_close(x);
 		http_free(h);
 		return(NULL);
-	} else if (NULL == http_body_read(h, x, NULL)) {
+	} else if (NULL == (bod = http_body_read(h, x, &bodsz))) {
 		http_close(x);
 		http_free(h);
 		return(NULL);
 	} 
+
+	http_disconnect(h);
 	
 	if (NULL == (head = http_head_parse(h, x, &headsz))) {
 		http_close(x);
@@ -746,6 +758,12 @@ http_get(const struct source *addrs, size_t addrsz,
 		return(NULL);
 	}
 
+	g->headpart = headr;
+	g->headpartsz = headrsz;
+	g->bodypart = bod;
+	g->bodypartsz = bodsz;
+	g->head = head;
+	g->headsz = headsz;
 	g->code = code;
 	g->xfer = x;
 	g->http = h;
