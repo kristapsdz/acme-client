@@ -275,29 +275,3 @@ checkexit(pid_t pid, enum comp comp)
 	return(0);
 }
 
-/*
- * Safely drop privileges into the given credentials.
- * Returns zero on failure, non-zero on success.
- */
-int
-dropprivs(uid_t uid, gid_t gid)
-{
-
-	if (setgroups(1, &gid) ||
-	    setresgid(gid, gid, gid) ||
-	    setresuid(uid, uid, uid)) {
-		warnx("drop privileges");
-		return(0);
-	}
-
-	if (getgid() != gid || getegid() != gid) {
-		warnx("failed to drop gid");
-		return(0);
-	}
-	if (getuid() != uid || geteuid() != uid) {
-		warnx("failed to drop uid");
-		return(0);
-	}
-
-	return(1);
-}

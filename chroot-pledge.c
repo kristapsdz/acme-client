@@ -41,3 +41,15 @@ checkprivs(void)
 	 */
 	return(1);
 }
+
+int
+dropprivs(uid_t uid, gid_t gid)
+{
+
+	/*
+	 * No need to drop privileges?
+	 * What is the point of dropping root privileges if root can't
+	 * do anything?
+	 */
+	return(1);
+}
