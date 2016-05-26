@@ -131,6 +131,7 @@ dnsproc(int nfd, uid_t uid, gid_t gid)
 
 	rc = 0;
 	look = last = NULL;
+	vsz = 0;
 
 	/*
 	 * Why don't we chroot() here?

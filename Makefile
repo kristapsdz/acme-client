@@ -1,5 +1,5 @@
 PREFIX	 = /usr/local
-CFLAGS	+= -g -W -Wall -Wno-deprecated-declarations `curl-config --cflags`
+CFLAGS	+= -g -W -Wall -Wno-deprecated-declarations 
 OBJS 	 = acctproc.o \
 	   base64.o \
 	   certproc.o \
