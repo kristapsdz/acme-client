@@ -244,6 +244,7 @@ char		*json_fmt_signed(const char *,
 
 int		 dropprivs(uid_t, gid_t);		 
 int		 dropfs(const char *);
+int		 checkprivs(void);
 
 int		 sandbox_after();
 int		 sandbox_before();
