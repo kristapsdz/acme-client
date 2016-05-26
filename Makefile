@@ -1,10 +1,9 @@
 PREFIX	 = /usr/local
-CFLAGS	+= -g -W -Wall -Wno-deprecated-declarations 
+CFLAGS	+= -g -W -Wall
 OBJS 	 = acctproc.o \
 	   base64.o \
 	   certproc.o \
 	   chngproc.o \
-	   chroot-pledge.o \
 	   dbg.o \
 	   dnsproc.o \
 	   fileproc.o \
@@ -16,7 +15,8 @@ OBJS 	 = acctproc.o \
 	   netproc.o \
 	   revokeproc.o \
 	   sandbox-pledge.o \
-	   util.o
+	   util.o \
+	   util-pledge.o
 
 letskencrypt: $(OBJS)
 	$(CC) -o $@ $(OBJS) -ltls -lssl -lcrypto
