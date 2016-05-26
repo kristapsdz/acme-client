@@ -276,24 +276,6 @@ checkexit(pid_t pid, enum comp comp)
 }
 
 /*
- * Safely chroot() into the desired directory.
- * Returns zero on failure, non-zero on success.
- */
-int
-dropfs(const char *root)
-{
-
-	if (-1 == chroot(root))
-		warn("%s: chroot", root);
-	else if (-1 == chdir("/")) 
-		warn("/: chdir");
-	else
-		return(1);
-
-	return(0);
-}
-
-/*
  * Safely drop privileges into the given credentials.
  * Returns zero on failure, non-zero on success.
  */

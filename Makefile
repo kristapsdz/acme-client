@@ -4,6 +4,7 @@ OBJS 	 = acctproc.o \
 	   base64.o \
 	   certproc.o \
 	   chngproc.o \
+	   chroot-pledge.o \
 	   dbg.o \
 	   dnsproc.o \
 	   fileproc.o \

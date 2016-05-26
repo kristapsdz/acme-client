@@ -112,7 +112,7 @@ main(int argc, char *argv[])
 	argc--;
 	argv++;
 
-	if (0 != getuid())
+	if ( ! checkprivs())
 		errx(EXIT_FAILURE, "must be run as root");
 
 	/*
