@@ -18,11 +18,15 @@
 # include "config.h"
 #endif
 
+#include <unistd.h>
+
 #include "extern.h"
 
 int
 dropfs(const char *path)
 {
+
+	(void)path;
 
 	/*
 	 * On OpenBSD with pledge(2), we don't need to chroot(2), so we
@@ -45,6 +49,9 @@ checkprivs(void)
 int
 dropprivs(uid_t uid, gid_t gid)
 {
+
+	(void)uid;
+	(void)gid;
 
 	/*
 	 * No need to drop privileges?
