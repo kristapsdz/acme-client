@@ -26,24 +26,30 @@ int
 dropfs(const char *path)
 {
 
-	(void)path;
-
 	/*
-	 * On OpenBSD with pledge(2), we don't need to chroot(2), so we
-	 * don't need to run as root.
-	 * Why?  As said by deraadt@, "Embrace the pledge."
+	 * Only the challenge and file processes touch files within the
+	 * pledge, so only these need to be chrooted.
 	 */
-	return(1);
+	
+	if (COMP_CHALLENGE != proccomp &&
+	    COMP_FILE != proccomp)
+		return(1);
+
+	if (-1 == chroot(path))
+		warn("%s: chroot", path);
+	else if (-1 == chdir("/")) 
+		warn("/: chdir");
+	else
+		return(1);
+
+	return(0);
 }
 
 int
 checkprivs(void)
 {
 
-	/*
-	 * No need for root privileges.
-	 */
-	return(1);
+	return(0 == getuid());
 }
 
 int
@@ -53,10 +59,5 @@ dropprivs(uid_t uid, gid_t gid)
 	(void)uid;
 	(void)gid;
 
-	/*
-	 * No need to drop privileges?
-	 * What is the point of dropping root privileges if root can't
-	 * do anything?
-	 */
 	return(1);
 }
