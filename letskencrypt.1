@@ -14,7 +14,6 @@
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
 .Op Fl k Ar domainkey
-.Op Fl u Ar user
 .Ar domain
 .Op Ar altnames...
 .Sh DESCRIPTION
@@ -46,9 +45,6 @@ and
 .Pa /etc/letsencrypt/privkey.pem
 for the account private key
 .Pq Fl f .
-It drops privileges to the
-.Dq nobody
-user.
 Its arguments are as follows:
 .Bl -tag -width Ds
 .It Fl F
@@ -84,8 +80,6 @@ client or with
 .Fl n .
 .It Fl k Ar domainkey
 The private key for the domain.
-.It Fl u Ar user
-User for dropping privileges.
 .It Ar domain
 The domain name.
 The only difference between this and the

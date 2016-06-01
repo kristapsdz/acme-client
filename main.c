@@ -22,7 +22,6 @@
 #include <sys/param.h>
 
 #include <err.h>
-#include <pwd.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,13 +30,11 @@
 
 #include "extern.h"
 
-#define NOBODY_USER "nobody"
-
 int
 main(int argc, char *argv[])
 {
 	const char	 *domain, *certdir, *acctkey, 
-	     		 *chngdir, *keyfile, *nobody;
+	     		 *chngdir, *keyfile;
 	int		  key_fds[2], acct_fds[2], chng_fds[2], 
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
@@ -48,19 +45,15 @@ main(int argc, char *argv[])
 	extern enum comp  proccomp;
 	size_t		  i, altsz, ne;
 	const char	**alts;
-	struct passwd	 *passent;
-	uid_t		  nobody_uid;
-	gid_t		  nobody_gid;
 
 	alts = NULL;
-	nobody = NOBODY_USER;
 	newacct = remote = revoke = verbose = force = staging = 0;
 	certdir = "/etc/ssl/letsencrypt";
 	keyfile = "/etc/ssl/letsencrypt/private/privkey.pem";
 	acctkey = "/etc/letsencrypt/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
-	while (-1 != (c = getopt(argc, argv, "Fnrstvf:c:C:k:u:"))) 
+	while (-1 != (c = getopt(argc, argv, "Fnrstvf:c:C:k:"))) 
 		switch (c) {
 		case ('c'):
 			certdir = optarg;
@@ -93,9 +86,6 @@ main(int argc, char *argv[])
 			 */
 			remote = 1;
 			break;
-		case ('u'):
-			nobody = optarg;
-			break;
 		case ('v'):
 			verbose = verbose ? 2 : 1;
 			break;
@@ -114,18 +104,6 @@ main(int argc, char *argv[])
 
 	if ( ! checkprivs())
 		errx(EXIT_FAILURE, "must be run as root");
-
-	/*
-	 * Look up our privilege-separated users.
-	 * We care about "nobody" for key and network operations and the
-	 * web user for the challenge operations.
-	 */
-
-	passent = getpwnam(nobody);
-	if (NULL == passent)
-		errx(EXIT_FAILURE, "%s: bad user", nobody);
-	nobody_uid = passent->pw_uid;
-	nobody_gid = passent->pw_gid;
 
 	/* 
 	 * Do some quick checks to see if our paths exist. 
@@ -203,7 +181,6 @@ main(int argc, char *argv[])
 			chng_fds[1], cert_fds[1], 
 			dns_fds[1], rvk_fds[1], 
 			newacct, revoke, staging,
-			nobody_uid, nobody_gid,
 			(const char *const *)alts, altsz);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -231,7 +208,6 @@ main(int argc, char *argv[])
 		close(file_fds[0]);
 		close(file_fds[1]);
 		c = keyproc(key_fds[0], keyfile, 
-			nobody_uid, nobody_gid, 
 			(const char **)alts, altsz);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -253,8 +229,7 @@ main(int argc, char *argv[])
 		close(chng_fds[0]);
 		close(file_fds[0]);
 		close(file_fds[1]);
-		c = acctproc(acct_fds[0], acctkey, 
-			newacct, nobody_uid, nobody_gid);
+		c = acctproc(acct_fds[0], acctkey, newacct);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -290,8 +265,7 @@ main(int argc, char *argv[])
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
 		close(file_fds[1]);
-		c = certproc(cert_fds[0], file_fds[0],
-			nobody_uid, nobody_gid);
+		c = certproc(cert_fds[0], file_fds[0]);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -323,7 +297,7 @@ main(int argc, char *argv[])
 		proccomp = COMP_DNS;
 		free(alts);
 		close(rvk_fds[0]);
-		c = dnsproc(dns_fds[0], nobody_uid, nobody_gid);
+		c = dnsproc(dns_fds[0]);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -337,7 +311,7 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_REVOKE]) {
 		proccomp = COMP_REVOKE;
 		c = revokeproc(rvk_fds[0], certdir, 
-			nobody_uid, nobody_gid, force, revoke,
+			force, revoke,
 			(const char *const *)alts, altsz);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);

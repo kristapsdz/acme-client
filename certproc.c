@@ -85,7 +85,7 @@ x509buf(X509 *x, size_t *sz)
 }
 
 int
-certproc(int netsock, int filesock, uid_t uid, gid_t gid)
+certproc(int netsock, int filesock)
 {
 	char		*csr, *chain, *url;
 	unsigned char	*csrcp, *chaincp;

@@ -579,7 +579,7 @@ dofullchain(struct conn *c, const char *addr)
  */
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
-	int newacct, int revoke, int staging, uid_t uid, gid_t gid, 
+	int newacct, int revoke, int staging, 
 	const char *const *alts, size_t altsz)
 {
 	int		 rc;
