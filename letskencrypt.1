@@ -102,9 +102,6 @@ obtains signed certificates is roughly as follows.
 In this, the
 .Dq CA
 is the ACME server for Let's Encrypt.
-See
-.Sx IMPLEMENTATION NOTES
-for the details.
 .Bl -enum
 .It
 Access the CA (unauthenticated) and requests its list of resources.
@@ -216,67 +213,67 @@ expiring,
 will not attempt to refresh the signature.
 .\" .Sh CONTEXT
 .\" For section 9 functions only.
-.Sh IMPLEMENTATION NOTES
-The
-.Nm
-utility follows a model of strict isolation between components.
-There are seven such components, each of which is started in a
-subprocess.
-Sandboxing is system-specific.
-.Bl -tag -width Ds
-.It DNS process.
-Manages domain name resolution.
-This is allowed full access to the file-system, but is privilege-dropped.
-On
-.Ox , 
-the sandbox ensures that only DNS lookups are made; however, other
-systems do not have this.
-This is due to weak (or overly complex) DNS resolution and/or
-sandboxing.
-.It Network process.
-Manages communication with the Let's Encrypt server.
-This process is sandboxed and jailed in
-.Pa /var/empty ,
-and drops user privileges.
-.It Certificate process.
-Translates certificates into PEM files and transfers them to the file
-process.
-Also extracts the CA issuer name from the certificate and transfers it
-to the network process for downloading.
-This process is sandboxed and jailed in
-.Pa /var/empty ,
-and drops user privileges.
-.It File process.
-Manages public certificate and certificate chain files.
-Each domain certificate is written into a temporary file then atomically
-renamed into the real certificate with
-.Xr rename 2 .
-This process is sandboxed and jailed in the certificate directory.
-.It Domain key process.
-Reads and parses the RSA private key for the domain.
-This is used for creating the X509 request.
-After opening the private key file, this is sandboxed and jailed in
-.Pa /var/empty ,
-and drops user privileges.
-.It Account key process.
-Reads and parses the RSA private key for the account.
-This is responsible for signing messages submitted by the network
-process and creating
-.Dq thumbprint
-digests used by the challenge process.
-After opening the private key file, this is sandboxed and jailed in
-.Pa /var/empty ,
-and drops user privileges.
-.It Challenge process.
-This process creates and deletes challenge files.
-It is sandboxed and jailed in the challenge directory.
-.It Revoke process.
-If found, reads and parses the X509 certificate to check whether it
-should be signed or not.
-After opening the certificate file, this is sandboxed and jailed in
-.Pa /var/empty ,
-and drops user privileges.
-.El
+.\" .Sh IMPLEMENTATION NOTES
+.\" The
+.\" .Nm
+.\" utility follows a model of strict isolation between components.
+.\" There are seven such components, each of which is started in a
+.\" subprocess.
+.\" Sandboxing is system-specific.
+.\" .Bl -tag -width Ds
+.\" .It DNS process.
+.\" Manages domain name resolution.
+.\" This is allowed full access to the file-system, but is privilege-dropped.
+.\" On
+.\" .Ox , 
+.\" the sandbox ensures that only DNS lookups are made; however, other
+.\" systems do not have this.
+.\" This is due to weak (or overly complex) DNS resolution and/or
+.\" sandboxing.
+.\" .It Network process.
+.\" Manages communication with the Let's Encrypt server.
+.\" This process is sandboxed and jailed in
+.\" .Pa /var/empty ,
+.\" and drops user privileges.
+.\" .It Certificate process.
+.\" Translates certificates into PEM files and transfers them to the file
+.\" process.
+.\" Also extracts the CA issuer name from the certificate and transfers it
+.\" to the network process for downloading.
+.\" This process is sandboxed and jailed in
+.\" .Pa /var/empty ,
+.\" and drops user privileges.
+.\" .It File process.
+.\" Manages public certificate and certificate chain files.
+.\" Each domain certificate is written into a temporary file then atomically
+.\" renamed into the real certificate with
+.\" .Xr rename 2 .
+.\" This process is sandboxed and jailed in the certificate directory.
+.\" .It Domain key process.
+.\" Reads and parses the RSA private key for the domain.
+.\" This is used for creating the X509 request.
+.\" After opening the private key file, this is sandboxed and jailed in
+.\" .Pa /var/empty ,
+.\" and drops user privileges.
+.\" .It Account key process.
+.\" Reads and parses the RSA private key for the account.
+.\" This is responsible for signing messages submitted by the network
+.\" process and creating
+.\" .Dq thumbprint
+.\" digests used by the challenge process.
+.\" After opening the private key file, this is sandboxed and jailed in
+.\" .Pa /var/empty ,
+.\" and drops user privileges.
+.\" .It Challenge process.
+.\" This process creates and deletes challenge files.
+.\" It is sandboxed and jailed in the challenge directory.
+.\" .It Revoke process.
+.\" If found, reads and parses the X509 certificate to check whether it
+.\" should be signed or not.
+.\" After opening the certificate file, this is sandboxed and jailed in
+.\" .Pa /var/empty ,
+.\" and drops user privileges.
+.\" .El
 .\" Not used in OpenBSD.
 .\" .Sh RETURN VALUES
 .\" For sections 2, 3, and 9 function return values only.
@@ -297,7 +294,11 @@ and drops user privileges.
 .\" .Sh AUTHORS
 .\" .Sh CAVEATS
 .Sh BUGS
-The challenge and certificate processes retain their privileges, as I'm
-not sure which credentials to use otherwise.
+The challenge and certificate processes currently retain their (root)
+privileges.
+.Pp
+For the time being,
+.Nm
+only supports RSA keys.
 .\" .Sh SECURITY CONSIDERATIONS
 .\" Not used in OpenBSD.
