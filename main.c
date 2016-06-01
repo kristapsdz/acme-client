@@ -351,7 +351,7 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	else if ( ! dropfs(PATH_VAR_EMPTY))
 		exit(EXIT_FAILURE);
-	else if ( ! dropprivs(nobody_uid, nobody_gid))
+	else if ( ! dropprivs())
 		exit(EXIT_FAILURE);
 	else if ( ! sandbox_after())
 		exit(EXIT_FAILURE);
