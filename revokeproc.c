@@ -18,15 +18,10 @@
 # include "config.h"
 #endif
 
-#include <sys/stat.h>
-#include <sys/param.h>
-
 #include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +30,7 @@
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
-#include <openssl/engine.h>
+#include <openssl/err.h>
 
 #include "extern.h"
 

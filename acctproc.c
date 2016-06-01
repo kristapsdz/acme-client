@@ -18,11 +18,7 @@
 # include "config.h"
 #endif
 
-#include <sys/param.h>
-
-#include <assert.h>
 #include <err.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,7 +27,7 @@
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/rand.h>
-#include <openssl/engine.h>
+#include <openssl/err.h>
 
 #include "extern.h"
 

@@ -18,10 +18,7 @@
 # include "config.h"
 #endif
 
-#include <sys/param.h>
-
 #include <err.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
