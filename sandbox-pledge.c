@@ -64,9 +64,8 @@ sandbox_after(void)
 		break;
 	case (COMP_FILE):
 		/* 
-		 * XXX: rpath shouldn't be here, but it's tripped by the
-		 * rename(2) despite that pledge(2) specifically says
-		 * rename(2) is cpath.
+		 * Rpath and cpath for rename, wpath and cpath for
+		 * writing to the temporary.
 		 */
 		if (-1 == pledge("stdio cpath wpath rpath", NULL)) {
 			warn("pledge");
@@ -74,8 +73,7 @@ sandbox_after(void)
 		}
 		break;
 	case (COMP_NET):
-		/* rpath required by libcurl */
-		if (-1 == pledge("stdio inet rpath", NULL)) {
+		if (-1 == pledge("stdio inet", NULL)) {
 			warn("pledge");
 			return(0);
 		}
