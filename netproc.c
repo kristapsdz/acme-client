@@ -602,7 +602,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 		goto out;
 	else if ( ! dropfs(PATH_VAR_EMPTY))
 		goto out;
-	else if ( ! dropprivs(uid, gid))
+	else if ( ! dropprivs())
 		goto out;
 	else if ( ! sandbox_after())
 		goto out;

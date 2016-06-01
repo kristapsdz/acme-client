@@ -242,7 +242,7 @@ char		*json_fmt_thumb(const char *, const char *);
 char		*json_fmt_signed(const char *, 
 			const char *, const char *, const char *);
 
-int		 dropprivs(uid_t, gid_t);		 
+int		 dropprivs(void);
 int		 dropfs(const char *);
 int		 checkprivs(void);
 
