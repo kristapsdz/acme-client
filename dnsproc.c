@@ -119,7 +119,7 @@ host_dns(const char *s, struct addr *vec)
 }
 
 int
-dnsproc(int nfd, uid_t uid, gid_t gid)
+dnsproc(int nfd)
 {
 	int		 rc, cc;
 	char		*look, *last;

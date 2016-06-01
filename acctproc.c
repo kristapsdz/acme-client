@@ -299,8 +299,7 @@ out:
 }
 
 int
-acctproc(int netsock, const char *acctkey, 
-	int newacct, uid_t uid, gid_t gid)
+acctproc(int netsock, const char *acctkey, int newacct)
 {
 	FILE		*f;
 	RSA		*r;
