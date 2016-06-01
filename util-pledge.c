@@ -18,6 +18,7 @@
 # include "config.h"
 #endif
 
+#include <err.h>
 #include <unistd.h>
 
 #include "extern.h"
