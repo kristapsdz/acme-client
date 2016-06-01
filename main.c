@@ -374,7 +374,7 @@ main(int argc, char *argv[])
 	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
 usage:
 	fprintf(stderr, "usage: %s "
-		"[-nrsv] "
+		"[-Fnrsv] "
 		"[-C challengedir] "
 		"[-c certdir] "
 		"[-f accountkey] "
