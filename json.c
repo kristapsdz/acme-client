@@ -123,7 +123,7 @@ build(struct parse *parse, struct jsmnn **np,
 	case (JSMN_ARRAY):
 		n->fields = t->size;
 		n->d.array = calloc(n->fields, 
-			sizeof(struct jsmnp *));
+			sizeof(struct jsmnn *));
 		if (NULL == n->d.array)
 			break;
 		for (i = j = 0; i < (size_t)t->size; i++) {
@@ -170,14 +170,17 @@ jsmnparse_free(struct parse *p)
 
 /*
  * Allocate a tree representation of "t".
- * This returns NULL on allocation failure, in which case all resources
- * allocated along the way are freed already.
+ * This returns NULL on allocation failure or when sz is zero, in which case all
+ * resources allocated along the way are freed already.
  */
 struct jsmnn *
 jsmntree_alloc(jsmntok_t *t, const char *js, size_t sz)
 {
 	struct jsmnn	*first;
 	struct parse	*p;
+
+	if (sz == 0)
+		return(NULL);
 
 	p = calloc(1, sizeof(struct parse));
 	if (NULL == p)
@@ -417,14 +420,14 @@ again:
 		return(NULL);
 	}
 
-	/* Actually try to parse the JOSN into the tokens. */
+	/* Actually try to parse the JSON into the tokens. */
 
 	r = jsmn_parse(&p, buf, sz, tok, tokcount);
 	if (r < 0 && JSMN_ERROR_NOMEM == r) {
 		tokcount *= 2;
 		free(tok);
 		goto again;
-	} else if (r < 0) {
+	} else if (r <= 0) {
 		warnx("jsmn_parse: %d", r);
 		free(tok);
 		return(NULL);
