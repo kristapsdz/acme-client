@@ -471,6 +471,8 @@ http_body_read(const struct http *http,
 		/* If less than sizeof(buf), at EOF. */
 		if ((ssz = http_read(buf, sizeof(buf), http)) < 0)
 			return(NULL);
+		else if (0 == ssz)
+			break;
 		pp = realloc(trans->bbuf, trans->bbufsz + ssz);
 		if (NULL == pp) {
 			warn("realloc");
@@ -668,6 +670,8 @@ http_head_read(const struct http *http,
 		/* If less than sizeof(buf), at EOF. */
 		if ((ssz = http_read(buf, sizeof(buf), http)) < 0)
 			return(NULL);
+		else if (0 == ssz)
+			break;
 		pp = realloc(trans->hbuf, trans->hbufsz + ssz);
 		if (NULL == pp) {
 			warn("realloc");
