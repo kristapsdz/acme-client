@@ -36,13 +36,23 @@
 /*
  * This was lifted more or less directly from demos/x509/mkreq.c of the
  * OpenSSL source code.
- * TODO: is this the best way of doing this?
  */
 static int 
 add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 {
 	X509_EXTENSION 	*ex;
 	char		*cp;
+
+	/*
+	 * XXX: I don't like this at all.
+	 * There's no documentation for X509V3_EXT_conf_nid, so I'm not
+	 * sure if the "value" parameter is ever written to, touched,
+	 * etc.
+	 * The 'official' examples suggest not (they use a string
+	 * literal as the input), but to be safe, I'm doing an
+	 * allocation here and just letting it go.
+	 * This leaks memory, but bounded to the number of SANs.
+	 */
 
 	if (NULL == (cp = strdup(value))) {
 		warn("strdup");
@@ -51,6 +61,7 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 	ex = X509V3_EXT_conf_nid(NULL, NULL, nid, cp);
 	if (NULL == ex) {
 		warnx("X509V3_EXT_conf_nid");
+		free(cp);
 		return(0);
 	}
 	sk_X509_EXTENSION_push(sk, ex);
