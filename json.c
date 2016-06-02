@@ -123,7 +123,7 @@ build(struct parse *parse, struct jsmnn **np,
 	case (JSMN_ARRAY):
 		n->fields = t->size;
 		n->d.array = calloc(n->fields, 
-			sizeof(struct jsmnp *));
+			sizeof(struct jsmnn *));
 		if (NULL == n->d.array)
 			break;
 		for (i = j = 0; i < (size_t)t->size; i++) {
