@@ -75,7 +75,7 @@ bn2string(const BIGNUM *bn)
  * The thumbprint operation is used for the challenge sequence.
  */
 static int
-op_thumbprint(int fd, RSA *r)
+op_thumbprint(int fd, EVP_PKEY *pkey)
 {
 	char		*exp, *mod, *thumb, *dig64;
 	int		 rc;
@@ -83,13 +83,17 @@ op_thumbprint(int fd, RSA *r)
 	unsigned char	*dig;
 
 	EVP_MD_CTX	*ctx;
+	RSA		*r;
 
 	rc = 0;
 	mod = exp = thumb = dig64 = NULL;
 	dig = NULL;
 	ctx = NULL;
 
-	if (NULL == (mod = bn2string(r->n))) {
+	if (NULL == (r = EVP_PKEY_get1_RSA(pkey))) {
+		warnx("EVP_PKEY_get1_RSA");
+		goto out;
+	} else if (NULL == (mod = bn2string(r->n))) {
 		warnx("bn2string");
 		goto out;
 	} else if (NULL == (exp = bn2string(r->e))) {
@@ -150,7 +154,7 @@ out:
  * This requires the sender ("fd") to provide the payload and a nonce.
  */
 static int
-op_sign(int fd, RSA *r)
+op_sign(int fd, EVP_PKEY *pkey)
 {
 	char		*exp, *mod, *nonce, *pay,
 			*pay64, *prot, *prot64, *head, 
@@ -158,15 +162,13 @@ op_sign(int fd, RSA *r)
 	int		 cc, rc;
 	unsigned int	 digsz;
 	unsigned char	*dig;
-
 	EVP_MD_CTX	*ctx;
-	EVP_PKEY	*pkey;
+	RSA		*r;
 
 	rc = 0;
 	pay = nonce = mod = exp = head = fin =
 		sign = prot = prot64 = pay64 = dig64 = NULL;
 	dig = NULL;
-	pkey = NULL;
 	ctx = NULL;
 
 	/* Read our payload and nonce from the requestor. */
@@ -178,7 +180,10 @@ op_sign(int fd, RSA *r)
 
 	/* Extract relevant portions of our private key. */
 
-	if (NULL == (mod = bn2string(r->n))) {
+	if (NULL == (r = EVP_PKEY_get1_RSA(pkey))) {
+		warnx("EVP_PKEY_get1_RSA");
+		goto out;
+	} else if (NULL == (mod = bn2string(r->n))) {
 		warnx("bn2string");
 		goto out;
 	} else if (NULL == (exp = bn2string(r->e))) {
@@ -219,21 +224,7 @@ op_sign(int fd, RSA *r)
 		goto out;
 	}
 
-	/*
-	 * Create an envelope for the key an assign the RSA private key
-	 * parts to it (we'll use it for signing).
-	 * (The dup is because the EVP_PKEY_free will kill the RSA.)
-	 * FIXME: we don't need to keep recomputing this.
-	 * Do it outside of this function and loop.
-	 */
-
-	if (NULL == (pkey = EVP_PKEY_new())) {
-		warnx("EVP_PKEY_new");
-		goto out;
-	} else if ( ! EVP_PKEY_assign_RSA(pkey, RSAPrivateKey_dup(r))) {
-		warnx("EVP_PKEY_assign_RSA");
-		goto out;
-	} else if (NULL == (dig = malloc(EVP_PKEY_size(pkey)))) {
+	if (NULL == (dig = malloc(EVP_PKEY_size(pkey)))) {
 		warn("malloc");
 		goto out;
 	}
@@ -274,8 +265,6 @@ op_sign(int fd, RSA *r)
 
 	rc = 1;
 out:
-	if (NULL != pkey)
-		EVP_PKEY_free(pkey);
 	if (NULL != ctx)
 		EVP_MD_CTX_destroy(ctx);
 
@@ -298,16 +287,16 @@ int
 acctproc(int netsock, const char *acctkey, int newacct)
 {
 	FILE		*f;
-	RSA		*r;
+	EVP_PKEY_CTX	*ctx;
+	EVP_PKEY	*pkey;
 	long		 lval;
 	enum acctop	 op;
 	unsigned char	 rbuf[64];
-	BIGNUM		*bne;
 	int		 rc, cc;
 
 	f = NULL;
-	r = NULL;
-	bne = NULL;
+	ctx = NULL;
+	pkey = NULL;
 	rc = 0;
 
 	/* 
@@ -346,31 +335,31 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	}
 
 	if (newacct) {
-		if (NULL == (bne = BN_new())) {
-			warnx("BN_new");
+		if (NULL == (ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL))) {
+			warnx("EVP_PKEY_CTX_new_id");
 			goto out;
-		} else if ( ! BN_set_word(bne, RSA_F4)) {
-			warnx("BN_set_word");
+		} else if (EVP_PKEY_keygen_init(ctx) <= 0) {
+			warnx("EVP_PKEY_keygen_init");
 			goto out;
-		} else if (NULL == (r = RSA_new())) {
-			warnx("RSA_new");
+		} else if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, KEY_BITS) <= 0) {
+			warnx("EVP_PKEY_set_rsa_keygen_bits");
 			goto out;
 		}
 		dodbg("%s: creating: %d bits", acctkey, KEY_BITS);
-		if ( ! RSA_generate_key_ex(r, KEY_BITS, bne, NULL)) {
-			warnx("RSA_generate_key_ex");
+		if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
+			warnx("EVP_PKEY_keygen");
 			goto out;
 		}
-		if ( ! PEM_write_RSAPrivateKey
-		    (f, r, NULL, 0, 0, NULL, NULL)) {
-			warnx("PEM_write_RSAPrivateKey");
+		if ( ! PEM_write_PrivateKey
+		    (f, pkey, NULL, NULL, 0, NULL, NULL)) {
+			warnx("PEM_write_PrivateKey");
 			goto out;
 		}
-		BN_free(bne);
-		bne = NULL;
+		EVP_PKEY_CTX_free(ctx);
+		ctx = NULL;
 	} else {
-		r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
-		if (NULL == r) {
+		pkey = PEM_read_PrivateKey(f, NULL, NULL, NULL);
+		if (NULL == pkey) {
 			warnx("%s", acctkey);
 			goto out;
 		}
@@ -407,12 +396,12 @@ acctproc(int netsock, const char *acctkey, int newacct)
 
 		switch (op) {
 		case (ACCT_SIGN):
-			if (op_sign(netsock, r))
+			if (op_sign(netsock, pkey))
 				break;
 			warnx("op_sign");
 			goto out;
 		case (ACCT_THUMBPRINT):
-			if (op_thumbprint(netsock, r))
+			if (op_thumbprint(netsock, pkey))
 				break;
 			warnx("op_thumbprint");
 			goto out;
@@ -426,10 +415,10 @@ out:
 	close(netsock);
 	if (NULL != f)
 		fclose(f);
-	if (NULL != r)
-		RSA_free(r);
-	if (NULL != bne)
-		BN_free(bne);
+	if (NULL != pkey)
+		EVP_PKEY_free(pkey);
+	if (NULL != ctx)
+		EVP_PKEY_CTX_free(ctx);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
 	return(rc);
