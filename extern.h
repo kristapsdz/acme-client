@@ -246,8 +246,8 @@ int		 dropprivs(void);
 int		 dropfs(const char *);
 int		 checkprivs(void);
 
-int		 sandbox_after();
-int		 sandbox_before();
+int		 sandbox_after(void);
+int		 sandbox_before(void);
 
 /*
  * Should we print debugging messages?
