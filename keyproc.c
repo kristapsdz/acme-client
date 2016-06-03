@@ -26,7 +26,6 @@
 
 #include <openssl/pem.h>
 #include <openssl/err.h>
-#include <openssl/rsa.h>
 #include <openssl/rand.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -69,8 +68,8 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 }
 
 /*
- * Create an X509 certificate from the private RSA key we have on file.
- * To do this, we first open the RSA key file, then jail ourselves.
+ * Create an X509 certificate from the private key we have on file.
+ * To do this, we first open the key file, then jail ourselves.
  * We then use the crypto library to create the certificate within the
  * jail and, on success, ship it to "netsock" as an X509 request.
  */
@@ -81,9 +80,8 @@ keyproc(int netsock, const char *keyfile,
 	char		*der64, *der, *dercp, *sans, *san;
 	FILE		*f;
 	size_t		 i, sansz;
-	RSA		*r;
 	void		*pp;
-	EVP_PKEY	*evp;
+	EVP_PKEY	*pkey;
 	X509_REQ	*x;
 	X509_NAME 	*name;
 	unsigned char	 rbuf[64];
@@ -91,8 +89,7 @@ keyproc(int netsock, const char *keyfile,
 	STACK_OF(X509_EXTENSION) *exts;
 
 	x = NULL;
-	evp = NULL;
-	r = NULL;
+	pkey = NULL;
 	name = NULL;
 	der = der64 = sans = san = NULL;
 	rc = 0;
@@ -137,8 +134,8 @@ keyproc(int netsock, const char *keyfile,
 	 * memory is managed by the EVP.
 	 */
 
-	r = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
-	if (NULL == r) {
+	pkey = PEM_read_PrivateKey(f, NULL, NULL, NULL);
+	if (NULL == pkey) {
 		warnx("%s", keyfile);
 		goto out;
 	}
@@ -146,16 +143,6 @@ keyproc(int netsock, const char *keyfile,
 	fclose(f);
 	f = NULL;
 
-	if (NULL == (evp = EVP_PKEY_new())) {
-		warnx("EVP_PKEY_new");
-		goto out;
-	} else if ( ! EVP_PKEY_assign_RSA(evp, r)) {
-		warnx("EVP_PKEY_assign_RSA");
-		goto out;
-	} 
-
-	r = NULL;
-	
 	/* 
 	 * Generate our certificate from the EVP public key.
 	 * Then set it as the X509 requester's key.
@@ -164,7 +151,7 @@ keyproc(int netsock, const char *keyfile,
 	if (NULL == (x = X509_REQ_new())) {
 		warnx("X509_new");
 		goto out;
-	} else if ( ! X509_REQ_set_pubkey(x, evp)) {
+	} else if ( ! X509_REQ_set_pubkey(x, pkey)) {
 		warnx("X509_set_pubkey");
 		goto out;
 	}
@@ -242,7 +229,7 @@ keyproc(int netsock, const char *keyfile,
 
 	/* Sign the X509 request using SHA256. */
 
-	if ( ! X509_REQ_sign(x, evp, EVP_sha256())) {
+	if ( ! X509_REQ_sign(x, pkey, EVP_sha256())) {
 		warnx("X509_sign");
 		goto out;
 	} 
@@ -285,12 +272,10 @@ out:
 	free(san);
 	if (NULL != x)
 		X509_REQ_free(x);
-	if (NULL != r)
-		RSA_free(r);
 	if (NULL != name)
 		X509_NAME_free(name);
-	if (NULL != evp)
-		EVP_PKEY_free(evp);
+	if (NULL != pkey)
+		EVP_PKEY_free(pkey);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
 	return(rc);
