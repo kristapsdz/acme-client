@@ -50,7 +50,7 @@ Its arguments are as follows:
 .It Fl F
 Force updating the certificate signature even if it's too soon.
 .It Fl n
-Create a new account key.
+Create a new RSA account key.
 This will fail if a file already exists in the account key's place.
 .It Fl r
 Revoke the X509 certificate found in
@@ -121,7 +121,7 @@ create a challenge response file,
 wait until the CA has verified the challenge.
 .El
 .It
-Read and extract the RSA domain key.
+Read and extract the domain key.
 .It
 Create an X509 request from the doman key for the domain and its
 alternative names.
@@ -299,6 +299,6 @@ privileges.
 .Pp
 For the time being,
 .Nm
-only supports RSA keys.
+only supports RSA as an account key format.
 .\" .Sh SECURITY CONSIDERATIONS
 .\" Not used in OpenBSD.
