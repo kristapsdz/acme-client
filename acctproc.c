@@ -362,6 +362,9 @@ acctproc(int netsock, const char *acctkey, int newacct)
 		if (NULL == pkey) {
 			warnx("%s", acctkey);
 			goto out;
+		} else if (EVP_PKEY_RSA != EVP_PKEY_type(pkey->type)) {
+			warnx("%s: unsupported key type", acctkey);
+			goto out;
 		}
 	}
 
