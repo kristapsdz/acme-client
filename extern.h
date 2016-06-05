@@ -21,12 +21,12 @@
 
 #define MAX_SERVERS_DNS 8
 
-#define	CERT_PEM "cert.pem"
-#define	CERT_BAK "cert.pem~"
-#define	CHAIN_PEM "chain.pem"
-#define	CHAIN_BAK "chain.pem~"
-#define	FCHAIN_PEM "fullchain.pem"
-#define	FCHAIN_BAK "fullchain.pem~"
+#define	CERT_PEM_TEMPLATE "%s.pem"
+#define	CERT_BAK_TEMPLATE "%s.pem~"
+#define	CHAIN_PEM_TEMPLATE "%s_chain.pem"
+#define	CHAIN_BAK_TEMPLATE "%s_chain.pem~"
+#define	FCHAIN_PEM_TEMPLATE "%s_fullchain.pem"
+#define	FCHAIN_BAK_TEMPLATE "%s_fullchain.pem~"
 
 
 /*
@@ -182,7 +182,7 @@ int		 chngproc(int, const char *, int);
 int		 dnsproc(int);
 int		 revokeproc(int, const char *, 
 			int, int, const char *const *, size_t);
-int		 fileproc(int, const char *);
+int		 fileproc(int, const char *, const char *);
 int		 keyproc(int, const char *,
 			const char **, size_t);
 int		 netproc(int, int, int, int, int, int, int, int, int,

@@ -64,9 +64,10 @@ serialise(const char *tmp, const char *real,
 }
 
 int
-fileproc(int certsock, const char *certdir)
+fileproc(int certsock, const char *certdir, const char *domain)
 {
 	char		*csr, *ch;
+	char		*CERT_PEM, *CERT_BAK, *CHAIN_PEM, *CHAIN_BAK, *FCHAIN_PEM, *FCHAIN_BAK;
 	size_t		 chsz, csz;
 	int		 rc;
 	long		 lval;
@@ -83,6 +84,32 @@ fileproc(int certsock, const char *certdir)
 		goto out;
 	else if ( ! sandbox_after())
 		goto out;
+
+	/* asprintf */
+	if (-1 == asprintf(&CERT_PEM, CERT_PEM_TEMPLATE, domain)) {
+		warn("asprintf");
+		goto out;
+	}
+	if (-1 == asprintf(&CERT_BAK, CERT_BAK_TEMPLATE, domain)) {
+		warn("asprintf");
+		goto out;
+	}
+	if (-1 == asprintf(&CHAIN_PEM, CHAIN_PEM_TEMPLATE, domain)) {
+		warn("asprintf");
+		goto out;
+	}
+	if (-1 == asprintf(&CHAIN_BAK, CHAIN_BAK_TEMPLATE, domain)) {
+		warn("asprintf");
+		goto out;
+	}
+	if (-1 == asprintf(&FCHAIN_PEM, FCHAIN_PEM_TEMPLATE, domain)) {
+		warn("asprintf");
+		goto out;
+	}
+	if (-1 == asprintf(&FCHAIN_BAK, FCHAIN_BAK_TEMPLATE, domain)) {
+		warn("asprintf");
+		goto out;
+	}
 
 	/* Read our operation. */
 
@@ -168,5 +195,11 @@ out:
 	close(certsock);
 	free(csr);
 	free(ch);
+	free(CERT_PEM);
+	free(CERT_BAK);
+	free(CHAIN_PEM);
+	free(CHAIN_BAK);
+	free(FCHAIN_PEM);
+	free(FCHAIN_BAK);
 	return(rc);
 }
