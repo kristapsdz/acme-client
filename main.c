@@ -43,11 +43,13 @@ main(int argc, char *argv[])
 	extern enum comp  proccomp;
 	size_t		  i, altsz, ne;
 	const char	**alts;
+	char		*keyfile_tmp;
 
+	keyfile_tmp = NULL;
 	alts = NULL;
 	newacct = remote = revoke = verbose = force = staging = 0;
 	certdir = "/etc/ssl/letsencrypt";
-	keyfile = "/etc/ssl/letsencrypt/private/privkey.pem";
+	keyfile = NULL; // "/etc/ssl/letsencrypt/private/%domain%.pem";
 	acctkey = "/etc/letsencrypt/privkey.pem";
 	chngdir = "/var/www/letsencrypt";
 
@@ -102,6 +104,13 @@ main(int argc, char *argv[])
 
 	if ( ! checkprivs())
 		errx(EXIT_FAILURE, "must be run as root");
+
+	/* asprintf */
+	if(keyfile == NULL) {
+	    if (-1 == asprintf(&keyfile_tmp, "%s/private/%s.pem", certdir, domain))
+		errx(EXIT_FAILURE, "asprintf");
+	    keyfile = keyfile_tmp;
+	}
 
 	/* 
 	 * Do some quick checks to see if our paths exist. 
@@ -280,7 +289,7 @@ main(int argc, char *argv[])
 		free(alts);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
-		c = fileproc(file_fds[1], certdir);
+		c = fileproc(file_fds[1], certdir, domain);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -343,6 +352,7 @@ main(int argc, char *argv[])
 	     checkexit(pids[COMP_REVOKE], COMP_REVOKE);
 
 	free(alts);
+	free(keyfile_tmp);
 	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
 usage:
 	fprintf(stderr, "usage: %s "

@@ -106,7 +106,7 @@ revokeproc(int fd, const char *certdir, int force, int revoke,
 	long		 lval;
 	FILE		*f;
 	size_t		*found;
-	char		*path, *der, *dercp, *der64, *san, *str, *tok;
+	char		*path, *der, *dercp, *der64, *san, *str, *tok, *CERT_PEM;
 	X509		*x;
 	enum revokeop	 op, rop;
 	time_t		 t;
@@ -124,6 +124,12 @@ revokeproc(int fd, const char *certdir, int force, int revoke,
 	path = NULL;
 	san = NULL;
 	x = NULL;
+
+	/* asprintf */
+	if (-1 == asprintf(&CERT_PEM, CERT_PEM_TEMPLATE, alts[0])) {
+		warn("asprintf");
+		goto out;
+	}
 
 	/*
 	 * First try to open the certificate before we drop privileges
@@ -364,6 +370,7 @@ out:
 		X509_free(x);
 	if (NULL != bio)
 		BIO_free(bio);
+	free(CERT_PEM);
 	free(san);
 	free(path);
 	free(der);
