@@ -88,7 +88,8 @@ main(int argc, char *argv[])
 	const char	**alts;
 
 	alts = NULL;
-	newacct = remote = revoke = verbose = force = staging = 0;
+	newacct = remote = revoke = verbose = force = 
+		multidir = staging = 0;
 	certdir = keyfile = acctkey = chngdir = NULL;
 
 	while (-1 != (c = getopt(argc, argv, "Fmnrstvf:c:C:k:"))) 
