@@ -56,26 +56,37 @@ struct	conn {
 };
 
 /*
- * If something goes wrong, we dump the current transfer's data as a
- * debug message.
+ * If something goes wrong (or we're tracing output), we dump the
+ * current transfer's data as a debug message.
  * Make sure that print all non-printable characters as question marks
  * so that we don't spam the console.
+ * Also, consolidate white-space.
+ * This of course will ruin string literals, but the intent here is just
+ * to show the message, not to replicate it.
  */
 static void
-buf_dump(struct buf *buf)
+buf_dump(const struct buf *buf)
 {
 	size_t	 i;
+	int	 j;
+	char	*nbuf;
 
 	if (0 == buf->sz)
 		return;
+	if (NULL == (nbuf = malloc(buf->sz)))
+		err(EXIT_FAILURE, "malloc");
 
-	for (i = 0; i < buf->sz; i++)
-		if (isspace((int)buf->buf[i]))
-			buf->buf[i] = ' ';
-		else if ( ! isprint((int)buf->buf[i]))
-			buf->buf[i] = '?';
-	dodbg("transfer buffer: [%.*s] (%zu bytes)", 
-		(int)buf->sz, buf->buf, buf->sz);
+	for (j = 0, i = 0; i < buf->sz; i++)
+		if (isspace((int)buf->buf[i])) {
+			nbuf[j++] = ' ';
+			while (isspace((int)buf->buf[i]))
+				i++;
+			i--;
+		} else
+			nbuf[j++] = isprint((int)buf->buf[i]) ?
+				buf->buf[i] : '?';
+	dodbg("transfer buffer: [%.*s] (%zu bytes)", j, nbuf, buf->sz);
+	free(nbuf);
 }
 
 /*
