@@ -20,7 +20,9 @@
 
 #include <sys/socket.h>
 
+#include <ctype.h>
 #include <err.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,17 +30,58 @@
 
 #include "extern.h"
 
+#define SSL_DIR "/etc/ssl/letsencrypt"
+#define SSL_PRIV_DIR "/etc/ssl/letsencrypt/private"
+#define ETC_DIR "/etc/letsencrypt"
+#define WWW_DIR "/var/www/letsencrypt"
+#define PRIVKEY_FILE "privkey.pem"
+
+/*
+ * This isn't RFC1035 compliant, but does the bare minimum in making
+ * sure that we don't get bogus domain names on the command line, which
+ * might otherwise screw up our directory structure.
+ * Returns zero on failure, non-zero on success.
+ */
+static int
+domain_valid(const char *cp)
+{
+
+	for ( ; '\0' != *cp; cp++)
+		if (!('.' == *cp || '-' == *cp || 
+ 		      '_' == *cp || isalpha((int)*cp)))
+			return(0);
+	return(1);
+}
+
+/*
+ * Wrap around asprintf(3), which sometimes nullifies the input values,
+ * sometimes not, but always returns <0 on error.
+ * Returns NULL on failure or the pointer on success.
+ */
+static char *
+doasprintf(const char *fmt, ...)
+{
+	int	 c;
+	char	*cp;
+	va_list	 ap;
+
+	va_start(ap, fmt);
+	c = vasprintf(&cp, fmt, ap);
+	va_end(ap);
+	return(c < 0 ? NULL : cp);
+}
+
 int
 main(int argc, char *argv[])
 {
-	const char	 *domain, *certdir, *acctkey, 
-	     		 *chngdir, *keyfile;
+	const char	 *domain;
+	char	 	 *certdir, *acctkey, *chngdir, *keyfile;
 	int		  key_fds[2], acct_fds[2], chng_fds[2], 
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
 	pid_t		  pids[COMP__MAX];
 	int		  c, rc, newacct, remote, revoke, force,
-			  staging;
+			  staging, multidir;
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, altsz, ne;
@@ -46,27 +89,35 @@ main(int argc, char *argv[])
 
 	alts = NULL;
 	newacct = remote = revoke = verbose = force = staging = 0;
-	certdir = "/etc/ssl/letsencrypt";
-	keyfile = "/etc/ssl/letsencrypt/private/privkey.pem";
-	acctkey = "/etc/letsencrypt/privkey.pem";
-	chngdir = "/var/www/letsencrypt";
+	certdir = keyfile = acctkey = chngdir = NULL;
 
-	while (-1 != (c = getopt(argc, argv, "Fnrstvf:c:C:k:"))) 
+	while (-1 != (c = getopt(argc, argv, "Fmnrstvf:c:C:k:"))) 
 		switch (c) {
 		case ('c'):
-			certdir = optarg;
+			free(certdir);
+			if (NULL == (certdir = strdup(optarg)))
+				err(EXIT_FAILURE, "strdup");
 			break;
 		case ('C'):
-			chngdir = optarg;
+			free(chngdir);
+			if (NULL == (chngdir = strdup(optarg)))
+				err(EXIT_FAILURE, "strdup");
 			break;
 		case ('f'):
-			acctkey = optarg;
+			free(acctkey);
+			if (NULL == (acctkey = strdup(optarg)))
+				err(EXIT_FAILURE, "strdup");
 			break;
 		case ('F'):
 			force = 1;
 			break;
 		case ('k'):
-			keyfile = optarg;
+			free(keyfile);
+			if (NULL == (keyfile = strdup(optarg)))
+				err(EXIT_FAILURE, "strdup");
+			break;
+		case ('m'):
+			multidir = 1;
 			break;
 		case ('n'):
 			newacct = 1;
@@ -96,12 +147,49 @@ main(int argc, char *argv[])
 	if (0 == argc)
 		goto usage;
 
+	/* Make sure that the domains are sane. */
+
+	for (i = 0; i < (size_t)argc; i++) {
+		if (domain_valid(argv[i]))
+			continue;
+		errx(EXIT_FAILURE, "%s: bad domain syntax", argv[i]);
+	}
+
 	domain = argv[0];
 	argc--;
 	argv++;
 
 	if ( ! checkprivs())
 		errx(EXIT_FAILURE, "must be run as root");
+
+	/* 
+	 * Now we allocate our directories and file paths IFF we haven't
+	 * specified them on the command-line.
+	 * If we're in "multidir" (-m) mode, we use our initial domain
+	 * name when specifying the prefixes.
+	 * Otherwise, we put them all in a known location.
+	 */
+
+	if (NULL == certdir)
+		certdir = multidir ? 
+			doasprintf(SSL_DIR "/%s", domain) :
+			strdup(SSL_DIR);
+	if (NULL == keyfile)
+		keyfile = multidir ?
+			doasprintf(SSL_PRIV_DIR "/%s/" 
+				PRIVKEY_FILE, domain) :
+			strdup(SSL_PRIV_DIR "/" PRIVKEY_FILE);
+	if (NULL == acctkey)
+		acctkey = multidir ? 
+			doasprintf(ETC_DIR "/%s/"
+				PRIVKEY_FILE, domain) :
+			strdup(ETC_DIR "/" PRIVKEY_FILE);
+	if (NULL == chngdir)
+		chngdir = strdup(WWW_DIR);
+
+	if (NULL == certdir || NULL == keyfile ||
+	    NULL == acctkey || NULL == chngdir)
+		err(EXIT_FAILURE, "strdup");
 
 	/* 
 	 * Do some quick checks to see if our paths exist. 
@@ -342,6 +430,10 @@ main(int argc, char *argv[])
 	     checkexit(pids[COMP_DNS], COMP_DNS) +
 	     checkexit(pids[COMP_REVOKE], COMP_REVOKE);
 
+	free(certdir);
+	free(keyfile);
+	free(acctkey);
+	free(chngdir);
 	free(alts);
 	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
 usage:
