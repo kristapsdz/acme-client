@@ -180,7 +180,7 @@ dnsproc(int nfd)
 			last = look;
 			look = NULL;
 		} else {
-			dodbg("%s: cached", look);
+			doddbg("%s: cached", look);
 			free(look);
 			look = NULL;
 		}
