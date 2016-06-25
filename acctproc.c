@@ -318,11 +318,39 @@ out:
 	return(rc);
 }
 
+/*
+ * Create an RSA key with the default KEY_BITS number of bits.
+ */
+static EVP_PKEY *
+key_create_rsa(void)
+{
+	EVP_PKEY_CTX	*ctx;
+	EVP_PKEY	*pkey;
+
+	ctx = NULL;
+	pkey = NULL;
+
+	if (NULL == (ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL)))
+		warnx("EVP_PKEY_CTX_new_id");
+	else if (EVP_PKEY_keygen_init(ctx) <= 0)
+		warnx("EVP_PKEY_keygen_init");
+	else if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, KEY_BITS) <= 0)
+		warnx("EVP_PKEY_set_rsa_keygen_bits");
+	else if (EVP_PKEY_keygen(ctx, &pkey) <= 0)
+		warnx("EVP_PKEY_keygen");
+	else
+		dodbg("generated: RSA %d bits", KEY_BITS);
+
+	if (NULL != ctx)
+		EVP_PKEY_CTX_free(ctx);
+
+	return(pkey);
+}
+
 int
 acctproc(int netsock, const char *acctkey, int newacct)
 {
 	FILE		*f;
-	EVP_PKEY_CTX	*ctx;
 	EVP_PKEY	*pkey;
 	long		 lval;
 	enum acctop	 op;
@@ -330,7 +358,6 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	int		 rc, cc;
 
 	f = NULL;
-	ctx = NULL;
 	pkey = NULL;
 	rc = 0;
 
@@ -370,28 +397,13 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	}
 
 	if (newacct) {
-		if (NULL == (ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL))) {
-			warnx("EVP_PKEY_CTX_new_id");
+		if (NULL == (pkey = key_create_rsa()))
 			goto out;
-		} else if (EVP_PKEY_keygen_init(ctx) <= 0) {
-			warnx("EVP_PKEY_keygen_init");
-			goto out;
-		} else if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, KEY_BITS) <= 0) {
-			warnx("EVP_PKEY_set_rsa_keygen_bits");
-			goto out;
-		}
-		dodbg("%s: creating: %d bits", acctkey, KEY_BITS);
-		if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
-			warnx("EVP_PKEY_keygen");
-			goto out;
-		}
 		if ( ! PEM_write_PrivateKey
 		    (f, pkey, NULL, NULL, 0, NULL, NULL)) {
 			warnx("PEM_write_PrivateKey");
 			goto out;
 		}
-		EVP_PKEY_CTX_free(ctx);
-		ctx = NULL;
 	} else {
 		pkey = PEM_read_PrivateKey(f, NULL, NULL, NULL);
 		if (NULL == pkey) {
@@ -455,8 +467,6 @@ out:
 		fclose(f);
 	if (NULL != pkey)
 		EVP_PKEY_free(pkey);
-	if (NULL != ctx)
-		EVP_PKEY_CTX_free(ctx);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
 	return(rc);
