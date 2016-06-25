@@ -9,7 +9,7 @@
 .\" Not used in OpenBSD.
 .Sh SYNOPSIS
 .Nm letskencrypt
-.Op Fl Fnrsv
+.Op Fl Fmnrsv
 .Op Fl C Ar challengedir
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
@@ -49,6 +49,16 @@ Its arguments are as follows:
 .Bl -tag -width Ds
 .It Fl F
 Force updating the certificate signature even if it's too soon.
+.It Fl m
+Append
+.Ar domain
+to all default paths except the challenge path
+.Pq i.e., those that are overriden by Fl c , k , f .
+Thus,
+.Ar foo.com
+as the initial domain would make the default domain private key into
+.Pa /etc/ssl/letsencrypt/private/foo.com/privkey.pem .
+This is useful in setups with multiple domain sets.
 .It Fl n
 Create a new RSA account key.
 This will fail if a file already exists in the account key's place.
