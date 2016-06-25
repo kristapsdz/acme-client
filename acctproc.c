@@ -103,7 +103,7 @@ op_thumbprint(int fd, EVP_PKEY *pkey)
 
 	/* Construct the thumbprint input itself. */
 
-	if (NULL == (thumb = json_fmt_thumb(exp, mod))) {
+	if (NULL == (thumb = json_fmt_thumb_rsa(exp, mod))) {
 		warnx("json_fmt_thumb");
 		goto out;
 	}
@@ -200,14 +200,14 @@ op_sign(int fd, EVP_PKEY *pkey)
 
 	/* Construct the public header. */
 
-	if (NULL == (head = json_fmt_header(exp, mod))) {
+	if (NULL == (head = json_fmt_header_rsa(exp, mod))) {
 		warnx("json_fmt_header");
 		goto out;
 	}
 
 	/* Now the header combined with the nonce, then base64. */
 
-	if (NULL == (prot = json_fmt_protected(exp, mod, nonce))) {
+	if (NULL == (prot = json_fmt_protected_rsa(exp, mod, nonce))) {
 		warnx("json_fmt_protected");
 		goto out;
 	} else if (NULL == (prot64 = base64buf_url(prot, strlen(prot)))) {
