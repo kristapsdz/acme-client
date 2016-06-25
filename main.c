@@ -447,5 +447,9 @@ usage:
 		"[-u user] "
 		"domain [altnames...]\n", 
 		getprogname());
+	free(certdir);
+	free(keyfile);
+	free(acctkey);
+	free(chngdir);
 	return(EXIT_FAILURE);
 }
