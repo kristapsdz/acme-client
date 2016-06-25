@@ -234,11 +234,11 @@ char		*json_fmt_challenge(const char *, const char *);
 char		*json_fmt_newauthz(const char *);
 char		*json_fmt_newcert(const char *);
 char		*json_fmt_newreg(const char *);
-char		*json_fmt_protected(const char *, 
+char		*json_fmt_protected_rsa(const char *,
 			const char *, const char *);
 char		*json_fmt_revokecert(const char *);
-char		*json_fmt_header(const char *, const char *);
-char		*json_fmt_thumb(const char *, const char *);
+char		*json_fmt_header_rsa(const char *, const char *);
+char		*json_fmt_thumb_rsa(const char *, const char *);
 char		*json_fmt_signed(const char *, 
 			const char *, const char *, const char *);
 

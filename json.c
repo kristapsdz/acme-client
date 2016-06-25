@@ -545,7 +545,7 @@ json_fmt_newcert(const char *cert)
  * Header component of json_fmt_signed().
  */
 char *
-json_fmt_header(const char *exp, const char *mod)
+json_fmt_header_rsa(const char *exp, const char *mod)
 {
 	int	 c;
 	char	*p;
@@ -566,7 +566,7 @@ json_fmt_header(const char *exp, const char *mod)
  * Protected component of json_fmt_signed().
  */
 char *
-json_fmt_protected(const char *exp, const char *mod, const char *nce)
+json_fmt_protected_rsa(const char *exp, const char *mod, const char *nce)
 {
 	int	 c;
 	char	*p;
@@ -614,7 +614,7 @@ json_fmt_signed(const char *header, const char *protected,
  * However, it's in the form of a JSON string, so do it here.
  */
 char *
-json_fmt_thumb(const char *exp, const char *mod)
+json_fmt_thumb_rsa(const char *exp, const char *mod)
 {
 	int	 c;
 	char	*p;
