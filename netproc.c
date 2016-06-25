@@ -342,7 +342,7 @@ donewreg(struct conn *c, const struct capaths *p)
 	else
 		rc = 1;
 
-	if (0 == rc)
+	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
 	free(req);
 	return(rc);
@@ -379,7 +379,7 @@ dochngreq(struct conn *c, const char *alt,
 	else
 		rc = 1;
 
-	if (0 == rc)
+	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
 	json_free(j);
 	free(req);
@@ -408,7 +408,7 @@ dochngresp(struct conn *c, const struct chng *chng, const char *th)
 	else
 		rc = 1;
 
-	if (0 == rc)
+	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
 	free(req);
 	return(rc);
@@ -474,7 +474,7 @@ dorevoke(struct conn *c, const char *addr, const char *cert)
 	if (409 == lc)
 		warnx("%s: already revoked", addr);
 
-	if (0 == rc)
+	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
 	free(req);
 	return(rc);
@@ -505,7 +505,7 @@ docert(struct conn *c, const char *addr, const char *cert)
 	else
 		rc = 1;
 
-	if (0 == rc)
+	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
 	free(req);
 	return(rc);
@@ -536,7 +536,7 @@ dodirs(struct conn *c, const char *addr, struct capaths *paths)
 	else
 		rc = 1;
 
-	if (0 == rc)
+	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
 	json_free(j);
 	return(rc);
@@ -561,7 +561,7 @@ dofullchain(struct conn *c, const char *addr)
 	else
 		rc = 1;
 
-	if (0 == rc)
+	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
 	return(rc);
 }
