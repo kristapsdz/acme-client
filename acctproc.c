@@ -18,6 +18,8 @@
 # include "config.h"
 #endif
 
+#include <sys/stat.h>
+
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -356,6 +358,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	enum acctop	 op;
 	unsigned char	 rbuf[64];
 	int		 rc, cc;
+	mode_t		 prev;
 
 	f = NULL;
 	pkey = NULL;
@@ -364,9 +367,14 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	/* 
 	 * First, open our private key file read-only or write-only if
 	 * we're creating from scratch.
+	 * Set our umask to be maximally restrictive.
 	 */
 
-	if (NULL == (f = fopen(acctkey, newacct ? "wx" : "r"))) {
+	prev = umask((S_IWUSR | S_IXUSR) | S_IRWXG | S_IRWXO);
+	f = fopen(acctkey, newacct ? "wx" : "r");
+	umask(prev);
+
+	if (NULL == f) {
 		warn("%s", acctkey);
 		goto out;
 	}
