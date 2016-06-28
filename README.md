@@ -9,7 +9,7 @@ Please see
 stable releases: this repository is for current development of the the
 [OpenBSD](http://www.openbsd.org) version, requiring requires OpenBSD
 5.9 or greater.  For the portable version (Mac OS X, Linux, FreeBSD,
-older OpenBSD) see
+NetBSD, older OpenBSD) see
 [letskencrypt-portable](https://github.com/kristapsdz/letskencrypt-portable).
 
 This repository mirrors the master CVS repository: any source changes
