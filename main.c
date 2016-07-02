@@ -48,7 +48,7 @@ domain_valid(const char *cp)
 
 	for ( ; '\0' != *cp; cp++)
 		if (!('.' == *cp || '-' == *cp || 
- 		      '_' == *cp || isalpha((int)*cp)))
+ 		      '_' == *cp || isalnum((int)*cp)))
 			return(0);
 	return(1);
 }
