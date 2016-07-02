@@ -22,6 +22,7 @@
 #include <sys/param.h>
 #include <arpa/inet.h>
 
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <limits.h>
@@ -96,41 +97,55 @@ dosyswrite(const void *buf, size_t sz, const struct http *http)
 static ssize_t
 dotlsread(char *buf, size_t sz, const struct http *http)
 {
-	size_t	out;
+	size_t	out, tot = 0;
 	int	rc;
 
-	do 
+	for (;;) {
+		out = 0;
 		rc = tls_read(http->ctx, buf, sz, &out);
-	while (TLS_READ_AGAIN == rc ||
-	       TLS_WRITE_AGAIN == rc);
-
-	if (rc < 0) {
-		warn("%s: tls_read: %s", 
-			http->src.ip, 
-			tls_error(http->ctx));
+		if (out > 0) {
+			buf += out;
+			assert(sz >= out);
+			sz -= out;
+			tot += out;
+		}
+		if (TLS_READ_AGAIN == rc)
+			continue;
+		else if (0 == out || 0 == sz || 0 == rc)
+			break;
+		warnx("%s: tls_read: %s", 
+			http->src.ip, tls_error(http->ctx));
 		return(-1);
-	}
-	return(out);
+	} 
+
+	return(tot);
 }
 
 static ssize_t
 dotlswrite(const void *buf, size_t sz, const struct http *http)
 {
+	size_t	 out, tot = 0;
 	int	 rc;
-	size_t	 out;
 
-	do
+	for (;;) {
+		out = 0;
 		rc = tls_write(http->ctx, buf, sz, &out);
-	while (TLS_READ_AGAIN == rc ||
-	       TLS_READ_AGAIN == rc);
-
-	if (rc < 0) {
+		if (out > 0) {
+			buf += out;
+			assert(sz >= out);
+			sz -= out;
+			tot += out;
+		}
+		if (TLS_WRITE_AGAIN == rc) 
+			continue;
+		else if (0 == out || 0 == rc || 0 == rc)
+			break;
 		warnx("%s: tls_write: %s", 
-			http->src.ip, 
-			tls_error(http->ctx));
+			http->src.ip, tls_error(http->ctx));
 		return(-1);
-	}
-	return(out);
+	} 
+
+	return(tot);
 }
 #else
 /*
