@@ -27,6 +27,7 @@
 #include <limits.h>
 #include <netdb.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <tls.h>
