@@ -14,12 +14,15 @@ OBJS 	 = acctproc.o \
 	   main.o \
 	   netproc.o \
 	   revokeproc.o \
+	   rsa.o \
 	   sandbox-pledge.o \
 	   util.o \
 	   util-pledge.o
 
 letskencrypt: $(OBJS)
 	$(CC) -o $@ $(OBJS) -ltls -lssl -lcrypto
+
+rsa.o acctproc.o: rsa.h
 
 jsmn.o json.o: jsmn.h
 
