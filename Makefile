@@ -22,7 +22,7 @@ OBJS 	 = acctproc.o \
 letskencrypt: $(OBJS)
 	$(CC) -o $@ $(OBJS) -ltls -lssl -lcrypto
 
-rsa.o acctproc.o: rsa.h
+rsa.o acctproc.o keyproc.o: rsa.h
 
 jsmn.o json.o: jsmn.h
 
