@@ -18,6 +18,8 @@
 # include "config.h"
 #endif
 
+#include <sys/stat.h>
+
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +33,7 @@
 #include <openssl/x509v3.h>
 
 #include "extern.h"
+#include "rsa.h"
 
 /*
  * This was lifted more or less directly from demos/x509/mkreq.c of the
@@ -86,6 +89,7 @@ keyproc(int netsock, const char *keyfile,
 	X509_NAME 	*name;
 	unsigned char	 rbuf[64];
 	int		 len, rc, cc, nid;
+	mode_t		 prev;
 	STACK_OF(X509_EXTENSION) *exts;
 
 	x = NULL;
@@ -95,9 +99,17 @@ keyproc(int netsock, const char *keyfile,
 	rc = 0;
 	exts = NULL;
 
-	/* Begin by opening our key file. */
+	/* 
+	 * First, open our private key file read-only or write-only if
+	 * we're creating from scratch.
+	 * Set our umask to be maximally restrictive.
+	 */
 
-	if (NULL == (f = fopen(keyfile, "r"))) {
+	prev = umask((S_IWUSR | S_IXUSR) | S_IRWXG | S_IRWXO);
+	f = fopen(keyfile, newkey ? "wx" : "r");
+	umask(prev);
+
+	if (NULL == f) {
 		warn("%s", keyfile);
 		goto out;
 	}
@@ -128,16 +140,14 @@ keyproc(int netsock, const char *keyfile,
 		RAND_seed(rbuf, sizeof(rbuf));
 	}
 
-	/* 
-	 * Parse our private key from an already-open steam. 
-	 * Then merge the key into a abstract EVP, at which point the
-	 * memory is managed by the EVP.
-	 */
-
-	pkey = PEM_read_PrivateKey(f, NULL, NULL, NULL);
-	if (NULL == pkey) {
-		warnx("%s", keyfile);
-		goto out;
+	if (newkey) {
+		if (NULL == (pkey = rsa_key_create(f, keyfile)))
+			goto out;
+		dodbg("%s: generated RSA account key", keyfile);
+	} else {
+		if (NULL == (pkey = rsa_key_load(f, keyfile)))
+			goto out;
+		doddbg("%s: loaded RSA account key", keyfile);
 	}
 
 	fclose(f);
