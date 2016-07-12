@@ -92,7 +92,7 @@ main(int argc, char *argv[])
 		multidir = staging = newkey = 0;
 	certdir = keyfile = acctkey = chngdir = NULL;
 
-	while (-1 != (c = getopt(argc, argv, "Fmnrstvf:c:C:k:"))) 
+	while (-1 != (c = getopt(argc, argv, "FmnNrstvf:c:C:k:"))) 
 		switch (c) {
 		case ('c'):
 			free(certdir);
