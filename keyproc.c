@@ -75,7 +75,7 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
  */
 int
 keyproc(int netsock, const char *keyfile, 
-	const char **alts, size_t altsz)
+	const char **alts, size_t altsz, int newkey)
 {
 	char		*der64, *der, *dercp, *sans, *san;
 	FILE		*f;
