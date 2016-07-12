@@ -211,7 +211,7 @@ main(int argc, char *argv[])
 	if ( ! newkey && -1 == access(keyfile, R_OK)) {
 		warnx("%s: -k file must exist", keyfile);
 		ne++;
-	} else if (newkey && access(keyfile, R_OK)) {
+	} else if (newkey && -1 != access(keyfile, R_OK)) {
 		warnx("-k file must not exist when using -N");
 		ne++;
 	}
@@ -224,7 +224,7 @@ main(int argc, char *argv[])
 	if ( ! newacct && -1 == access(acctkey, R_OK)) {
 		warnx("%s: -f file must exist", acctkey);
 		ne++;
-	} else if (newacct && access(acctkey, R_OK)) {
+	} else if (newacct && -1 != access(acctkey, R_OK)) {
 		warnx("-f file must not exist when using -n");
 		ne++;
 	}
