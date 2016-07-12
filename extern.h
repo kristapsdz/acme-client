@@ -261,4 +261,4 @@ enum comp	 proccomp;
 
 __END_DECLS
 
-#endif /* EXTERN_H */
+#endif /* ! EXTERN_H */
