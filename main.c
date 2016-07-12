@@ -81,7 +81,7 @@ main(int argc, char *argv[])
 			  rvk_fds[2];
 	pid_t		  pids[COMP__MAX];
 	int		  c, rc, newacct, remote, revoke, force,
-			  staging, multidir;
+			  staging, multidir, newkey;
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, altsz, ne;
@@ -89,7 +89,7 @@ main(int argc, char *argv[])
 
 	alts = NULL;
 	newacct = remote = revoke = verbose = force = 
-		multidir = staging = 0;
+		multidir = staging = newkey = 0;
 	certdir = keyfile = acctkey = chngdir = NULL;
 
 	while (-1 != (c = getopt(argc, argv, "Fmnrstvf:c:C:k:"))) 
@@ -122,6 +122,9 @@ main(int argc, char *argv[])
 			break;
 		case ('n'):
 			newacct = 1;
+			break;
+		case ('N'):
+			newkey = 1;
 			break;
 		case ('r'):
 			revoke = 1;
@@ -204,16 +207,25 @@ main(int argc, char *argv[])
 		warnx("%s: -c directory must exist", certdir);
 		ne++;
 	}
-	if (-1 == access(keyfile, R_OK)) {
+
+	if ( ! newkey && -1 == access(keyfile, R_OK)) {
 		warnx("%s: -k file must exist", keyfile);
 		ne++;
+	} else if (newkey && access(keyfile, R_OK)) {
+		warnx("-k file must not exist when using -N");
+		ne++;
 	}
+
 	if (-1 == access(chngdir, R_OK)) {
 		warnx("%s: -C directory must exist", chngdir);
 		ne++;
 	}
-	if (0 == newacct && -1 == access(acctkey, R_OK)) {
+
+	if ( ! newacct && -1 == access(acctkey, R_OK)) {
 		warnx("%s: -f file must exist", acctkey);
+		ne++;
+	} else if (newacct && access(acctkey, R_OK)) {
+		warnx("-f file must not exist when using -n");
 		ne++;
 	}
 
@@ -295,7 +307,7 @@ main(int argc, char *argv[])
 		close(file_fds[0]);
 		close(file_fds[1]);
 		c = keyproc(key_fds[0], keyfile, 
-			(const char **)alts, altsz);
+			(const char **)alts, altsz, newkey);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
