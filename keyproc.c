@@ -143,11 +143,11 @@ keyproc(int netsock, const char *keyfile,
 	if (newkey) {
 		if (NULL == (pkey = rsa_key_create(f, keyfile)))
 			goto out;
-		dodbg("%s: generated RSA account key", keyfile);
+		dodbg("%s: generated RSA domain key", keyfile);
 	} else {
 		if (NULL == (pkey = rsa_key_load(f, keyfile)))
 			goto out;
-		doddbg("%s: loaded RSA account key", keyfile);
+		doddbg("%s: loaded RSA domain key", keyfile);
 	}
 
 	fclose(f);
