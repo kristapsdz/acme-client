@@ -9,7 +9,7 @@
 .\" Not used in OpenBSD.
 .Sh SYNOPSIS
 .Nm letskencrypt
-.Op Fl Fmnrsv
+.Op Fl FmnNrsv
 .Op Fl C Ar challengedir
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
@@ -46,8 +46,10 @@ and
 for the account private key
 .Pq Fl f .
 All of these must exist unless you use
-.Fl n ,
-which will generate the account private key.
+.Fl n
+and/or
+.Fl N ,
+which will generate the account and domain private keys, respectively.
 Its arguments are as follows:
 .Bl -tag -width Ds
 .It Fl F
@@ -63,8 +65,11 @@ as the initial domain would make the default domain private key into
 .Pa /etc/ssl/letsencrypt/private/foo.com/privkey.pem .
 This is useful in setups with multiple domain sets.
 .It Fl n
-Create a new RSA account key.
+Create a new 4096-bit RSA account key.
 This will fail if a file already exists in the account key's place.
+.It Fl N
+Create a new 4096-bit RSA domain key.
+This will fail if a file already exists in the domain key's place.
 .It Fl r
 Revoke the X509 certificate found in
 .Sx Certificates .
@@ -93,6 +98,8 @@ client or with
 .Fl n .
 .It Fl k Ar domainkey
 The private key for the domain.
+This may also be created with
+.Fl N .
 .It Ar domain
 The domain name.
 The only difference between this and the
@@ -248,12 +255,11 @@ section:
 # mkdir /var/www/letsencrypt
 # mkdir /etc/ssl/letsencrypt
 # mkdir -m 0700 /etc/ssl/letsencrypt/private /etc/letsencrypt
-# openssl genrsa 4096 >/etc/ssl/letsencrypt/private/privkey.pem
-# letskencrypt -v -n foo.com www.foo.com smtp.foo.com
+# letskencrypt -vNn foo.com www.foo.com smtp.foo.com
 .Ed
 .Pp
-After generating the necessary directories, the above will create the
-domain's private key, then create and submit it to the server.
+After generating the necessary directories, the above will create all
+keys and submit them to the server.
 You'll then probably want to restart your web server to pick up the new
 certificates.
 .Pp
