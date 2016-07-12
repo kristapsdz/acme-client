@@ -32,11 +32,7 @@
 #include <openssl/err.h>
 
 #include "extern.h"
-
-/*
- * Default number of bits when creating a new key.
- */
-#define	KEY_BITS 4096
+#include "rsa.h"
 
 /*
  * Converts a BIGNUM to the form used in JWK.
@@ -320,35 +316,6 @@ out:
 	return(rc);
 }
 
-/*
- * Create an RSA key with the default KEY_BITS number of bits.
- */
-static EVP_PKEY *
-key_create_rsa(void)
-{
-	EVP_PKEY_CTX	*ctx;
-	EVP_PKEY	*pkey;
-
-	ctx = NULL;
-	pkey = NULL;
-
-	if (NULL == (ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL)))
-		warnx("EVP_PKEY_CTX_new_id");
-	else if (EVP_PKEY_keygen_init(ctx) <= 0)
-		warnx("EVP_PKEY_keygen_init");
-	else if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, KEY_BITS) <= 0)
-		warnx("EVP_PKEY_set_rsa_keygen_bits");
-	else if (EVP_PKEY_keygen(ctx, &pkey) <= 0)
-		warnx("EVP_PKEY_keygen");
-	else
-		dodbg("generated: RSA %d bits", KEY_BITS);
-
-	if (NULL != ctx)
-		EVP_PKEY_CTX_free(ctx);
-
-	return(pkey);
-}
-
 int
 acctproc(int netsock, const char *acctkey, int newacct)
 {
@@ -405,22 +372,13 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	}
 
 	if (newacct) {
-		if (NULL == (pkey = key_create_rsa()))
+		if (NULL == (pkey = rsa_key_create(f, acctkey)))
 			goto out;
-		if ( ! PEM_write_PrivateKey
-		    (f, pkey, NULL, NULL, 0, NULL, NULL)) {
-			warnx("PEM_write_PrivateKey");
-			goto out;
-		}
+		dodbg("%s: generated RSA account key", acctkey);
 	} else {
-		pkey = PEM_read_PrivateKey(f, NULL, NULL, NULL);
-		if (NULL == pkey) {
-			warnx("%s", acctkey);
+		if (NULL == (pkey = rsa_key_load(f, acctkey)))
 			goto out;
-		} else if (EVP_PKEY_RSA != EVP_PKEY_type(pkey->type)) {
-			warnx("%s: unsupported key type", acctkey);
-			goto out;
-		}
+		doddbg("%s: loaded RSA account key", acctkey);
 	}
 
 	fclose(f);
