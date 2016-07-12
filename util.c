@@ -20,6 +20,7 @@
 
 #include <sys/wait.h>
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <limits.h>
@@ -151,6 +152,7 @@ readbuf(int fd, enum comm comm, size_t *sz)
 			warn("read: %s", comms[comm]);
 			break;
 		} else if (ssz > 0) {
+			assert((size_t)ssz <= lsz);
 			rsz += (size_t)ssz;
 			lsz -= (size_t)ssz;
 		}
