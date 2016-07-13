@@ -249,31 +249,69 @@ writestr(int fd, enum comm comm, const char *v)
 }
 
 /*
- * Make sure that the given process exits properly.
+ * Make sure that the given process exits properly, i.e., properly
+ * exiting with EXIT_SUCCESS.
+ * Returns non-zero on success and zero on failure.
  */
 int
 checkexit(pid_t pid, enum comp comp)
 {
-	int	 c;
+	int		 c, cc;
+	const char	*cp;
+
+	if (-1 == waitpid(pid, &c, 0)) {
+		warn("waitpid");
+		return(0);
+	} else if ( ! WIFEXITED(c) && WIFSIGNALED(c)) {
+		cp = strsignal(WTERMSIG(c));
+		warnx("signal: %s(%u): %s", comps[comp], pid, cp);
+		return(0);
+	} else if ( ! WIFEXITED(c)) {
+		warnx("did not exit: %s(%u)", comps[comp], pid);
+		return(0);
+	} else if (EXIT_SUCCESS != WEXITSTATUS(c)) {
+		cc = WEXITSTATUS(c);
+		dodbg("bad exit: %s(%u): %d", comps[comp], pid, cc);
+		return(0);
+	}
+
+	return(1);
+}
+
+/*
+ * Make sure that the given process exits properly, i.e., properly
+ * exiting with EXIT_SUCCESS *or* 2.
+ * Returns non-zero on success and zero on failure and sets the "rc"
+ * value to be the exit status.
+ */
+int
+checkexit_ext(int *rc, pid_t pid, enum comp comp)
+{
+	int		 c;
+	const char	*cp;
+
+	*rc = EXIT_FAILURE;
 
 	if (-1 == waitpid(pid, &c, 0)) {
 		warn("waitpid");
 		return(0);
 	}
 
-	if ( ! WIFEXITED(c))  {
-		if (WIFSIGNALED(c))
-			warnx("signalled: %s(%u): %s", 
-				comps[comp], pid, 
-				strsignal(WTERMSIG(c)));
-		else
-			warnx("did not exit: %s(%u)", 
-				comps[comp], pid);
-	} else if (EXIT_SUCCESS != WEXITSTATUS(c))
-		dodbg("bad exit code: %s(%u)", comps[comp], pid);
-	else
-		return(1);
+	if ( ! WIFEXITED(c) && WIFSIGNALED(c)) {
+		cp = strsignal(WTERMSIG(c));
+		warnx("signal: %s(%u): %s", comps[comp], pid, cp);
+		return(0);
+	} else if ( ! WIFEXITED(c)) {
+		warnx("did not exit: %s(%u)", comps[comp], pid);
+		return(0);
+	} 
+	
+	/* Now check extended status. */
 
-	return(0);
+	if (EXIT_SUCCESS != (*rc = WEXITSTATUS(c)) && 2 != *rc) {
+		dodbg("bad exit: %s(%u): %d", comps[comp], pid, *rc);
+		return(0);
+	}
+	return(1);
 }
 
