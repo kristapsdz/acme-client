@@ -245,8 +245,8 @@ will not attempt to refresh the signature.
 .\" .Sh FILES
 .Sh EXIT STATUS
 .Nm
-returns 1 on failure, 0 if certificates were changed (revoked or
-updated), or 2 if the certificates didn't change (up to date).
+returns 1 on failure, 2 if the certificates didn't change (up to date),
+or 0 if certificates were changed (revoked or updated).
 .\" For sections 1, 6, and 8 only.
 .Sh EXAMPLES
 To create and submit a new key for a single domain, assuming that the
@@ -275,7 +275,7 @@ invocation running the following:
 
 letskencrypt foo.com www.foo.com smtp.foo.com
 
-if [ $? -eq 2 ]
+if [ $? -eq 0 ]
 then
 	/etc/rc.d/httpd reload
 fi
