@@ -212,7 +212,8 @@ main(int argc, char *argv[])
 		warnx("%s: -k file must exist", keyfile);
 		ne++;
 	} else if (newkey && -1 != access(keyfile, R_OK)) {
-		warnx("-k file must not exist when using -N");
+		warnx("%s: -k file must not exist "
+			"when using -N", keyfile);
 		ne++;
 	}
 
@@ -225,7 +226,8 @@ main(int argc, char *argv[])
 		warnx("%s: -f file must exist", acctkey);
 		ne++;
 	} else if (newacct && -1 != access(acctkey, R_OK)) {
-		warnx("-f file must not exist when using -n");
+		warnx("%s: -f file must not exist "
+			"when using -n", acctkey);
 		ne++;
 	}
 
@@ -382,7 +384,12 @@ main(int argc, char *argv[])
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
 		c = fileproc(file_fds[1], certdir);
-		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+		/*
+		 * This is different from the other processes in that it
+		 * can return 2 if the certificates were updated.
+		 */
+		exit(c > 1 ? 2 :
+		     (c ? EXIT_SUCCESS : EXIT_FAILURE));
 	}
 
 	close(file_fds[1]);
@@ -437,7 +444,7 @@ main(int argc, char *argv[])
 	rc = checkexit(pids[COMP_KEY], COMP_KEY) +
 	     checkexit(pids[COMP_CERT], COMP_CERT) +
 	     checkexit(pids[COMP_NET], COMP_NET) +
-	     checkexit(pids[COMP_FILE], COMP_FILE) +
+	     checkexit_ext(&c, pids[COMP_FILE], COMP_FILE) +
 	     checkexit(pids[COMP_ACCOUNT], COMP_ACCOUNT) +
 	     checkexit(pids[COMP_CHALLENGE], COMP_CHALLENGE) +
 	     checkexit(pids[COMP_DNS], COMP_DNS) +
@@ -448,15 +455,15 @@ main(int argc, char *argv[])
 	free(acctkey);
 	free(chngdir);
 	free(alts);
-	return(COMP__MAX == rc ? EXIT_SUCCESS : EXIT_FAILURE);
+	return(COMP__MAX != rc ? EXIT_FAILURE :
+	       (2 == c ? EXIT_SUCCESS : 2));
 usage:
 	fprintf(stderr, "usage: %s "
-		"[-Fnrsv] "
+		"[-FnNrsv] "
 		"[-C challengedir] "
 		"[-c certdir] "
 		"[-f accountkey] "
 		"[-k domainkey] "
-		"[-u user] "
 		"domain [altnames...]\n", 
 		getprogname());
 	free(certdir);
