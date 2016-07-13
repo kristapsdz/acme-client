@@ -209,6 +209,7 @@ int		 writestr(int, enum comm, const char *);
 int		 writeop(int, enum comm, long);
 
 int		 checkexit(pid_t, enum comp);
+int		 checkexit_ext(int *, pid_t, enum comp);
 
 /*
  * Base64 and URL encoding.
