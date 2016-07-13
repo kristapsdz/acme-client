@@ -100,7 +100,11 @@ fileproc(int certsock, const char *certdir)
 		goto out;
 	} 
 
-	/* If revoking certificates, just unlink the files. */
+	/* 
+	 * If revoking certificates, just unlink the files. 
+	 * We return the special error code of 2 to indicate that the
+	 * certificates were removed.
+	 */
 
 	if (FILE_REMOVE == op) {
 		if (-1 == unlink(CERT_PEM) && ENOENT != errno) {
@@ -121,7 +125,7 @@ fileproc(int certsock, const char *certdir)
 		} else
 			dodbg("%s/%s: unlinked", certdir, FCHAIN_PEM);
 
-		rc = 1;
+		rc = 2;
 		goto out;
 	}
 
@@ -156,6 +160,8 @@ fileproc(int certsock, const char *certdir)
 	/*
 	 * Finally, create the full-chain file.
 	 * This is just the concatenation of the certificate and chain.
+	 * We return the special error code 2 to indicate that the
+	 * on-file certificates were changed.
 	 */
 
 	if ( ! serialise(FCHAIN_BAK, FCHAIN_PEM, csr, csz, ch, chsz))
@@ -163,7 +169,7 @@ fileproc(int certsock, const char *certdir)
 
 	dodbg("%s/%s: created", certdir, FCHAIN_PEM);
 
-	rc = 1;
+	rc = 2;
 out:
 	close(certsock);
 	free(csr);
