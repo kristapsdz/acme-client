@@ -243,7 +243,10 @@ will not attempt to refresh the signature.
 .\" .Sh ENVIRONMENT
 .\" For sections 1, 6, 7, and 8 only.
 .\" .Sh FILES
-.\" .Sh EXIT STATUS
+.Sh EXIT STATUS
+.Nm
+returns 1 on failure, 0 if certificates were changed (revoked or
+updated), or 2 if the certificates didn't change (up to date).
 .\" For sections 1, 6, and 8 only.
 .Sh EXAMPLES
 To create and submit a new key for a single domain, assuming that the
@@ -254,7 +257,8 @@ section:
 .Bd -literal
 # mkdir /var/www/letsencrypt
 # mkdir /etc/ssl/letsencrypt
-# mkdir -m 0700 /etc/ssl/letsencrypt/private /etc/letsencrypt
+# mkdir /etc/ssl/letsencrypt/private /etc/letsencrypt
+# chmod 0700 /etc/ssl/letsencrypt/private /etc/letsencrypt
 # letskencrypt -vNn foo.com www.foo.com smtp.foo.com
 .Ed
 .Pp
@@ -263,12 +267,22 @@ keys and submit them to the server.
 You'll then probably want to restart your web server to pick up the new
 certificates.
 .Pp
-You can then keep your certificates fresh with the following daily
+You can then keep your certificates fresh with a daily
 .Xr cron 8
-invocation:
+invocation running the following:
 .Bd -literal
-30 1 * * * letskencrypt foo.com www.foo.com smtp.foo.com
+#! /bin/sh
+
+letskencrypt foo.com www.foo.com smtp.foo.com
+
+if [ $? -eq 2 ]
+then
+	/etc/rc.d/httpd reload
+fi
 .Ed
+.Pp
+You'll need to replace the httpd-reload statement with the correct
+script to have your web server reload its certificates.
 .\" .Sh DIAGNOSTICS
 .\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
 .\" .Sh ERRORS
