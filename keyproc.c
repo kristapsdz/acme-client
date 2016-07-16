@@ -100,14 +100,20 @@ keyproc(int netsock, const char *keyfile,
 	exts = NULL;
 
 	/* 
-	 * First, open our private key file read-only or write-only if
-	 * we're creating from scratch.
-	 * Set our umask to be maximally restrictive.
+	 * Try opening the file.  If it doesn't exist try creating it.
 	 */
 
-	prev = umask((S_IWUSR | S_IXUSR) | S_IRWXG | S_IRWXO);
-	f = fopen(keyfile, newkey ? "wx" : "r");
-	umask(prev);
+	f = fopen(keyfile, "r");
+	if (NULL == f && EACCES == errno && newkey) {
+		/*
+		 * To prevent a race condition, exclusive-open.
+		 * If this fails, then another process has snagged the
+		 * file in the meantime and we *should* fail.
+		 */
+		prev = umask((S_IWUSR | S_IXUSR) | S_IRWXG | S_IRWXO);
+		f = fopen(keyfile, "wx");
+		umask(prev);
+	}
 
 	if (NULL == f) {
 		warn("%s", keyfile);

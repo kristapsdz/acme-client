@@ -65,11 +65,9 @@ as the initial domain would make the default domain private key into
 .Pa /etc/ssl/letsencrypt/private/foo.com/privkey.pem .
 This is useful in setups with multiple domain sets.
 .It Fl n
-Create a new 4096-bit RSA account key.
-This will fail if a file already exists in the account key's place.
+Create a new 4096-bit RSA account key if one does not already exist.
 .It Fl N
-Create a new 4096-bit RSA domain key.
-This will fail if a file already exists in the domain key's place.
+Create a new 4096-bit RSA domain key if one does not already exist.
 .It Fl r
 Revoke the X509 certificate found in
 .Sx Certificates .
