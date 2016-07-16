@@ -332,21 +332,14 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	rc = 0;
 
 	/* 
-	 * Try opening the file.  If it doesn't exist try creating it.
+	 * First, open our private key file read-only or write-only if
+	 * we're creating from scratch.
+	 * Set our umask to be maximally restrictive.
 	 */
 
-	f = fopen(acctkey, "r");
-	if (NULL == f && EACCES == errno && newacct) {
-		warnx("%s: does not exist: creating", acctkey);
-		/*
-		 * To prevent a race condition, exclusive-open.
-		 * If this fails, then another process has snagged the
-		 * file in the meantime and we *should* fail.
-		 */
-		prev = umask((S_IWUSR | S_IXUSR) | S_IRWXG | S_IRWXO);
-		f = fopen(acctkey, "wx");
-		umask(prev);
-	}
+	prev = umask((S_IWUSR | S_IXUSR) | S_IRWXG | S_IRWXO);
+	f = fopen(acctkey, newacct ? "wx" : "r");
+	umask(prev);
 
 	if (NULL == f) {
 		warn("%s", acctkey);

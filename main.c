@@ -211,6 +211,10 @@ main(int argc, char *argv[])
 	if ( ! newkey && -1 == access(keyfile, R_OK)) {
 		warnx("%s: -k file must exist", keyfile);
 		ne++;
+	} else if (newkey && -1 != access(keyfile, R_OK)) {
+		dodbg("%s: domain key exists "
+			"(not creating)", keyfile);
+		newkey = 0;
 	}
 
 	if (-1 == access(chngdir, R_OK)) {
@@ -221,6 +225,10 @@ main(int argc, char *argv[])
 	if ( ! newacct && -1 == access(acctkey, R_OK)) {
 		warnx("%s: -f file must exist", acctkey);
 		ne++;
+	} else if (newacct && -1 != access(acctkey, R_OK)) {
+		dodbg("%s: account key exists "
+			"(not creating)", acctkey);
+		newacct = 0;
 	}
 
 	if (ne > 0)
