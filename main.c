@@ -81,7 +81,7 @@ main(int argc, char *argv[])
 			  rvk_fds[2];
 	pid_t		  pids[COMP__MAX];
 	int		  c, rc, newacct, remote, revoke, force,
-			  staging, multidir, newkey;
+			  staging, multidir, newkey, backup;
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, altsz, ne;
@@ -89,11 +89,14 @@ main(int argc, char *argv[])
 
 	alts = NULL;
 	newacct = remote = revoke = verbose = force = 
-		multidir = staging = newkey = 0;
+		multidir = staging = newkey = backup = 0;
 	certdir = keyfile = acctkey = chngdir = NULL;
 
-	while (-1 != (c = getopt(argc, argv, "FmnNrstvf:c:C:k:"))) 
+	while (-1 != (c = getopt(argc, argv, "bFmnNrstvf:c:C:k:"))) 
 		switch (c) {
+		case ('b'):
+			backup = 1;
+			break;
 		case ('c'):
 			free(certdir);
 			if (NULL == (certdir = strdup(optarg)))
@@ -383,7 +386,7 @@ main(int argc, char *argv[])
 		free(alts);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
-		c = fileproc(file_fds[1], certdir);
+		c = fileproc(file_fds[1], backup, certdir);
 		/*
 		 * This is different from the other processes in that it
 		 * can return 2 if the certificates were updated.

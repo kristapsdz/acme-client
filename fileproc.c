@@ -21,9 +21,11 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "extern.h"
@@ -64,13 +66,15 @@ serialise(const char *tmp, const char *real,
 }
 
 int
-fileproc(int certsock, const char *certdir)
+fileproc(int certsock, int backup, const char *certdir)
 {
 	char		*csr, *ch;
 	size_t		 chsz, csz;
 	int		 rc;
 	long		 lval;
 	enum fileop	 op;
+	time_t		 t;
+	char		 file[PATH_MAX];
 
 	csr = ch = NULL;
 	rc = 0;
@@ -99,6 +103,45 @@ fileproc(int certsock, const char *certdir)
 		warnx("unknown operation from certproc");
 		goto out;
 	} 
+	
+	/*
+	 * If we're backing up, then copy all files (found) by linking
+	 * them to the file followed by the epoch in seconds.
+	 * If we're going to remove, the unlink(2) will cause the
+	 * original to go away.
+	 * If we're going to update, the rename(2) will replace the
+	 * certificate, leaving the backup as the only one.
+	 */
+
+	if (backup) {
+		t = time(NULL);
+		snprintf(file, sizeof(file),
+			"cert-%llu.pem", (unsigned long long)t);
+		if (-1 == link(CERT_PEM, file) && ENOENT != errno) {
+			warnx("%s/%s", certdir, CERT_PEM);
+			goto out;
+		} else
+			dodbg("%s/%s: linked to %s", 
+				certdir, CERT_PEM, file);
+
+		snprintf(file, sizeof(file),
+			"chain-%llu.pem", (unsigned long long)t);
+		if (-1 == link(CHAIN_PEM, file) && ENOENT != errno) {
+			warnx("%s/%s", certdir, CHAIN_PEM);
+			goto out;
+		} else
+			dodbg("%s/%s: linked to %s", 
+				certdir, CHAIN_PEM, file);
+
+		snprintf(file, sizeof(file),
+			"fullchain-%llu.pem", (unsigned long long)t);
+		if (-1 == link(FCHAIN_PEM, file) && ENOENT != errno) {
+			warnx("%s/%s", certdir, FCHAIN_PEM);
+			goto out;
+		} else
+			dodbg("%s/%s: linked to %s", 
+				certdir, FCHAIN_PEM, file);
+	}
 
 	/* 
 	 * If revoking certificates, just unlink the files. 
