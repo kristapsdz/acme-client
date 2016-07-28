@@ -9,7 +9,7 @@
 .\" Not used in OpenBSD.
 .Sh SYNOPSIS
 .Nm letskencrypt
-.Op Fl FmnNrsv
+.Op Fl bFmnNrsv
 .Op Fl C Ar challengedir
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
@@ -52,6 +52,23 @@ and/or
 which will generate the account and domain private keys, respectively.
 Its arguments are as follows:
 .Bl -tag -width Ds
+.It Fl b
+Back up all
+.Sx Certificates
+in the certificate directory.
+This will only back up if something will be done to them (remove or
+replace).
+The backups are called
+.Pa cert-NNNNN.pem ,
+.Pa chain-NNNNN.pem ,
+and
+.Pa fullchain-NNNNN.pem ,
+where
+.Li NNNNN
+is the current UNIX epoch.
+Any given backup effort will use the same epoch time for all three
+certificates.
+If there are no certificates in place, this does nothing.
 .It Fl F
 Force updating the certificate signature even if it's too soon.
 .It Fl m
