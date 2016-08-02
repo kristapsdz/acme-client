@@ -32,7 +32,7 @@
 #define URL_REAL_CA "https://acme-v01.api.letsencrypt.org/directory"
 #define URL_STAGE_CA "https://acme-staging.api.letsencrypt.org/directory"
 #define URL_LICENSE "https://letsencrypt.org" \
-		    "/documents/LE-SA-v1.0.1-July-27-2015.pdf"
+		    "/documents/LE-SA-v1.1.1-August-1-2016.pdf"
 
 #define	RETRY_DELAY 5
 #define RETRY_MAX 10
