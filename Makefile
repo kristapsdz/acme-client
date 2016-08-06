@@ -29,10 +29,10 @@ jsmn.o json.o: jsmn.h
 http.o netproc.o: http.h
 
 install: letskencrypt
-	mkdir -p $(PREFIX)/bin
-	mkdir -p $(PREFIX)/man/man1
-	install -m 0755 letskencrypt $(PREFIX)/bin
-	install -m 0644 letskencrypt.1 $(PREFIX)/man/man1
+	mkdir -p $(DESTDIR)$(PREFIX)/bin
+	mkdir -p $(DESTDIR)$(PREFIX)/man/man1
+	install -m 0755 letskencrypt $(DESTDIR)$(PREFIX)/bin
+	install -m 0644 letskencrypt.1 $(DESTDIR)$(PREFIX)/man/man1
 
 $(OBJS): extern.h
 
