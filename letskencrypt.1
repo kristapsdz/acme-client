@@ -10,6 +10,7 @@
 .Sh SYNOPSIS
 .Nm letskencrypt
 .Op Fl bFmnNrsv
+.Op Fl a Ar agreement
 .Op Fl C Ar challengedir
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
@@ -52,6 +53,9 @@ and/or
 which will generate the account and domain private keys, respectively.
 Its arguments are as follows:
 .Bl -tag -width Ds
+.It Fl a Ar agreement
+Use an alternative agreement URL.
+The default uses the current one, but it may be out of date.
 .It Fl b
 Back up all
 .Sx Certificates
