@@ -53,9 +53,6 @@ and/or
 which will generate the account and domain private keys, respectively.
 Its arguments are as follows:
 .Bl -tag -width Ds
-.It Fl a Ar agreement
-Use an alternative agreement URL.
-The default uses the current one, but it may be out of date.
 .It Fl b
 Back up all
 .Sx Certificates
@@ -99,6 +96,9 @@ staging server instead of the real thing.
 .It Fl v
 Verbose operation.
 Specify twice to also trace communication and data transfers.
+.It Fl a Ar agreement
+Use an alternative agreement URL.
+The default uses the current one, but it may be out of date.
 .It Fl C Ar challengedir
 Where to register challenges.
 See
