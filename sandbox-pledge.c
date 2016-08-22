@@ -35,8 +35,11 @@ sandbox_before(void)
 	return(1);
 }
 
+/*
+ * Use pledge(2) to sandbox based which process we're in.
+ */
 int
-sandbox_after(void)
+sandbox_after(int arg)
 {
 
 	switch (proccomp) {
@@ -51,9 +54,21 @@ sandbox_after(void)
 		}
 		break;
 	case (COMP_CHALLENGE):
-		if (-1 == pledge("stdio cpath wpath", NULL)) {
-			warn("pledge");
-			return(0);
+		/*
+		 * If "arg" is set, that means that our challenge is
+		 * going to be exported to the caller and we don't need
+		 * to touch any files.
+		 */
+		if (arg) {
+			if (-1 == pledge("stdio", NULL)) {
+				warn("pledge");
+				return(0);
+			}
+		} else {
+			if (-1 == pledge("stdio cpath wpath", NULL)) {
+				warn("pledge");
+				return(0);
+			}
 		}
 		break;
 	case (COMP_DNS):

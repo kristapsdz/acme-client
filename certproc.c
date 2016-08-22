@@ -113,7 +113,7 @@ certproc(int netsock, int filesock)
 		goto out;
 	else if ( ! dropprivs())
 		goto out;
-	else if ( ! sandbox_after())
+	else if ( ! sandbox_after(0))
 		goto out;
 
 	/* Read what the netproc wants us to do. */

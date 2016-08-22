@@ -125,7 +125,7 @@ keyproc(int netsock, const char *keyfile,
 		goto out;
 	else if ( ! dropprivs())
 		goto out;
-	else if ( ! sandbox_after())
+	else if ( ! sandbox_after(0))
 		goto out;
 
 	/* 

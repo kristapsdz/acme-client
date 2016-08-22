@@ -321,10 +321,13 @@ json_parse_response(struct jsmnn *n)
 }
 
 /*
- * Parse the response from a new-authz, which consists of challenge
- * information, into a structure.
+ * Parse the response for "challenge" from a new-authz, which consists
+ * of challenge information, into a structure.
  * We can accept any type of challenge to check for, but we default to
  * http-01.
+ * Returns zero on failure (parse error or couldn't find challenge) or
+ * non-zero on success, in which case both challenge properties are
+ * filled in.
  */
 int
 json_parse_challenge(struct jsmnn *n, 
@@ -356,12 +359,6 @@ json_parse_challenge(struct jsmnn *n,
 		free(type);
 		if (rc)
 			continue;
-
-		p = calloc(1, sizeof(struct chng));
-		if (NULL == p) {
-			warn("calloc");
-			return(0);
-		}
 
 		p->uri = json_getstr(obj, "uri");
 		p->token = json_getstr(obj, "token");
