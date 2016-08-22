@@ -1,4 +1,4 @@
-.Dd $Mdocdate: August 19 2016 $
+.Dd $Mdocdate: August 22 2016 $
 .Dt LETSKENCRYPT 1
 .Os
 .Sh NAME
@@ -208,7 +208,7 @@ Remove the certificate, the chain, and the full-chain.
 Let's Encrypt uses challenges to verify that the submitter has access to
 the registered domains.
 .Nm
-implements only the
+internally implements only the
 .Dq http-01
 challenge type, where a file is created within a directory accessible by
 a locally-run web server configured for the requested domain.
@@ -238,7 +238,7 @@ This way, the files placed in
 will be properly mapped by the web server when the Let's Encrypt
 responds to a challenge.
 .Pp
-An alternate challenge type may be specified with
+An alternate challenge type, however, may be specified with
 .Fl t ,
 in which case the caller must create the challenge environment.
 This may be used for implementing
