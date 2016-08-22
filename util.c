@@ -315,3 +315,21 @@ checkexit_ext(int *rc, pid_t pid, enum comp comp)
 	return(1);
 }
 
+/*
+ * Wrap around asprintf(3), which sometimes nullifies the input values,
+ * sometimes not, but always returns <0 on error.
+ * Returns NULL on failure or the pointer on success.
+ */
+char *
+doasprintf(const char *fmt, ...)
+{
+	int	 c;
+	char	*cp;
+	va_list	 ap;
+
+	va_start(ap, fmt);
+	c = vasprintf(&cp, fmt, ap);
+	va_end(ap);
+	return(c < 0 ? NULL : cp);
+}
+

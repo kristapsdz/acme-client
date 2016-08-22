@@ -364,8 +364,8 @@ donewreg(struct conn *c, const char *agreement,
  * On non-zero exit, fills in "chng" with the challenge.
  */
 static int
-dochngreq(struct conn *c, const char *alt, 
-	struct chng *chng, const struct capaths *p)
+dochngreq(struct conn *c, const char *alt, struct chng *chng, 
+	const struct capaths *p, const char *challenge)
 {
 	int		 rc;
 	char		*req;
@@ -384,7 +384,7 @@ dochngreq(struct conn *c, const char *alt,
 		warnx("%s: bad HTTP: %ld", p->newauthz, lc);
 	else if (NULL == (j = json_parse(c->buf.buf, c->buf.sz)))
 		warnx("%s: bad JSON object", p->newauthz);
-	else if ( ! json_parse_challenge(j, chng)) 
+	else if ( ! json_parse_challenge(j, chng, challenge)) 
 		warnx("%s: bad challenge", p->newauthz);
 	else
 		rc = 1;
@@ -584,7 +584,8 @@ dofullchain(struct conn *c, const char *addr)
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	int newacct, int revoke, int staging, 
-	const char *const *alts, size_t altsz, const char *agreement)
+	const char *const *alts, size_t altsz, const char *agreement,
+	const char *challenge)
 {
 	int		 rc;
 	size_t		 i;
@@ -695,7 +696,8 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	/* Pre-authorise all domains with CA server. */
 
 	for (i = 0; i < altsz; i++)
-		if ( ! dochngreq(&c, alts[i], &chngs[i], &paths))
+		if ( ! dochngreq(&c, alts[i], 
+		    &chngs[i], &paths, challenge))
 			goto out;
 
 	/*

@@ -30,19 +30,19 @@
 #include "extern.h"
 
 int
-chngproc(int netsock, const char *root, int remote)
+chngproc(int netsock, const char *root, const char *challenge)
 {
-	int		  rc;
+	int		  rc, fd, cc;
 	long		  lval;
 	enum chngop	  op;
-	char		 *tok, *th, *fmt;
+	char		 *tok, *th, *fmt, *fmtbuf;
 	char		**fs;
-	size_t		  i, fsz;
+	ssize_t		  ssz;
+	size_t		  i, fsz, sz;
 	void		 *pp;
-	int		  fd, cc;
 
 	rc = 0;
-	th = tok = fmt = NULL;
+	th = tok = fmt = fmtbuf = NULL;
 	fd = -1;
 	fs = NULL;
 	fsz = 0;
@@ -99,30 +99,56 @@ chngproc(int netsock, const char *root, int remote)
 		tok = NULL;
 		fsz++;
 
-		if (-1 == asprintf(&fmt, "%s.%s", fs[fsz - 1], th)) {
-			warn("asprintf");
-			goto out;
-		}
+		if (NULL != challenge) {
+			/*
+			 * If we have a specific challenge request, then
+			 * we write the request and thumbprint to stdout
+			 * and wait for a reply (which must be an echo
+			 * of the output) to indicate that all's well.
+			 */
+			fmt = doasprintf("%s.%s\n", fs[fsz - 1], th);
+			if (NULL == fmt) {
+				warn("asprintf");
+				goto out;
+			} else if (NULL == (fmtbuf = strdup(fmt))) {
+				warn("strdup");
+				goto out;
+			}
 
-		/*
-		 * I use this for testing when letskencrypt is being run
-		 * on machines apart from where I'm hosting the
-		 * challenge directory.
-		 * DON'T DEPEND ON THIS FEATURE.
-		 */
-		if (remote) {
-			puts("RUN THIS IN THE CHALLENGE DIRECTORY");
-			puts("YOU HAVE 20 SECONDS...");
-			printf("doas sh -c \"echo %s > %s\"\n", 
-				fmt, fs[fsz - 1]);
-			sleep(20);
-			puts("TIME'S UP.");
+			sz = strlen(fmt);
+			ssz = write(STDOUT_FILENO, fmt, sz);
+			if (-1 == ssz) {
+				warn("<stdout>");
+				goto out;
+			} else if ((size_t)ssz != sz) {
+				warnx("<stdout>: short write");
+				goto out;
+			}
+			doddbg("%s: challenge written", fs[fsz - 1]);
+			ssz = read(STDIN_FILENO, fmt, sz);
+			if (-1 == ssz) {
+				warn("<stdin>");
+				goto out;
+			} else if ((size_t)ssz != sz) {
+				warnx("<stdin>: short read");
+				goto out;
+			} else if (strcmp(fmt, fmtbuf)) {
+				warnx("<stdin>: token mismatch");
+				goto out;
+			}
+			doddbg("%s: challenge read", fs[fsz - 1]);
 		} else { 
 			/* 
 			 * Create and write to our challenge file.
 			 * Note: we use file descriptors instead of FILE
 			 * because we want to minimise our pledges.
 			 */
+			fmt = doasprintf("%s.%s", fs[fsz - 1], th);
+			if (NULL == fmt) {
+				warn("asprintf");
+				goto out;
+			}
+
 			fd = open(fs[fsz - 1], 
 				O_WRONLY|O_EXCL|O_CREAT, 0444);
 			if (-1 == fd) {
@@ -136,13 +162,13 @@ chngproc(int netsock, const char *root, int remote)
 				goto out;
 			}
 			fd = -1;
+			dodbg("%s/%s: created", root, fs[fsz - 1]);
 		}
 
 		free(th);
 		free(fmt);
-		th = fmt = NULL;
-
-		dodbg("%s/%s: created", root, fs[fsz - 1]);
+		free(fmtbuf);
+		th = fmt = fmtbuf = NULL;
 
 		/* 
 		 * Write our acknowledgement. 
@@ -161,13 +187,15 @@ out:
 	close(netsock);
 	if (-1 != fd)
 		close(fd);
-	for (i = 0; i < fsz; i++) {
-		if (-1 == unlink(fs[i]) && ENOENT != errno)
-			warn("%s", fs[i]);
-		free(fs[i]);
-	}
+	if (NULL == challenge) 
+		for (i = 0; i < fsz; i++) {
+			if (-1 == unlink(fs[i]) && ENOENT != errno)
+				warn("%s", fs[i]);
+			free(fs[i]);
+		}
 	free(fs);
 	free(fmt);
+	free(fmtbuf);
 	free(th);
 	free(tok);
 	return(rc);

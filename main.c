@@ -55,34 +55,16 @@ domain_valid(const char *cp)
 	return(1);
 }
 
-/*
- * Wrap around asprintf(3), which sometimes nullifies the input values,
- * sometimes not, but always returns <0 on error.
- * Returns NULL on failure or the pointer on success.
- */
-static char *
-doasprintf(const char *fmt, ...)
-{
-	int	 c;
-	char	*cp;
-	va_list	 ap;
-
-	va_start(ap, fmt);
-	c = vasprintf(&cp, fmt, ap);
-	va_end(ap);
-	return(c < 0 ? NULL : cp);
-}
-
 int
 main(int argc, char *argv[])
 {
-	const char	 *domain, *agreement;
+	const char	 *domain, *agreement, *challenge;
 	char	 	 *certdir, *acctkey, *chngdir, *keyfile;
 	int		  key_fds[2], acct_fds[2], chng_fds[2], 
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
 	pid_t		  pids[COMP__MAX];
-	int		  c, rc, newacct, remote, revoke, force,
+	int		  c, rc, newacct, revoke, force,
 			  staging, multidir, newkey, backup;
 	extern int	  verbose;
 	extern enum comp  proccomp;
@@ -90,12 +72,13 @@ main(int argc, char *argv[])
 	const char	**alts;
 
 	alts = NULL;
-	newacct = remote = revoke = verbose = force = 
+	newacct = revoke = verbose = force = 
 		multidir = staging = newkey = backup = 0;
 	certdir = keyfile = acctkey = chngdir = NULL;
 	agreement = AGREEMENT;
+	challenge = NULL;
 
-	while (-1 != (c = getopt(argc, argv, "bFmnNrstva:f:c:C:k:"))) 
+	while (-1 != (c = getopt(argc, argv, "bFmnNrsva:f:c:C:k:t:"))) 
 		switch (c) {
 		case ('a'):
 			agreement = optarg;
@@ -146,7 +129,7 @@ main(int argc, char *argv[])
 			 / Undocumented feature.
 			 * Don't use it.
 			 */
-			remote = 1;
+			challenge = optarg;
 			break;
 		case ('v'):
 			verbose = verbose ? 2 : 1;
@@ -226,7 +209,7 @@ main(int argc, char *argv[])
 		newkey = 0;
 	}
 
-	if (-1 == access(chngdir, R_OK)) {
+	if (NULL == challenge && -1 == access(chngdir, R_OK)) {
 		warnx("%s: -C directory must exist", chngdir);
 		ne++;
 	}
@@ -292,7 +275,7 @@ main(int argc, char *argv[])
 			dns_fds[1], rvk_fds[1], 
 			newacct, revoke, staging,
 			(const char *const *)alts, altsz,
-			agreement);
+			agreement, challenge);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
@@ -359,7 +342,7 @@ main(int argc, char *argv[])
 		close(rvk_fds[0]);
 		close(file_fds[0]);
 		close(file_fds[1]);
-		c = chngproc(chng_fds[0], chngdir, remote);
+		c = chngproc(chng_fds[0], chngdir, challenge);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -475,6 +458,7 @@ usage:
 		"[-c certdir] "
 		"[-f accountkey] "
 		"[-k domainkey] "
+		"[-t challenge] "
 		"domain [altnames...]\n", 
 		getprogname());
 	free(certdir);

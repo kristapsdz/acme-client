@@ -180,7 +180,7 @@ __BEGIN_DECLS
  */
 int		 acctproc(int, const char *, int);
 int		 certproc(int, int);
-int		 chngproc(int, const char *, int);
+int		 chngproc(int, const char *, const char *);
 int		 dnsproc(int);
 int		 revokeproc(int, const char *, 
 			int, int, const char *const *, size_t);
@@ -188,7 +188,8 @@ int		 fileproc(int, int, const char *);
 int		 keyproc(int, const char *,
 			const char **, size_t, int);
 int		 netproc(int, int, int, int, int, int, int, int, int,
-			const char *const *, size_t, const char *);
+			const char *const *, size_t, const char *,
+			const char *);
 
 /*
  * Debugging functions.
@@ -197,6 +198,8 @@ int		 netproc(int, int, int, int, int, int, int, int, int,
 void		 dodbg(const char *, ...)
 			__attribute__((format(printf, 1, 2)));
 void		 doddbg(const char *, ...)
+			__attribute__((format(printf, 1, 2)));
+char		*doasprintf(const char *, ...)
 			__attribute__((format(printf, 1, 2)));
 
 /*
@@ -229,7 +232,8 @@ struct jsmnn	*json_parse(const char *, size_t);
 void		 json_free(struct jsmnn *);
 int		 json_parse_response(struct jsmnn *);
 void		 json_free_challenge(struct chng *);
-int		 json_parse_challenge(struct jsmnn *, struct chng *);
+int		 json_parse_challenge(struct jsmnn *, 
+			struct chng *, const char *);
 void		 json_free_capaths(struct capaths *);
 int		 json_parse_capaths(struct jsmnn *, struct capaths *);
 
