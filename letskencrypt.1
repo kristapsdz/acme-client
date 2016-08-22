@@ -15,6 +15,7 @@
 .Op Fl c Ar certdir
 .Op Fl f Ar accountkey
 .Op Fl k Ar domainkey
+.Op Fl t Ar challenge
 .Ar domain
 .Op Ar altnames...
 .Sh DESCRIPTION
@@ -104,6 +105,9 @@ Where to register challenges.
 See
 .Sx Challenges
 for details.
+Ignored when
+.Fl t
+is specified.
 .It Fl c Ar certdir
 Where to put public certificates.
 See
@@ -119,6 +123,15 @@ client or with
 The private key for the domain.
 This may also be created with
 .Fl N .
+.It Fl t Ar challenge
+If not using the internally-handled
+.Dq http-01
+as a challenge type, specify a
+.Ar challenge
+for the caller to manage.
+See the
+.Sx Challenges
+section for details.
 .It Ar domain
 The domain name.
 The only difference between this and the
@@ -224,6 +237,28 @@ This way, the files placed in
 .Pa /var/www/letsencrypt
 will be properly mapped by the web server when the Let's Encrypt
 responds to a challenge.
+.Pp
+An alternate challenge type may be specified with
+.Fl t ,
+in which case the caller must create the challenge environment.
+This may be used for implementing
+.Dq dns-01
+and other system-specific challenges.
+To use
+.Fl t ,
+the caller invoking
+.Nm
+must wait for the system to print the thumbprint and token as
+.Dq token.thumbprint\en
+.Pq note the a trailing newline
+for each domain on standard output.
+After each line, the caller must implement the challenge.
+Following that, the caller must write the same exact string (along with
+the newline) as standard input to
+.Nm .
+When
+.Nm
+exits, there are no more domains.
 .Ss Certificates
 Public certificates (domain certificate, chain, and the full-chain) are
 placed by default in

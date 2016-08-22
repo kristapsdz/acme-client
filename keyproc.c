@@ -88,7 +88,7 @@ keyproc(int netsock, const char *keyfile,
 	X509_REQ	*x;
 	X509_NAME 	*name;
 	unsigned char	 rbuf[64];
-	int		 len, rc, cc, nid;
+	int		 len, rc, nid;
 	mode_t		 prev;
 	STACK_OF(X509_EXTENSION) *exts;
 
@@ -208,9 +208,9 @@ keyproc(int netsock, const char *keyfile,
 		 */
 
 		for (i = 1; i < altsz; i++) {
-			cc = asprintf(&san, "%sDNS:%s", 
+			san = doasprintf("%sDNS:%s", 
 				i > 1 ? "," : "", alts[i]);
-			if (-1 == cc) {
+			if (NULL == san) {
 				warn("asprintf");
 				goto out;
 			}

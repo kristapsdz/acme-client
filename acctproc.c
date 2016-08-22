@@ -208,7 +208,7 @@ op_sign(int fd, EVP_PKEY *pkey)
 	char		*nonce, *pay,
 			*pay64, *prot, *prot64, *head, 
 			*sign, *dig64, *fin;
-	int		 cc, rc;
+	int		 rc;
 	unsigned int	 digsz;
 	unsigned char	*dig;
 	EVP_MD_CTX	*ctx;
@@ -252,10 +252,9 @@ op_sign(int fd, EVP_PKEY *pkey)
 
 	/* Now the signature material. */
 
-	cc = asprintf(&sign, "%s.%s", prot64, pay64);
-	if (-1 == cc) {
+	sign = doasprintf("%s.%s", prot64, pay64);
+	if (NULL == sign) {
 		warn("asprintf");
-		sign = NULL;
 		goto out;
 	}
 
