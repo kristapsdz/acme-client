@@ -150,7 +150,7 @@ revokeproc(int fd, const char *certdir, int force, int revoke,
 		goto out;
 	else if ( ! dropprivs())
 		goto out;
-	else if ( ! sandbox_after())
+	else if ( ! sandbox_after(0))
 		goto out;
 
 	/*

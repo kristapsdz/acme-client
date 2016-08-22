@@ -426,7 +426,7 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	else if ( ! dropprivs())
 		exit(EXIT_FAILURE);
-	else if ( ! sandbox_after())
+	else if ( ! sandbox_after(0))
 		exit(EXIT_FAILURE);
 
 	/*

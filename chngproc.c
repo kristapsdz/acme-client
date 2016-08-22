@@ -51,9 +51,9 @@ chngproc(int netsock, const char *root, const char *challenge)
 
 	if ( ! sandbox_before())
 		goto out;
-	else if ( ! dropfs(root))
+	else if ( ! dropfs(NULL != challenge ? PATH_VAR_EMPTY : root))
 		goto out;
-	else if ( ! sandbox_after())
+	else if ( ! sandbox_after(NULL != challenge))
 		goto out;
 
 	/* 

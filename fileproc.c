@@ -85,7 +85,7 @@ fileproc(int certsock, int backup, const char *certdir)
 		goto out;
 	else if ( ! dropfs(certdir))
 		goto out;
-	else if ( ! sandbox_after())
+	else if ( ! sandbox_after(0))
 		goto out;
 
 	/* Read our operation. */

@@ -253,7 +253,7 @@ int		 dropprivs(void);
 int		 dropfs(const char *);
 int		 checkprivs(void);
 
-int		 sandbox_after(void);
+int		 sandbox_after(int);
 int		 sandbox_before(void);
 
 /*
