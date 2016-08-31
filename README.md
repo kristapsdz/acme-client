@@ -17,6 +17,10 @@ will occur on the master and be pushed periodically to GitHub.  If you
 have bug reports or patches, either file them here or e-mail them to me.
 Feature requests will be ignored unless joined by a patch.
 
+*letskencrypt* is named
+[acme-client](http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/usr.sbin/acme-client/)
+in OpenBSD.
+
 ## License
 
 Sources use the ISC (like OpenBSD) license.
