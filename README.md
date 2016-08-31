@@ -6,7 +6,7 @@ development**.
 
 Please see
 [kristaps.bsd.lv/letskencrypt](https://kristaps.bsd.lv/letskencrypt) for
-stable releases: this repository is for current development of the the
+stable releases: this repository is for current development of the
 [OpenBSD](http://www.openbsd.org) version, requiring requires OpenBSD
 5.9 or greater.  For the portable version (Mac OS X, Linux, FreeBSD,
 NetBSD, older OpenBSD) see
