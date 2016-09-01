@@ -19,7 +19,7 @@ OBJS 	 = acctproc.o \
 	   util.o \
 	   util-pledge.o
 
-letskencrypt: $(OBJS)
+acme-client: $(OBJS)
 	$(CC) -o $@ $(OBJS) -ltls -lssl -lcrypto
 
 rsa.o acctproc.o keyproc.o: rsa.h
@@ -28,13 +28,13 @@ jsmn.o json.o: jsmn.h
 
 http.o netproc.o: http.h
 
-install: letskencrypt
+install: acme-client
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
 	mkdir -p $(DESTDIR)$(PREFIX)/man/man1
-	install -m 0755 letskencrypt $(DESTDIR)$(PREFIX)/bin
-	install -m 0644 letskencrypt.1 $(DESTDIR)$(PREFIX)/man/man1
+	install -m 0755 acme-client $(DESTDIR)$(PREFIX)/bin
+	install -m 0644 acme-client.1 $(DESTDIR)$(PREFIX)/man/man1
 
 $(OBJS): extern.h
 
 clean:
-	rm -f letskencrypt $(OBJS)
+	rm -f acme-client $(OBJS)

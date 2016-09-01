@@ -15,16 +15,16 @@
 .\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
 .Dd $Mdocdate$
-.Dt LETSKENCRYPT 1
+.Dt ACME-CLIENT 1
 .Os
 .Sh NAME
-.Nm letskencrypt
+.Nm acme-client
 .Nd secure Let's Encrypt client
 .\" .Sh LIBRARY
 .\" For sections 2, 3, and 9 only.
 .\" Not used in OpenBSD.
 .Sh SYNOPSIS
-.Nm letskencrypt
+.Nm acme-client
 .Op Fl bFmnNrsv
 .Op Fl a Ar agreement
 .Op Fl C Ar challengedir
@@ -329,7 +329,7 @@ section:
 # mkdir /etc/ssl/letsencrypt
 # mkdir /etc/ssl/letsencrypt/private /etc/letsencrypt
 # chmod 0700 /etc/ssl/letsencrypt/private /etc/letsencrypt
-# letskencrypt -vNn foo.com www.foo.com smtp.foo.com
+# acme-client -vNn foo.com www.foo.com smtp.foo.com
 .Ed
 .Pp
 After generating the necessary directories, the above will create all
@@ -343,7 +343,7 @@ invocation running the following:
 .Bd -literal
 #! /bin/sh
 
-letskencrypt foo.com www.foo.com smtp.foo.com
+acme-client foo.com www.foo.com smtp.foo.com
 
 if [ $? -eq 0 ]
 then
@@ -361,7 +361,14 @@ script to have your web server reload its certificates.
 .Xr openssl 1
 .\" .Sh STANDARDS
 .\" .Sh HISTORY
-.\" .Sh AUTHORS
+.Sh AUTHORS
+The
+.Nm
+utility was written by
+.An Kristaps Dzonsons Aq Mt kristaps@bsd.lv .
+It was originally named
+.Nm letskencrypt ,
+renamed at version 0.1.11.
 .\" .Sh CAVEATS
 .Sh BUGS
 The challenge and certificate processes currently retain their (root)
