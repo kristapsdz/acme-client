@@ -1,25 +1,24 @@
 ## Synopsis
 
-*letskencrypt* is yet another [Let's Encrypt](https://letsencrypt.org)
-client, but one with a strong focus on security.  **It is still under
-development**.
+*acme-client* is yet another
+[ACME](https://letsencrypt.github.io/acme-spec/) client, specifically
+for [Let's Encrypt](https://letsencrypt.org), but one with a strong
+focus on security. 
+
+It was originally named *letskencrypt* until version 0.1.11.
 
 Please see
-[kristaps.bsd.lv/letskencrypt](https://kristaps.bsd.lv/letskencrypt) for
+[kristaps.bsd.lv/acme-client](https://kristaps.bsd.lv/acme-client) for
 stable releases: this repository is for current development of the
-[OpenBSD](http://www.openbsd.org) version, requiring requires OpenBSD
-5.9 or greater.  For the portable version (Mac OS X, Linux, FreeBSD,
-NetBSD, older OpenBSD) see
-[letskencrypt-portable](https://github.com/kristapsdz/letskencrypt-portable).
+[OpenBSD](http://www.openbsd.org) version, requiring OpenBSD 5.9 or
+greater.  For the portable version (Mac OS X, Linux, FreeBSD, NetBSD,
+older OpenBSD) see
+[acme-client-portable](https://github.com/kristapsdz/acme-client-portable).
 
 This repository mirrors the master CVS repository: any source changes
-will occur on the master and be pushed periodically to GitHub.  If you
+will occur in the master and be pushed periodically to GitHub.  If you
 have bug reports or patches, either file them here or e-mail them to me.
 Feature requests will be ignored unless joined by a patch.
-
-*letskencrypt* is named
-[acme-client](http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/usr.sbin/acme-client/)
-in OpenBSD.
 
 ## License
 
