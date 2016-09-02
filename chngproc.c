@@ -56,7 +56,7 @@ chngproc(int netsock, const char *root, const char *challenge)
 	else if ( ! sandbox_after(NULL != challenge))
 		goto out;
 
-	/* 
+	/*
 	 * Loop while we wait to get a thumbprint and token.
 	 * We'll get this for each SAN request.
 	 */
@@ -170,8 +170,8 @@ chngproc(int netsock, const char *root, const char *challenge)
 		free(fmtbuf);
 		th = fmt = fmtbuf = NULL;
 
-		/* 
-		 * Write our acknowledgement. 
+		/*
+		 * Write our acknowledgement.
 		 * Ignore reader failure.
 		 */
 

@@ -41,28 +41,28 @@
  * A buffer for transferring HTTP/S data.
  */
 struct	httpxfer {
-	char		*hbuf; /* header transfer buffer */
-	size_t		 hbufsz; /* header buffer size */
-	int		 headok; /* header has been parsed */
-	char		*bbuf; /* body transfer buffer */
-	size_t		 bbufsz; /* body buffer size */
-	int		 bodyok; /* body has been parsed */
+	char		*hbuf;    /* header transfer buffer */
+	size_t		 hbufsz;  /* header buffer size */
+	int		 headok;  /* header has been parsed */
+	char		*bbuf;    /* body transfer buffer */
+	size_t		 bbufsz;  /* body buffer size */
+	int		 bodyok;  /* body has been parsed */
 	char		*headbuf; /* lookaside buffer for headers */
-	struct httphead	*head; /* parsed headers */
-	size_t		 headsz; /* number of headers */
+	struct httphead	*head;    /* parsed headers */
+	size_t		 headsz;  /* number of headers */
 };
 
 /*
  * An HTTP/S connection object.
  */
 struct	http {
-	int	 	   fd; /* connected socket */
-	short	 	   port; /* port number */
-	struct source	   src; /* endpoint (raw) host */
-	char		  *path; /* path to request */
-	char		  *host; /* name of endpoint host */
-	struct tls_config *cfg; /* if TLS */
-	struct tls	  *ctx; /* if TLS */
+	int		   fd;     /* connected socket */
+	short		   port;   /* port number */
+	struct source	   src;    /* endpoint (raw) host */
+	char		  *path;   /* path to request */
+	char		  *host;   /* name of endpoint host */
+	struct tls_config *cfg;    /* if TLS */
+	struct tls	  *ctx;    /* if TLS */
 	writefp		   writer; /* write function */
 	readfp		   reader; /* read function */
 };
@@ -75,7 +75,7 @@ dosysread(char *buf, size_t sz, const struct http *http)
 	rc = read(http->fd, buf, sz);
 	if (rc < 0)
 		warn("%s: read", http->src.ip);
-	return(rc);
+	return (rc);
 }
 
 static ssize_t
