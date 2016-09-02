@@ -27,7 +27,7 @@
 void
 doddbg(const char *fmt, ...)
 {
-	va_list	 	 ap;
+	va_list		 ap;
 
 	if (verbose < 2)
 		return;
@@ -40,7 +40,7 @@ doddbg(const char *fmt, ...)
 void
 dodbg(const char *fmt, ...)
 {
-	va_list	 	 ap;
+	va_list		 ap;
 
 	if ( ! verbose)
 		return;

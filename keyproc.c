@@ -39,7 +39,7 @@
  * This was lifted more or less directly from demos/x509/mkreq.c of the
  * OpenSSL source code.
  */
-static int 
+static int
 add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 {
 	X509_EXTENSION 	*ex;
@@ -58,16 +58,16 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 
 	if (NULL == (cp = strdup(value))) {
 		warn("strdup");
-		return(0);
+		return (0);
 	}
 	ex = X509V3_EXT_conf_nid(NULL, NULL, nid, cp);
 	if (NULL == ex) {
 		warnx("X509V3_EXT_conf_nid");
 		free(cp);
-		return(0);
+		return (0);
 	}
 	sk_X509_EXTENSION_push(sk, ex);
-	return(1);
+	return (1);
 }
 
 /*
@@ -77,7 +77,7 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
  * jail and, on success, ship it to "netsock" as an X509 request.
  */
 int
-keyproc(int netsock, const char *keyfile, 
+keyproc(int netsock, const char *keyfile,
 	const char **alts, size_t altsz, int newkey)
 {
 	char		*der64, *der, *dercp, *sans, *san;
@@ -86,7 +86,7 @@ keyproc(int netsock, const char *keyfile,
 	void		*pp;
 	EVP_PKEY	*pkey;
 	X509_REQ	*x;
-	X509_NAME 	*name;
+	X509_NAME	*name;
 	unsigned char	 rbuf[64];
 	int		 len, rc, nid;
 	mode_t		 prev;
@@ -99,7 +99,7 @@ keyproc(int netsock, const char *keyfile,
 	rc = 0;
 	exts = NULL;
 
-	/* 
+	/*
 	 * First, open our private key file read-only or write-only if
 	 * we're creating from scratch.
 	 * Set our umask to be maximally restrictive.
@@ -128,7 +128,7 @@ keyproc(int netsock, const char *keyfile,
 	else if ( ! sandbox_after(0))
 		goto out;
 
-	/* 
+	/*
 	 * Seed our PRNG with data from arc4random().
 	 * Do this until we're told it's ok and use increments of 64
 	 * bytes (arbitrarily).
@@ -153,7 +153,7 @@ keyproc(int netsock, const char *keyfile,
 	fclose(f);
 	f = NULL;
 
-	/* 
+	/*
 	 * Generate our certificate from the EVP public key.
 	 * Then set it as the X509 requester's key.
 	 */
@@ -171,8 +171,8 @@ keyproc(int netsock, const char *keyfile,
 	if (NULL == (name = X509_NAME_new())) {
 		warnx("X509_NAME_new");
 		goto out;
-	} else if ( ! X509_NAME_add_entry_by_txt(name, "CN", 
-	           MBSTRING_ASC, (u_char *)alts[0], -1, -1, 0)) {
+	} else if ( ! X509_NAME_add_entry_by_txt(name, "CN",
+		MBSTRING_ASC, (u_char *)alts[0], -1, -1, 0)) {
 		warnx("X509_NAME_add_entry_by_txt: CN=%s", alts[0]);
 		goto out;
 	} else if ( ! X509_REQ_set_subject_name(x, name)) {
@@ -180,12 +180,12 @@ keyproc(int netsock, const char *keyfile,
 		goto out;
 	}
 
-	/* 
-	 * Now add the SAN extensions. 
+	/*
+	 * Now add the SAN extensions.
 	 * This was lifted more or less directly from demos/x509/mkreq.c
 	 * of the OpenSSL source code.
 	 * (The zeroth altname is the domain name.)
- 	 * TODO: is this the best way of doing this?
+	 * TODO: is this the best way of doing this?
 	 */
 
 	if (altsz > 1) {
@@ -201,7 +201,7 @@ keyproc(int netsock, const char *keyfile,
 		}
 		sansz = strlen(sans) + 1;
 
-		/* 
+		/*
 		 * For each SAN entry, append it to the string.
 		 * We need a single SAN entry for all of the SAN
 		 * domains: NOT an entry per domain!
@@ -242,7 +242,7 @@ keyproc(int netsock, const char *keyfile,
 	if ( ! X509_REQ_sign(x, pkey, EVP_sha256())) {
 		warnx("X509_sign");
 		goto out;
-	} 
+	}
 
 	/* Now, serialise to DER, then base64. */
 
@@ -260,15 +260,15 @@ keyproc(int netsock, const char *keyfile,
 		goto out;
 	}
 
-	/* 
-	 * Write that we're ready, then write. 
+	/*
+	 * Write that we're ready, then write.
 	 * We ignore reader-closed failure, as we're just going to roll
 	 * into the exit case anyway.
 	 */
-       
-	if (writeop(netsock, COMM_KEY_STAT, KEY_READY) < 0) 
+
+	if (writeop(netsock, COMM_KEY_STAT, KEY_READY) < 0)
 		goto out;
-	if (writestr(netsock, COMM_CERT, der64) < 0) 
+	if (writestr(netsock, COMM_CERT, der64) < 0)
 		goto out;
 
 	rc = 1;
@@ -288,6 +288,6 @@ out:
 		EVP_PKEY_free(pkey);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
-	return(rc);
+	return (rc);
 }
 

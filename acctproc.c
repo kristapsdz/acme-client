@@ -50,11 +50,11 @@ bn2string(const BIGNUM *bn)
 	len = BN_num_bytes(bn);
 	if (NULL == (buf = malloc(len))) {
 		warn("malloc");
-		return(NULL);
+		return (NULL);
 	} else if (len != BN_bn2bin(bn, (unsigned char *)buf)) {
 		warnx("BN_bn2bin");
 		free(buf);
-		return(NULL);
+		return (NULL);
 	}
 
 	/* Convert to base64url. */
@@ -62,11 +62,11 @@ bn2string(const BIGNUM *bn)
 	if (NULL == (bbuf = base64buf_url(buf, len))) {
 		warnx("base64buf_url");
 		free(buf);
-		return(NULL);
+		return (NULL);
 	}
 
 	free(buf);
-	return(bbuf);
+	return (bbuf);
 }
 
 /*
@@ -92,7 +92,7 @@ op_thumb_rsa(EVP_PKEY *pkey)
 
 	free(exp);
 	free(mod);
-	return(json);
+	return (json);
 }
 
 /*
@@ -161,7 +161,7 @@ out:
 	free(thumb);
 	free(dig);
 	free(dig64);
-	return(rc);
+	return (rc);
 }
 
 static int
@@ -174,9 +174,9 @@ op_sign_rsa(char **head, char **prot, EVP_PKEY *pkey, const char *nonce)
 	*head = *prot = exp = mod = NULL;
 	rc = 0;
 
-	/* 
-	 * First, extract relevant portions of our private key. 
-	 * Then construct the public header. 
+	/*
+	 * First, extract relevant portions of our private key.
+	 * Then construct the public header.
 	 * Finally, format the header combined with the nonce.
 	 */
 
@@ -195,7 +195,7 @@ op_sign_rsa(char **head, char **prot, EVP_PKEY *pkey, const char *nonce)
 
 	free(exp);
 	free(mod);
-	return(rc);
+	return (rc);
 }
 
 /*
@@ -206,7 +206,7 @@ static int
 op_sign(int fd, EVP_PKEY *pkey)
 {
 	char		*nonce, *pay,
-			*pay64, *prot, *prot64, *head, 
+			*pay64, *prot, *prot64, *head,
 			*sign, *dig64, *fin;
 	int		 rc;
 	unsigned int	 digsz;
@@ -223,7 +223,7 @@ op_sign(int fd, EVP_PKEY *pkey)
 
 	if (NULL == (pay = readstr(fd, COMM_PAY)))
 		goto out;
-	else if (NULL == (nonce = readstr(fd, COMM_NONCE))) 
+	else if (NULL == (nonce = readstr(fd, COMM_NONCE)))
 		goto out;
 
 	/* Base64-encode the payload. */
@@ -285,8 +285,8 @@ op_sign(int fd, EVP_PKEY *pkey)
 		goto out;
 	}
 
-	/* 
-	 * Write back in the correct JSON format. 
+	/*
+	 * Write back in the correct JSON format.
 	 * If the reader is closed, just ignore it (we'll pick it up
 	 * when we next enter the read loop).
 	 */
@@ -312,7 +312,7 @@ out:
 	free(dig);
 	free(dig64);
 	free(fin);
-	return(rc);
+	return (rc);
 }
 
 int
@@ -330,7 +330,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	pkey = NULL;
 	rc = 0;
 
-	/* 
+	/*
 	 * First, open our private key file read-only or write-only if
 	 * we're creating from scratch.
 	 * Set our umask to be maximally restrictive.
@@ -359,7 +359,7 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	else if ( ! sandbox_after(0))
 		goto out;
 
-	/* 
+	/*
 	 * Seed our PRNG with data from arc4random().
 	 * Do this until we're told it's ok and use increments of 64
 	 * bytes (arbitrarily).
@@ -434,6 +434,6 @@ out:
 		EVP_PKEY_free(pkey);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
-	return(rc);
+	return (rc);
 }
 
