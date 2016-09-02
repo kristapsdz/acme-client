@@ -49,18 +49,18 @@ domain_valid(const char *cp)
 {
 
 	for ( ; '\0' != *cp; cp++)
-		if (!('.' == *cp || '-' == *cp || 
- 		      '_' == *cp || isalnum((int)*cp)))
-			return(0);
-	return(1);
+		if (!('.' == *cp || '-' == *cp ||
+		    '_' == *cp || isalnum((int)*cp)))
+			return (0);
+	return (1);
 }
 
 int
 main(int argc, char *argv[])
 {
 	const char	 *domain, *agreement, *challenge;
-	char	 	 *certdir, *acctkey, *chngdir, *keyfile;
-	int		  key_fds[2], acct_fds[2], chng_fds[2], 
+	char		 *certdir, *acctkey, *chngdir, *keyfile;
+	int		  key_fds[2], acct_fds[2], chng_fds[2],
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
 	pid_t		  pids[COMP__MAX];
@@ -167,16 +167,16 @@ main(int argc, char *argv[])
 	 */
 
 	if (NULL == certdir)
-		certdir = multidir ? 
+		certdir = multidir ?
 			doasprintf(SSL_DIR "/%s", domain) :
 			strdup(SSL_DIR);
 	if (NULL == keyfile)
 		keyfile = multidir ?
-			doasprintf(SSL_PRIV_DIR "/%s/" 
+			doasprintf(SSL_PRIV_DIR "/%s/"
 				PRIVKEY_FILE, domain) :
 			strdup(SSL_PRIV_DIR "/" PRIVKEY_FILE);
 	if (NULL == acctkey)
-		acctkey = multidir ? 
+		acctkey = multidir ?
 			doasprintf(ETC_DIR "/%s/"
 				PRIVKEY_FILE, domain) :
 			strdup(ETC_DIR "/" PRIVKEY_FILE);
@@ -187,8 +187,8 @@ main(int argc, char *argv[])
 	    NULL == acctkey || NULL == chngdir)
 		err(EXIT_FAILURE, "strdup");
 
-	/* 
-	 * Do some quick checks to see if our paths exist. 
+	/*
+	 * Do some quick checks to see if our paths exist.
 	 * This will be done in the children, but we might as well check
 	 * now before the fork.
 	 */
@@ -236,8 +236,8 @@ main(int argc, char *argv[])
 	for (i = 0; i < (size_t)argc; i++)
 		alts[i + 1] = argv[i];
 
-	/* 
-	 * Open channels between our components. 
+	/*
+	 * Open channels between our components.
 	 */
 
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, key_fds))
@@ -270,12 +270,12 @@ main(int argc, char *argv[])
 		close(file_fds[1]);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
-		c = netproc(key_fds[1], acct_fds[1], 
-			chng_fds[1], cert_fds[1], 
-			dns_fds[1], rvk_fds[1], 
-			newacct, revoke, staging,
-			(const char *const *)alts, altsz,
-			agreement, challenge);
+		c = netproc(key_fds[1], acct_fds[1],
+		    chng_fds[1], cert_fds[1],
+		    dns_fds[1], rvk_fds[1],
+		    newacct, revoke, staging,
+		    (const char *const *)alts, altsz,
+		    agreement, challenge);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
@@ -301,7 +301,7 @@ main(int argc, char *argv[])
 		close(chng_fds[0]);
 		close(file_fds[0]);
 		close(file_fds[1]);
-		c = keyproc(key_fds[0], keyfile, 
+		c = keyproc(key_fds[0], keyfile,
 			(const char **)alts, altsz, newkey);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -382,7 +382,7 @@ main(int argc, char *argv[])
 		 * can return 2 if the certificates were updated.
 		 */
 		exit(c > 1 ? 2 :
-		     (c ? EXIT_SUCCESS : EXIT_FAILURE));
+		    (c ? EXIT_SUCCESS : EXIT_FAILURE));
 	}
 
 	close(file_fds[1]);
@@ -409,7 +409,7 @@ main(int argc, char *argv[])
 
 	if (0 == pids[COMP_REVOKE]) {
 		proccomp = COMP_REVOKE;
-		c = revokeproc(rvk_fds[0], certdir, 
+		c = revokeproc(rvk_fds[0], certdir,
 			force, revoke,
 			(const char *const *)alts, altsz);
 		free(alts);
@@ -435,21 +435,21 @@ main(int argc, char *argv[])
 	 */
 
 	rc = checkexit(pids[COMP_KEY], COMP_KEY) +
-	     checkexit(pids[COMP_CERT], COMP_CERT) +
-	     checkexit(pids[COMP_NET], COMP_NET) +
-	     checkexit_ext(&c, pids[COMP_FILE], COMP_FILE) +
-	     checkexit(pids[COMP_ACCOUNT], COMP_ACCOUNT) +
-	     checkexit(pids[COMP_CHALLENGE], COMP_CHALLENGE) +
-	     checkexit(pids[COMP_DNS], COMP_DNS) +
-	     checkexit(pids[COMP_REVOKE], COMP_REVOKE);
+	    checkexit(pids[COMP_CERT], COMP_CERT) +
+	    checkexit(pids[COMP_NET], COMP_NET) +
+	    checkexit_ext(&c, pids[COMP_FILE], COMP_FILE) +
+	    checkexit(pids[COMP_ACCOUNT], COMP_ACCOUNT) +
+	    checkexit(pids[COMP_CHALLENGE], COMP_CHALLENGE) +
+	    checkexit(pids[COMP_DNS], COMP_DNS) +
+	    checkexit(pids[COMP_REVOKE], COMP_REVOKE);
 
 	free(certdir);
 	free(keyfile);
 	free(acctkey);
 	free(chngdir);
 	free(alts);
-	return(COMP__MAX != rc ? EXIT_FAILURE :
-	       (2 == c ? EXIT_SUCCESS : 2));
+	return (COMP__MAX != rc ? EXIT_FAILURE :
+	    (2 == c ? EXIT_SUCCESS : 2));
 usage:
 	fprintf(stderr, "usage: %s "
 		"[-bFmnNrsv] "
@@ -465,5 +465,5 @@ usage:
 	free(keyfile);
 	free(acctkey);
 	free(chngdir);
-	return(EXIT_FAILURE);
+	return (EXIT_FAILURE);
 }

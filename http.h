@@ -33,7 +33,7 @@ struct	http;
 typedef	ssize_t (*writefp)(const void *, size_t, const struct http *);
 typedef	ssize_t (*readfp)(char *, size_t, const struct http *);
 
-/* 
+/*
  * HTTP/S header pair.
  * There's also a cooked-up pair, "Status", with the status code.
  * Both strings are nil-terminated.
@@ -70,7 +70,7 @@ struct httpget	*http_get(const struct source *, size_t,
 void		 http_get_free(struct httpget *);
 
 /* Allocation and release. */
-struct http	*http_alloc(const struct source *, size_t, 
+struct http	*http_alloc(const struct source *, size_t,
 			const char *, short, const char *);
 void		 http_free(struct http *);
 struct httpxfer	*http_open(const struct http *, const void *, size_t);
@@ -78,11 +78,11 @@ void		 http_close(struct httpxfer *);
 void		 http_disconnect(struct http *);
 
 /* Access. */
-char		*http_head_read(const struct http *, 
+char		*http_head_read(const struct http *,
 			struct httpxfer *, size_t *);
 struct httphead	*http_head_parse(const struct http *,
 			struct httpxfer *, size_t *);
-char 		*http_body_read(const struct http *, 
+char		*http_body_read(const struct http *,
 			struct httpxfer *, size_t *);
 int		 http_head_status(const struct http *,
 			struct httphead *, size_t);

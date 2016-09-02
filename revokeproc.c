@@ -160,7 +160,7 @@ revokeproc(int fd, const char *certdir, int force, int revoke,
 	 * If we're revoking, however, then that's an error!
 	 * Ignore if the reader isn't reading in either case.
 	 */
-	
+
 	if (NULL == f && revoke) {
 		warnx("%s/%s: no certificate found",
 			certdir, CERT_PEM);
@@ -282,7 +282,7 @@ revokeproc(int fd, const char *certdir, int force, int revoke,
 	 * netproc in DER and base64-encoded format.
 	 * Then exit: we have nothing left to do.
 	 */
-	
+
 	if (revoke) {
 		dodbg("%s/%s: revocation", certdir, CERT_PEM);
 

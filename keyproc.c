@@ -42,7 +42,7 @@
 static int
 add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
 {
-	X509_EXTENSION 	*ex;
+	X509_EXTENSION	*ex;
 	char		*cp;
 
 	/*
