@@ -125,10 +125,6 @@ main(int argc, char *argv[])
 			staging = 1;
 			break;
 		case ('t'):
-			/*
-			 / Undocumented feature.
-			 * Don't use it.
-			 */
 			challenge = optarg;
 			break;
 		case ('v'):
