@@ -49,34 +49,34 @@ x509buf(X509 *x, size_t *sz)
 
 	if (NULL == (bio = BIO_new(BIO_s_mem()))) {
 		warnx("BIO_new");
-		return(NULL);
+		return (NULL);
 	} else if ( ! PEM_write_bio_X509(bio, x)) {
 		warnx("PEM_write_bio_X509");
 		BIO_free(bio);
-		return(NULL);
+		return (NULL);
 	}
 
-	/* 
-	 * Now convert bio to string. 
+	/*
+	 * Now convert bio to string.
 	 * Make into nil-terminated, just in case.
 	 */
 
 	if (NULL == (p = calloc(1, bio->num_write + 1))) {
 		warn("calloc");
 		BIO_free(bio);
-		return(NULL);
-	} 
+		return (NULL);
+	}
 
 	ssz = BIO_read(bio, p, bio->num_write);
 	if (ssz < 0 || (unsigned)ssz != bio->num_write) {
 		warnx("BIO_read");
 		BIO_free(bio);
-		return(NULL);
+		return (NULL);
 	}
 
 	*sz = ssz;
 	BIO_free(bio);
-	return(p);
+	return (p);
 }
 
 int
@@ -132,8 +132,8 @@ certproc(int netsock, int filesock)
 		goto out;
 	}
 
-	/* 
-	 * Pass revocation right through to fileproc. 
+	/*
+	 * Pass revocation right through to fileproc.
 	 * If the reader is terminated, ignore it.
 	 */
 
@@ -210,7 +210,7 @@ certproc(int netsock, int filesock)
 	if (chainsz <= strlen(MARKER) ||
 	    strncmp(chain, MARKER, strlen(MARKER))) {
 		chaincp = (u_char *)chain;
-		chainx = d2i_X509(NULL, 
+		chainx = d2i_X509(NULL,
 			(const u_char **)&chaincp, chainsz);
 		if (NULL == chainx) {
 			warnx("d2i_X509");
@@ -219,7 +219,7 @@ certproc(int netsock, int filesock)
 		free(chain);
 		if (NULL == (chain = x509buf(chainx, &chainsz)))
 			goto out;
-	} 
+	}
 
 	/* Allow reader termination to just push us out. */
 
@@ -232,8 +232,8 @@ certproc(int netsock, int filesock)
 	if (cc <= 0)
 		goto out;
 
-	/* 
-	 * Next, convert the X509 to a buffer and send that. 
+	/*
+	 * Next, convert the X509 to a buffer and send that.
 	 * Reader failure doesn't change anything.
 	 */
 
@@ -256,6 +256,6 @@ out:
 	free(chain);
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
-	return(rc);
+	return (rc);
 }
 

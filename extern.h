@@ -152,7 +152,7 @@ enum	comm {
  * (presumably!) local machine to an ACME connection; and a URI, to
  * which we must connect to verify the token.
  */
-struct 	chng {
+struct	chng {
 	char		*uri; /* uri on ACME server */
 	char		*token; /* token we must offer */
 	size_t		 retry; /* how many times have we tried */
@@ -246,7 +246,7 @@ char		*json_fmt_protected_rsa(const char *,
 char		*json_fmt_revokecert(const char *);
 char		*json_fmt_header_rsa(const char *, const char *);
 char		*json_fmt_thumb_rsa(const char *, const char *);
-char		*json_fmt_signed(const char *, 
+char		*json_fmt_signed(const char *,
 			const char *, const char *, const char *);
 
 int		 dropprivs(void);

@@ -63,7 +63,7 @@ chngproc(int netsock, const char *root, const char *challenge)
 
 	for (;;) {
 		op = CHNG__MAX;
-		if (0 == (lval = readop(netsock, COMM_CHNG_OP))) 
+		if (0 == (lval = readop(netsock, COMM_CHNG_OP)))
 			op = CHNG_STOP;
 		else if (CHNG_SYN == lval)
 			op = lval;
@@ -76,7 +76,7 @@ chngproc(int netsock, const char *root, const char *challenge)
 
 		assert(CHNG_SYN == op);
 
-		/* 
+		/*
 		 * Read the thumbprint and token.
 		 * The token is the filename, so store that in a vector
 		 * of tokens that we'll later clean up.
