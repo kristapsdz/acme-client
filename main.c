@@ -19,6 +19,7 @@
 #endif
 
 #include <sys/socket.h>
+#include <sys/stat.h> /* mkdir(2) */
 
 #include <ctype.h>
 #include <err.h>
@@ -59,13 +60,15 @@ int
 main(int argc, char *argv[])
 {
 	const char	 *domain, *agreement, *challenge;
-	char		 *certdir, *acctkey, *chngdir, *keyfile;
+	char		 *certdir, *acctkey, *chngdir, *keyfile,
+			 *keydir, *acctdir;
 	int		  key_fds[2], acct_fds[2], chng_fds[2],
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
 	pid_t		  pids[COMP__MAX];
 	int		  c, rc, newacct, revoke, force,
-			  staging, multidir, newkey, backup;
+			  staging, multidir, newkey, backup,
+			  build_certdir, build_ssldir, build_acctdir;
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, altsz, ne;
@@ -162,6 +165,10 @@ main(int argc, char *argv[])
 	 * Otherwise, we put them all in a known location.
 	 */
 
+	build_certdir = (NULL == certdir) && multidir;
+	build_ssldir = (NULL == keyfile) && multidir;
+	build_acctdir = (NULL == acctkey) && multidir;
+
 	if (NULL == certdir)
 		certdir = multidir ?
 			doasprintf(SSL_DIR "/%s", domain) :
@@ -179,9 +186,46 @@ main(int argc, char *argv[])
 	if (NULL == chngdir)
 		chngdir = strdup(WWW_DIR);
 
+	keydir = multidir ?
+		doasprintf(SSL_PRIV_DIR "/%s", domain) :
+		strdup(SSL_PRIV_DIR);
+	acctdir = multidir ?
+		doasprintf(ETC_DIR "/%s", domain) :
+		strdup(ETC_DIR);
+
 	if (NULL == certdir || NULL == keyfile ||
-	    NULL == acctkey || NULL == chngdir)
+	    NULL == acctkey || NULL == chngdir ||
+	    NULL == keydir || NULL == acctdir)
 		err(EXIT_FAILURE, "strdup");
+
+	/*
+	 * If we're running in multi-mode with default paths, try to
+	 * build the domain-specific directory component if not found.
+	 * This makes it easier to get started from nothing without
+	 * mucking around in directories.
+	 */
+
+	if (build_certdir && -1 == access(certdir, R_OK)) {
+		dodbg("%s: creating directory", certdir);
+		if (-1 == mkdir(certdir, 0755))
+			err(EXIT_FAILURE, "%s", certdir);
+	}
+
+	if (build_ssldir && -1 == access(keydir, R_OK)) {
+		dodbg("%s: creating directory", keydir);
+		if (-1 == mkdir(keydir, 0755))
+			err(EXIT_FAILURE, "%s", keydir);
+	}
+
+	if (build_acctdir && -1 == access(acctdir, R_OK)) {
+		dodbg("%s: creating directory", acctdir);
+		if (-1 == mkdir(acctdir, 0755)) 
+			err(EXIT_FAILURE, "%s", acctdir);
+	}
+
+	free(keydir);
+	free(acctdir);
+	keydir = acctdir = NULL;
 
 	/*
 	 * Do some quick checks to see if our paths exist.
