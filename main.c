@@ -32,10 +32,10 @@
 
 #define AGREEMENT "https://letsencrypt.org" \
 		  "/documents/LE-SA-v1.1.1-August-1-2016.pdf"
-#define SSL_DIR "/etc/ssl/letsencrypt"
-#define SSL_PRIV_DIR "/etc/ssl/letsencrypt/private"
-#define ETC_DIR "/etc/letsencrypt"
-#define WWW_DIR "/var/www/letsencrypt"
+#define SSL_DIR "/etc/ssl/acme"
+#define SSL_PRIV_DIR "/etc/ssl/acme/private"
+#define ETC_DIR "/etc/acme"
+#define WWW_DIR "/var/www/acme"
 #define PRIVKEY_FILE "privkey.pem"
 
 /*

@@ -50,17 +50,17 @@ It must be run as root.
 .Xr chroot 2 . )
 .Pp
 By default, it uses
-.Pa /var/www/letsencrypt
+.Pa /var/www/acme
 for responding to challenges
 .Pq Fl C ,
-.Pa /etc/ssl/letsencrypt
+.Pa /etc/ssl/acme
 for the public certificate directory
 .Pq Fl c ,
-.Pa /etc/ssl/letsencrypt/private/privkey.pem
+.Pa /etc/ssl/acme/private/privkey.pem
 for the domain private key
 .Pq Fl k ,
 and
-.Pa /etc/letsencrypt/privkey.pem
+.Pa /etc/acme/privkey.pem
 for the account private key
 .Pq Fl f .
 All of these must exist unless you use
@@ -97,7 +97,7 @@ to all default paths except the challenge path
 Thus,
 .Ar foo.com
 as the initial domain would make the default domain private key into
-.Pa /etc/ssl/letsencrypt/private/foo.com/privkey.pem .
+.Pa /etc/ssl/acme/private/foo.com/privkey.pem .
 This is useful in setups with multiple domain sets.
 .It Fl n
 Create a new 4096-bit RSA account key if one does not already exist.
@@ -239,8 +239,8 @@ might be as follows:
   [...]
   ServerName foo.com
   ServerAlias www.foo.com
-  Alias /.well-known/acme-challenge /var/www/letsencrypt
-  <Directory /var/www/letsencrypt>
+  Alias /.well-known/acme-challenge /var/www/acme
+  <Directory /var/www/acme>
     Options None
     AllowOverride None
     Order allow,deny
@@ -250,7 +250,7 @@ might be as follows:
 .Ed
 .Pp
 This way, the files placed in
-.Pa /var/www/letsencrypt
+.Pa /var/www/acme
 will be properly mapped by the web server when the Let's Encrypt
 responds to a challenge.
 .Pp
@@ -278,7 +278,7 @@ exits, there are no more domains.
 .Ss Certificates
 Public certificates (domain certificate, chain, and the full-chain) are
 placed by default in
-.Pa /etc/ssl/letsencrypt
+.Pa /etc/ssl/acme
 as
 .Pa cert.pem ,
 .Pa chain.pem ,
@@ -293,8 +293,8 @@ server {
   listen 443;
   server_name foo.com www.foo.com;
   [...]
-  ssl_certificate /etc/ssl/letsencrypt/fullchain.pem;
-  ssl_certificate_key /etc/ssl/letsencrypt/private/privkey.pem;
+  ssl_certificate /etc/ssl/acme/fullchain.pem;
+  ssl_certificate_key /etc/ssl/acme/private/privkey.pem;
 }
 .Ed
 .Pp
@@ -325,10 +325,10 @@ as in the
 .Sx Challenges
 section:
 .Bd -literal
-# mkdir /var/www/letsencrypt
-# mkdir /etc/ssl/letsencrypt
-# mkdir /etc/ssl/letsencrypt/private /etc/letsencrypt
-# chmod 0700 /etc/ssl/letsencrypt/private /etc/letsencrypt
+# mkdir /var/www/acme
+# mkdir /etc/ssl/acme
+# mkdir /etc/ssl/acme/private /etc/acme
+# chmod 0700 /etc/ssl/acme/private /etc/acme
 # acme-client -vNn foo.com www.foo.com smtp.foo.com
 .Ed
 .Pp

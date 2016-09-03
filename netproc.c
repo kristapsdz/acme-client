@@ -577,7 +577,7 @@ dofullchain(struct conn *c, const char *addr)
 }
 
 /*
- * Here we communicate with the letsencrypt server.
+ * Here we communicate with the ACME server.
  * For this, we'll need the certificate we want to upload and our
  * account key information.
  */
