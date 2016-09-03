@@ -99,6 +99,10 @@ Thus,
 as the initial domain would make the default domain private key into
 .Pa /etc/ssl/acme/private/foo.com/privkey.pem .
 This is useful in setups with multiple domain sets.
+If the
+.Pa foo.com
+directory is not found within non-overriden default paths, it will be
+created automatically.
 .It Fl n
 Create a new 4096-bit RSA account key if one does not already exist.
 .It Fl N
