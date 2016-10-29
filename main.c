@@ -66,7 +66,7 @@ main(int argc, char *argv[])
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
 	pid_t		  pids[COMP__MAX];
-	int		  c, rc, newacct, revoke, force,
+	int		  c, rc, newacct, revocate, force,
 			  staging, multidir, newkey, backup,
 			  build_certdir, build_ssldir, build_acctdir;
 	extern int	  verbose;
@@ -75,7 +75,7 @@ main(int argc, char *argv[])
 	const char	**alts;
 
 	alts = NULL;
-	newacct = revoke = verbose = force = 
+	newacct = revocate = verbose = force = 
 		multidir = staging = newkey = backup = 0;
 	certdir = keyfile = acctkey = chngdir = NULL;
 	agreement = AGREEMENT;
@@ -122,7 +122,7 @@ main(int argc, char *argv[])
 			newkey = 1;
 			break;
 		case ('r'):
-			revoke = 1;
+			revocate = 1;
 			break;
 		case ('s'):
 			staging = 1;
@@ -313,7 +313,7 @@ main(int argc, char *argv[])
 		c = netproc(key_fds[1], acct_fds[1],
 		    chng_fds[1], cert_fds[1],
 		    dns_fds[1], rvk_fds[1],
-		    newacct, revoke, staging,
+		    newacct, revocate, staging,
 		    (const char *const *)alts, altsz,
 		    agreement, challenge);
 		free(alts);
@@ -450,7 +450,7 @@ main(int argc, char *argv[])
 	if (0 == pids[COMP_REVOKE]) {
 		proccomp = COMP_REVOKE;
 		c = revokeproc(rvk_fds[0], certdir,
-			force, revoke,
+			force, revocate,
 			(const char *const *)alts, altsz);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
