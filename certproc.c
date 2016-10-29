@@ -82,25 +82,18 @@ x509buf(X509 *x, size_t *sz)
 int
 certproc(int netsock, int filesock)
 {
-	char		*csr, *chain, *url;
+	char		*csr = NULL, *chain = NULL, *url = NULL;
 	unsigned char	*csrcp, *chaincp;
 	size_t		 csrsz, chainsz;
-	int		 i, rc, idx, cc;
+	int		 i, rc = 0, idx = -1, cc;
 	enum certop	 op;
 	long		 lval;
-	X509		*x, *chainx;
-	X509_EXTENSION	*ext;
-	X509V3_EXT_METHOD *method;
+	X509		*x = NULL, *chainx = NULL;
+	X509_EXTENSION	*ext = NULL;
+	X509V3_EXT_METHOD *method = NULL;
 	void		*entries;
 	STACK_OF(CONF_VALUE) *val;
 	CONF_VALUE	*nval;
-
-	ext = NULL;
-	idx = -1;
-	method = NULL;
-	chain = csr = url = NULL;
-	rc = 0;
-	x = chainx = NULL;
 
 	/* File-system and sandbox jailing. */
 
@@ -258,4 +251,3 @@ out:
 	ERR_free_strings();
 	return (rc);
 }
-
