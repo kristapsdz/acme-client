@@ -68,16 +68,13 @@ serialise(const char *tmp, const char *real,
 int
 fileproc(int certsock, int backup, const char *certdir)
 {
-	char		*csr, *ch;
+	char		*csr = NULL, *ch = NULL;
+	char		 file[PATH_MAX];
 	size_t		 chsz, csz;
-	int		 rc;
+	int		 rc = 0;
 	long		 lval;
 	enum fileop	 op;
 	time_t		 t;
-	char		 file[PATH_MAX];
-
-	csr = ch = NULL;
-	rc = 0;
 
 	/* File-system and sandbox jailing. */
 

@@ -125,9 +125,7 @@ readbuf(int fd, enum comm comm, size_t *sz)
 {
 	ssize_t		 ssz;
 	size_t		 rsz, lsz;
-	char		*p;
-
-	p = NULL;
+	char		*p = NULL;
 
 	if ((ssz = read(fd, sz, sizeof(size_t))) < 0) {
 		warn("read: %s length", comms[comm]);
@@ -205,10 +203,8 @@ int
 writebuf(int fd, enum comm comm, const void *v, size_t sz)
 {
 	ssize_t	 ssz;
-	int	 er, rc;
+	int	 er, rc = -1;
 	void	(*sigfp)(int);
-
-	rc = -1;
 
 	/*
 	 * First, try to write the length.

@@ -99,31 +99,22 @@ X509expires(X509 *x)
 }
 
 int
-revokeproc(int fd, const char *certdir, int force, int revoke,
+revokeproc(int fd, const char *certdir, int force, int revocate,
 	const char *const *alts, size_t altsz)
 {
-	int		 rc, cc, i, extsz, ssz;
+	char		*path = NULL, *der = NULL, *dercp, 
+			*der64 = NULL, *san = NULL, *str, *tok;
+	int		 rc = 0, cc, i, extsz, ssz, len;
+	size_t		*found = NULL;
+	BIO		*bio = NULL;
+	FILE		*f = NULL;
+	X509		*x = NULL;
 	long		 lval;
-	FILE		*f;
-	size_t		*found;
-	char		*path, *der, *dercp, *der64, *san, *str, *tok;
-	X509		*x;
 	enum revokeop	 op, rop;
 	time_t		 t;
-	int		 len;
 	X509_EXTENSION	*ex;
 	ASN1_OBJECT	*obj;
-	BIO		*bio;
 	size_t		 j;
-
-	found = NULL;
-	bio = NULL;
-	der = der64 = NULL;
-	rc = 0;
-	f = NULL;
-	path = NULL;
-	san = NULL;
-	x = NULL;
 
 	/*
 	 * First try to open the certificate before we drop privileges
@@ -161,12 +152,12 @@ revokeproc(int fd, const char *certdir, int force, int revoke,
 	 * Ignore if the reader isn't reading in either case.
 	 */
 
-	if (NULL == f && revoke) {
+	if (NULL == f && revocate) {
 		warnx("%s/%s: no certificate found",
 			certdir, CERT_PEM);
 		(void)writeop(fd, COMM_REVOKE_RESP, REVOKE_OK);
 		goto out;
-	} else if (NULL == f && ! revoke) {
+	} else if (NULL == f && ! revocate) {
 		if (writeop(fd, COMM_REVOKE_RESP, REVOKE_EXP) >= 0)
 			rc = 1;
 		goto out;
@@ -283,7 +274,7 @@ revokeproc(int fd, const char *certdir, int force, int revoke,
 	 * Then exit: we have nothing left to do.
 	 */
 
-	if (revoke) {
+	if (revocate) {
 		dodbg("%s/%s: revocation", certdir, CERT_PEM);
 
 		/*
