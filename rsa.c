@@ -39,11 +39,8 @@
 EVP_PKEY *
 rsa_key_create(FILE *f, const char *fname)
 {
-	EVP_PKEY_CTX	*ctx;
-	EVP_PKEY	*pkey;
-
-	ctx = NULL;
-	pkey = NULL;
+	EVP_PKEY_CTX	*ctx = NULL;
+	EVP_PKEY	*pkey = NULL;
 
 	/* First, create the context and the key. */
 
@@ -94,4 +91,3 @@ rsa_key_load(FILE *f, const char *fname)
 	EVP_PKEY_free(pkey);
 	return (NULL);
 }
-

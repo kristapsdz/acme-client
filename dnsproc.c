@@ -115,17 +115,13 @@ host_dns(const char *s, struct addr *vec)
 int
 dnsproc(int nfd)
 {
-	int		 rc, cc;
-	char		*look, *last;
+	char		*look = NULL, *last = NULL;
 	struct addr	 v[MAX_SERVERS_DNS];
+	int		 rc = 0, cc;
 	long		 lval;
+	ssize_t		 vsz = 0;
 	size_t		 i;
-	ssize_t		 vsz;
 	enum dnsop	 op;
-
-	rc = 0;
-	look = last = NULL;
-	vsz = 0;
 
 	/*
 	 * Why don't we chroot() here?
