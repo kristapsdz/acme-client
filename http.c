@@ -37,6 +37,8 @@
 #include "http.h"
 #include "extern.h"
 
+#define DEFAULT_CA_FILE "/etc/ssl/cert.pem"
+
 /*
  * A buffer for transferring HTTP/S data.
  */
@@ -61,10 +63,13 @@ struct	http {
 	struct source	   src;    /* endpoint (raw) host */
 	char		  *path;   /* path to request */
 	char		  *host;   /* name of endpoint host */
-	struct tls_config *cfg;    /* if TLS */
 	struct tls	  *ctx;    /* if TLS */
 	writefp		   writer; /* write function */
 	readfp		   reader; /* read function */
+};
+
+struct	httpcfg {
+	struct tls_config *tlscfg;
 };
 
 static ssize_t
@@ -184,6 +189,67 @@ dotlswrite(const void *buf, size_t sz, const struct http *http)
 }
 #endif
 
+/*
+ * Free the resources of an http_init() object.
+ */
+void
+http_uninit(struct httpcfg *p)
+{
+
+	if (NULL == p)
+		return;
+	if (NULL != p->tlscfg)
+		tls_config_free(p->tlscfg);
+	free(p);
+}
+
+/*
+ * This function allocates a configuration shared among multiple
+ * connections.
+ * It will generally be called once, then used in a series of
+ * connections.
+ * Returns the configuration object or NULL on errors.
+ * A returned object must be freed with http_deinit().
+ */
+struct httpcfg *
+http_init(void)
+{
+	struct httpcfg	*p;
+
+	/* Can be called more than once. */
+
+	if (-1 == tls_init()) {
+		warn("tls_init");
+		return (NULL);
+	}
+
+	if (NULL == (p = malloc(sizeof(struct httpcfg)))) {
+		warn("calloc");
+		return (NULL);
+	} else if (NULL == (p->tlscfg = tls_config_new())) {
+		warn("tls_config_new");
+		goto err;
+	}
+
+	tls_config_set_protocols(p->tlscfg, TLS_PROTOCOLS_ALL);
+
+	if (-1 == tls_config_set_ca_file(p->tlscfg, DEFAULT_CA_FILE)) {
+		warn("tls_config_set_ca_file: %s", 
+			tls_config_error(p->tlscfg));
+		goto err;
+	}
+	if (-1 == tls_config_set_ciphers(p->tlscfg, "compat")) {
+		warn("tls_config_set_ciphers: %s", 
+			tls_config_error(p->tlscfg));
+		goto err;
+	}
+
+	return (p);
+ err:
+	http_uninit(p);
+	return (NULL);
+}
+
 static ssize_t
 http_read(char *buf, size_t sz, const struct http *http)
 {
@@ -257,8 +323,6 @@ http_free(struct http *http)
 	if (NULL == http)
 		return;
 	http_disconnect(http);
-	if (NULL != http->cfg)
-		tls_config_free(http->cfg);
 	free(http->host);
 	free(http->path);
 	free(http->src.ip);
@@ -266,7 +330,8 @@ http_free(struct http *http)
 }
 
 struct http *
-http_alloc(const struct source *addrs, size_t addrsz,
+http_alloc(struct httpcfg *cfg, 
+	const struct source *addrs, size_t addrsz,
 	const char *host, short port, const char *path)
 {
 	struct sockaddr_storage ss;
@@ -356,29 +421,10 @@ again:
 	http->writer = dotlswrite;
 	http->reader = dotlsread;
 
-	if (-1 == tls_init()) {
-		warn("tls_init");
-		goto err;
-	}
-
-	http->cfg = tls_config_new();
-	if (NULL == http->cfg) {
-		warn("tls_config_new");
-		goto err;
-	}
-
-	tls_config_set_protocols(http->cfg, TLS_PROTOCOLS_ALL);
-
-	/* FIXME: is this necessary? */
-	tls_config_insecure_noverifycert(http->cfg);
-
-	if (-1 == tls_config_set_ciphers(http->cfg, "compat")) {
-		warn("tls_config_set_ciphers");
-		goto err;
-	} else if (NULL == (http->ctx = tls_client())) {
+	if (NULL == (http->ctx = tls_client())) {
 		warn("tls_client");
 		goto err;
-	} else if (-1 == tls_configure(http->ctx, http->cfg)) {
+	} else if (-1 == tls_configure(http->ctx, cfg->tlscfg)) {
 		warnx("%s: tls_configure: %s",
 			http->src.ip, tls_error(http->ctx));
 		goto err;
@@ -746,7 +792,8 @@ http_get_free(struct httpget *g)
 }
 
 struct httpget *
-http_get(const struct source *addrs, size_t addrsz,
+http_get(struct httpcfg *cfg,
+	const struct source *addrs, size_t addrsz,
 	const char *domain, short port, const char *path,
 	const void *post, size_t postsz)
 {
@@ -758,7 +805,7 @@ http_get(const struct source *addrs, size_t addrsz,
 	int		 code;
 	char		*bod, *headr;
 
-	h = http_alloc(addrs, addrsz, domain, port, path);
+	h = http_alloc(cfg, addrs, addrsz, domain, port, path);
 	if (NULL == h)
 		return (NULL);
 
