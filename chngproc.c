@@ -32,20 +32,15 @@
 int
 chngproc(int netsock, const char *root, const char *challenge)
 {
-	int		  rc, fd, cc;
+	char		 *tok = NULL, *th = NULL, *fmt = NULL, 
+			 *fmtbuf = NULL;
+	char		**fs = NULL;
+	size_t		  i, fsz = 0, sz;
+	ssize_t		  ssz;
+	int		  rc = 0, fd = -1, cc;
 	long		  lval;
 	enum chngop	  op;
-	char		 *tok, *th, *fmt, *fmtbuf;
-	char		**fs;
-	ssize_t		  ssz;
-	size_t		  i, fsz, sz;
 	void		 *pp;
-
-	rc = 0;
-	th = tok = fmt = fmtbuf = NULL;
-	fd = -1;
-	fs = NULL;
-	fsz = 0;
 
 	/* File-system and sandbox jailing. */
 
