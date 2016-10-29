@@ -80,24 +80,18 @@ int
 keyproc(int netsock, const char *keyfile,
 	const char **alts, size_t altsz, int newkey)
 {
-	char		*der64, *der, *dercp, *sans, *san;
+	char		*der64 = NULL, *der = NULL, *dercp, 
+			*sans = NULL, *san = NULL;
 	FILE		*f;
 	size_t		 i, sansz;
 	void		*pp;
-	EVP_PKEY	*pkey;
-	X509_REQ	*x;
-	X509_NAME	*name;
+	EVP_PKEY	*pkey = NULL;
+	X509_REQ	*x = NULL;
+	X509_NAME	*name = NULL;
 	unsigned char	 rbuf[64];
-	int		 len, rc, nid;
+	int		 len, rc = 0, nid;
 	mode_t		 prev;
-	STACK_OF(X509_EXTENSION) *exts;
-
-	x = NULL;
-	pkey = NULL;
-	name = NULL;
-	der = der64 = sans = san = NULL;
-	rc = 0;
-	exts = NULL;
+	STACK_OF(X509_EXTENSION) *exts = NULL;
 
 	/*
 	 * First, open our private key file read-only or write-only if
@@ -290,4 +284,3 @@ out:
 	ERR_free_strings();
 	return (rc);
 }
-
