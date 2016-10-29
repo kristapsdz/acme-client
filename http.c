@@ -234,13 +234,21 @@ http_init(void)
 	tls_config_set_protocols(p->tlscfg, TLS_PROTOCOLS_ALL);
 
 	if (-1 == tls_config_set_ca_file(p->tlscfg, DEFAULT_CA_FILE)) {
+#if defined(TLS_READ_AGAIN) && defined(TLS_WRITE_AGAIN)
+		warn("tls_config_set_ca_file");
+#else
 		warn("tls_config_set_ca_file: %s", 
 			tls_config_error(p->tlscfg));
+#endif
 		goto err;
 	}
 	if (-1 == tls_config_set_ciphers(p->tlscfg, "compat")) {
+#if defined(TLS_READ_AGAIN) && defined(TLS_WRITE_AGAIN)
+		warn("tls_config_set_ciphers");
+#else
 		warn("tls_config_set_ciphers: %s", 
 			tls_config_error(p->tlscfg));
+#endif
 		goto err;
 	}
 
