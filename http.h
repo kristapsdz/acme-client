@@ -23,6 +23,7 @@ struct	source {
 };
 
 struct	http;
+struct	httpcfg;
 
 /*
  * Write and read callbacks to allow HTTP and HTTPS.
@@ -63,14 +64,20 @@ struct	httpget {
 
 __BEGIN_DECLS
 
+/* Configuration functions. */
+struct httpcfg	*http_init(void);
+void		 http_uninit(struct httpcfg *);
+
 /* Convenience functions. */
-struct httpget	*http_get(const struct source *, size_t,
+struct httpget	*http_get(struct httpcfg *,
+			const struct source *, size_t,
 			const char *, short, const char *,
 			const void *, size_t);
 void		 http_get_free(struct httpget *);
 
 /* Allocation and release. */
-struct http	*http_alloc(const struct source *, size_t,
+struct http	*http_alloc(struct httpcfg *,
+			const struct source *, size_t,
 			const char *, short, const char *);
 void		 http_free(struct http *);
 struct httpxfer	*http_open(const struct http *, const void *, size_t);

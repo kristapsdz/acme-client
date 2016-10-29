@@ -39,18 +39,19 @@
  * Buffer used when collecting the results of a CURL transfer.
  */
 struct	buf {
-	char	*buf; /* binary buffer */
-	size_t	 sz; /* length of buffer */
+	char	*buf;	/* binary buffer */
+	size_t	 sz;	/* length of buffer */
 };
 
 /*
  * Used for CURL communications.
  */
 struct	conn {
-	const char	  *na; /* nonce authority */
-	int		   fd; /* acctproc handle */
-	int		   dfd; /* dnsproc handle */
-	struct buf	   buf; /* transfer buffer */
+	const char	*na;	/* nonce authority */
+	int		 fd;	/* acctproc handle */
+	int		 dfd;	/* dnsproc handle */
+	struct buf	 buf;	/* transfer buffer */
+	struct httpcfg	*cfg;	/* http configuration */
 };
 
 /*
@@ -201,7 +202,7 @@ nreq(struct conn *c, const char *addr)
 	}
 	srcsz = ssz;
 
-	g = http_get(src, srcsz, host, port, path, NULL, 0);
+	g = http_get(c->cfg, src, srcsz, host, port, path, NULL, 0);
 	free(host);
 	free(path);
 	if (NULL == g)
@@ -248,7 +249,8 @@ sreq(struct conn *c, const char *addr, const char *req)
 		return (-1);
 	}
 
-	g = http_get(src, (size_t)ssz, host, port, path, NULL, 0);
+	g = http_get(c->cfg, src, (size_t)ssz, 
+		host, port, path, NULL, 0);
 	free(host);
 	free(path);
 	if (NULL == g)
@@ -300,7 +302,7 @@ sreq(struct conn *c, const char *addr, const char *req)
 		return (-1);
 	}
 
-	g = http_get(src, (size_t)ssz, host,
+	g = http_get(c->cfg, src, (size_t)ssz, host,
 		port, path, reqsn, strlen(reqsn));
 
 	free(host);
@@ -334,11 +336,10 @@ static int
 donewreg(struct conn *c, const char *agreement,
 	const struct capaths *p)
 {
-	int		 rc;
+	int		 rc = 0;
 	char		*req;
 	long		 lc;
 
-	rc = 0;
 	dodbg("%s: new-reg", p->newreg);
 
 	if (NULL == (req = json_fmt_newreg(agreement)))
@@ -355,7 +356,7 @@ donewreg(struct conn *c, const char *agreement,
 	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
 	free(req);
-	return(rc);
+	return (rc);
 }
 
 /*
@@ -367,13 +368,11 @@ static int
 dochngreq(struct conn *c, const char *alt, struct chng *chng, 
 	const struct capaths *p, const char *challenge)
 {
-	int		 rc;
+	int		 rc = 0;
 	char		*req;
 	long		 lc;
-	struct jsmnn	*j;
+	struct jsmnn	*j = NULL;
 
-	j = NULL;
-	rc = 0;
 	dodbg("%s: req-auth: %s", p->newauthz, alt);
 
 	if (NULL == (req = json_fmt_newauthz(alt)))
@@ -393,7 +392,7 @@ dochngreq(struct conn *c, const char *alt, struct chng *chng,
 		buf_dump(&c->buf);
 	json_free(j);
 	free(req);
-	return(rc);
+	return (rc);
 }
 
 /*
@@ -402,11 +401,10 @@ dochngreq(struct conn *c, const char *alt, struct chng *chng,
 static int
 dochngresp(struct conn *c, const struct chng *chng, const char *th)
 {
-	int	 rc;
+	int	 rc = 0;
 	long	 lc;
 	char	*req;
 
-	rc = 0;
 	dodbg("%s: challenge", chng->uri);
 
 	if (NULL == (req = json_fmt_challenge(chng->token, th)))
@@ -421,7 +419,7 @@ dochngresp(struct conn *c, const struct chng *chng, const char *th)
 	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
 	free(req);
-	return(rc);
+	return (rc);
 }
 
 /*
@@ -465,11 +463,9 @@ static int
 dorevoke(struct conn *c, const char *addr, const char *cert)
 {
 	char		*req;
-	int		 rc;
-	long		 lc;
+	int		 rc = 0;
+	long		 lc = 0;
 
-	lc = 0;
-	rc = 0;
 	dodbg("%s: revocation", addr);
 
 	if (NULL == (req = json_fmt_revokecert(cert)))
@@ -498,10 +494,9 @@ static int
 docert(struct conn *c, const char *addr, const char *cert)
 {
 	char	*req;
-	int	 rc;
+	int	 rc = 0;
 	long	 lc;
 
-	rc = 0;
 	dodbg("%s: certificate", addr);
 
 	if (NULL == (req = json_fmt_newcert(cert)))
@@ -527,12 +522,10 @@ docert(struct conn *c, const char *addr, const char *cert)
 static int
 dodirs(struct conn *c, const char *addr, struct capaths *paths)
 {
-	struct jsmnn	*j;
+	struct jsmnn	*j = NULL;
 	long		 lc;
-	int		 rc;
+	int		 rc = 0;
 
-	j = NULL;
-	rc = 0;
 	dodbg("%s: directories", addr);
 
 	if ((lc = nreq(c, addr)) < 0)
@@ -558,10 +551,9 @@ dodirs(struct conn *c, const char *addr, struct capaths *paths)
 static int
 dofullchain(struct conn *c, const char *addr)
 {
-	int	 rc;
+	int	 rc = 0;
 	long	 lc;
 
-	rc = 0;
 	dodbg("%s: full chain", addr);
 
 	if ((lc = nreq(c, addr)) < 0)
@@ -573,7 +565,7 @@ dofullchain(struct conn *c, const char *addr)
 
 	if (0 == rc || verbose > 1)
 		buf_dump(&c->buf);
-	return(rc);
+	return (rc);
 }
 
 /*
@@ -583,23 +575,31 @@ dofullchain(struct conn *c, const char *addr)
  */
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
-	int newacct, int revoke, int staging, 
+	int newacct, int revocate, int staging, 
 	const char *const *alts, size_t altsz, const char *agreement,
 	const char *challenge)
 {
-	int		 rc;
+	int		 rc = 0;
 	size_t		 i;
-	char		*cert, *thumb, *url;
+	char		*cert = NULL, *thumb = NULL, *url = NULL;
 	struct conn	 c;
 	struct capaths	 paths;
-	struct chng	*chngs;
+	struct chng	*chngs = NULL;
 	long		 lval;
 
-	rc = 0;
 	memset(&paths, 0, sizeof(struct capaths));
 	memset(&c, 0, sizeof(struct conn));
-	url = cert = thumb = NULL;
-	chngs = NULL;
+
+	/*
+	 * FIXME: we do this before pledge()ing because our pledge (and
+	 * chroot) will prevent reading the default certificate.
+	 * However, we should do a pledge before it with "rpath", as in
+	 * downstream OpenBSD, but the current framework is too rigid
+	 * for doing so.
+	 * Need to rethink.
+	 */
+
+	c.cfg = http_init();
 
 	/* File-system, user, and sandbox jail. */
 
@@ -663,6 +663,9 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	c.fd = afd;
 	c.na = staging ? URL_STAGE_CA : URL_REAL_CA;
 
+	if (NULL == c.cfg)
+		goto out;
+
 	/*
 	 * Look up the domain of the ACME server.
 	 * We'll use this ourselves instead of having libcurl do the DNS
@@ -678,7 +681,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	 * certproc, which will in turn notify the fileproc.
 	 */
 
-	if (revoke) {
+	if (revocate) {
 		if (NULL == (cert = readstr(rfd, COMM_CSR)))
 			goto out;
 		if ( ! dorevoke(&c, paths.revokecert, cert))
@@ -803,6 +806,7 @@ out:
 	free(cert);
 	free(url);
 	free(thumb);
+	http_uninit(c.cfg);
 	free(c.buf.buf);
 	if (NULL != chngs)
 		for (i = 0; i < altsz; i++)
