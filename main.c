@@ -21,7 +21,6 @@
 #include <sys/socket.h>
 #include <sys/stat.h> /* mkdir(2) */
 
-#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <stdarg.h>
@@ -40,6 +39,11 @@
 #define WWW_DIR "/var/www/acme"
 #define PRIVKEY_FILE "privkey.pem"
 
+/*
+ * XXX: I arbitrarily choose a starting descriptor and hope that we
+ * haven't opened up til this one.
+ * This is a hack, but will suffice as I figure out a better way.
+ */
 enum	fds {
 	FDS_REVOKE = 32,
 	FDS_DNS,
@@ -194,6 +198,11 @@ main(int argc, char *argv[])
 			verbose = verbose ? 2 : 1;
 			break;
 		case ('x'):
+			/*
+			 * Internally used: not to be documented.
+			 * This flag dictates which subprocess is
+			 * currently running.
+			 */
 			sp = optarg;
 			break;
 		default:
@@ -202,6 +211,7 @@ main(int argc, char *argv[])
 
 	argc -= optind;
 	argv += optind;
+
 	if (0 == argc)
 		goto usage;
 
@@ -221,11 +231,12 @@ main(int argc, char *argv[])
 		errx(EXIT_FAILURE, "must be run as root");
 
 	/* 
-	 * Now we allocate our directories and file paths IFF we haven't
-	 * specified them on the command-line.
+	 * Now we allocate our directories and file path buffers IFF we
+	 * haven't specified them on the command-line.
 	 * If we're in "multidir" (-m) mode, we use our initial domain
 	 * name when specifying the prefixes.
 	 * Otherwise, we put them all in a known location.
+	 * We don't /do/ anything here: just build the paths.
 	 */
 
 	build_certdir = (NULL == certdir) && multidir;
@@ -261,74 +272,6 @@ main(int argc, char *argv[])
 	    NULL == keydir || NULL == acctdir)
 		err(EXIT_FAILURE, "strdup");
 
-	/*
-	 * If we're running in multi-mode with default paths, try to
-	 * build the domain-specific directory component if not found.
-	 * This makes it easier to get started from nothing without
-	 * mucking around in directories.
-	 */
-
-	if (build_certdir && -1 == access(certdir, R_OK)) {
-		dodbg("%s: creating directory", certdir);
-		if (-1 == mkdir(certdir, 0755))
-			err(EXIT_FAILURE, "%s", certdir);
-	}
-
-	if (build_ssldir && -1 == access(keydir, R_OK)) {
-		dodbg("%s: creating directory", keydir);
-		if (-1 == mkdir(keydir, 0755))
-			err(EXIT_FAILURE, "%s", keydir);
-	}
-
-	if (build_acctdir && -1 == access(acctdir, R_OK)) {
-		dodbg("%s: creating directory", acctdir);
-		if (-1 == mkdir(acctdir, 0755)) 
-			err(EXIT_FAILURE, "%s", acctdir);
-	}
-
-	free(keydir);
-	free(acctdir);
-	keydir = acctdir = NULL;
-
-	/*
-	 * Do some quick checks to see if our paths exist.
-	 * This will be done in the children, but we might as well check
-	 * now before the fork.
-	 */
-
-	ne = 0;
-
-	if (-1 == access(certdir, R_OK)) {
-		warnx("%s: -c directory must exist", certdir);
-		ne++;
-	}
-
-	if ( ! newkey && -1 == access(keyfile, R_OK)) {
-		warnx("%s: -k file must exist", keyfile);
-		ne++;
-	} else if (newkey && -1 != access(keyfile, R_OK)) {
-		dodbg("%s: domain key exists "
-			"(not creating)", keyfile);
-		newkey = 0;
-	}
-
-	if (NULL == challenge && -1 == access(chngdir, R_OK)) {
-		warnx("%s: -C directory must exist", chngdir);
-		ne++;
-	}
-
-	if ( ! newacct && -1 == access(acctkey, R_OK)) {
-		warnx("%s: -f file must exist", acctkey);
-		ne++;
-	} else if (newacct && -1 != access(acctkey, R_OK)) {
-		dodbg("%s: account key exists "
-			"(not creating)", acctkey);
-		newacct = 0;
-	}
-
-	if (ne > 0)
-		exit(EXIT_FAILURE);
-
 	/* Set the zeroth altname as our domain. */
 
 	altsz = argc + 1;
@@ -348,6 +291,13 @@ main(int argc, char *argv[])
 
 	if (NULL == sp)
 		goto main;
+
+	/* FIXME: push this into file reading part. */
+
+	if (newacct && -1 != access(acctkey, R_OK))
+		newacct = 0;
+	if (newkey && -1 != access(keyfile, R_OK))
+		newkey = 0;
 
 	if (0 == strcmp(sp, subps[COMP_REVOKE])) {
 		proccomp = COMP_REVOKE;
@@ -407,9 +357,74 @@ main(int argc, char *argv[])
 
 main:
 	/*
-	 * We're now in the main process, whose responsibility it is
-	 * only to start the processes and connect them by pipes.
-	 * Begin by opening channels between our components.
+	 * If we're running in multi-mode with default paths, try to
+	 * build the domain-specific directory component if not found.
+	 * This makes it easier to get started from nothing without
+	 * mucking around in directories.
+	 */
+
+	if (build_certdir && -1 == access(certdir, R_OK)) {
+		dodbg("%s: creating directory", certdir);
+		if (-1 == mkdir(certdir, 0755))
+			err(EXIT_FAILURE, "%s", certdir);
+	}
+
+	if (build_ssldir && -1 == access(keydir, R_OK)) {
+		dodbg("%s: creating directory", keydir);
+		if (-1 == mkdir(keydir, 0755))
+			err(EXIT_FAILURE, "%s", keydir);
+	}
+
+	if (build_acctdir && -1 == access(acctdir, R_OK)) {
+		dodbg("%s: creating directory", acctdir);
+		if (-1 == mkdir(acctdir, 0755)) 
+			err(EXIT_FAILURE, "%s", acctdir);
+	}
+
+	free(keydir);
+	free(acctdir);
+	keydir = acctdir = NULL;
+
+	/*
+	 * Do some quick checks to see if our paths exist.
+	 * Run all of the tests before exiting on possible errors.
+	 * We do this in the children, but it's easier to do it now to
+	 * report any errors early on.
+	 */
+
+	ne = 0;
+
+	if (-1 == access(certdir, R_OK)) {
+		warnx("%s: -c directory must exist", certdir);
+		ne++;
+	}
+
+	if ( ! newkey && -1 == access(keyfile, R_OK)) {
+		warnx("%s: -k file must exist", keyfile);
+		ne++;
+	} else if (newkey && -1 != access(keyfile, R_OK))
+		dodbg("%s: domain key exists "
+			"(not creating)", keyfile);
+
+	if (NULL == challenge && -1 == access(chngdir, R_OK)) {
+		warnx("%s: -C directory must exist", chngdir);
+		ne++;
+	}
+
+	if ( ! newacct && -1 == access(acctkey, R_OK)) {
+		warnx("%s: -f file must exist", acctkey);
+		ne++;
+	} else if (newacct && -1 != access(acctkey, R_OK))
+		dodbg("%s: account key exists "
+			"(not creating)", acctkey);
+
+	if (ne > 0)
+		exit(EXIT_FAILURE);
+
+	/*
+	 * Ok, here we go.
+	 * Begin by opening channels that we'll use to communicate
+	 * between our components.
 	 */
 
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, key_fds))
@@ -460,8 +475,6 @@ main:
 	close(cert_fds[1]);
 	close(dns_fds[1]);
 	close(rvk_fds[1]);
-
-	/* Now the key-touching component. */
 
 	if (-1 == (pids[COMP_KEY] = fork()))
 		err(EXIT_FAILURE, "fork");
@@ -538,8 +551,6 @@ main:
 
 	close(file_fds[1]);
 
-	/* The DNS lookup component. */
-
 	if (-1 == (pids[COMP_DNS] = fork()))
 		err(EXIT_FAILURE, "fork");
 
@@ -551,8 +562,6 @@ main:
 
 	close(dns_fds[0]);
 
-	/* The expiration component. */
-
 	if (-1 == (pids[COMP_REVOKE] = fork()))
 		err(EXIT_FAILURE, "fork");
 
@@ -563,7 +572,11 @@ main:
 
 	close(rvk_fds[0]);
 
-	/* Jail: sandbox, file-system, user. */
+	/* 
+	 * Now all of the components have started.
+	 * The main process can now just wait.
+	 * Jail: sandbox, file-system, user. 
+	 */
 
 	if ( ! sandbox_before())
 		exit(EXIT_FAILURE);
