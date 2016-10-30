@@ -234,7 +234,7 @@ http_init(void)
 	tls_config_set_protocols(p->tlscfg, TLS_PROTOCOLS_ALL);
 
 	if (-1 == tls_config_set_ca_file(p->tlscfg, DEFAULT_CA_FILE)) {
-#if defined(TLS_READ_AGAIN) && defined(TLS_WRITE_AGAIN)
+#if TLS_API < 20160801
 		warn("tls_config_set_ca_file");
 #else
 		warn("tls_config_set_ca_file: %s", 
@@ -243,7 +243,7 @@ http_init(void)
 		goto err;
 	}
 	if (-1 == tls_config_set_ciphers(p->tlscfg, "compat")) {
-#if defined(TLS_READ_AGAIN) && defined(TLS_WRITE_AGAIN)
+#if TLS_API < 20160801
 		warn("tls_config_set_ciphers");
 #else
 		warn("tls_config_set_ciphers: %s", 
