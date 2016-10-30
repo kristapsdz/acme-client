@@ -21,6 +21,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h> /* mkdir(2) */
 
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <stdarg.h>
@@ -39,6 +40,28 @@
 #define WWW_DIR "/var/www/acme"
 #define PRIVKEY_FILE "privkey.pem"
 
+enum	fds {
+	FDS_REVOKE = 32,
+	FDS_DNS,
+	FDS_FILE,
+	FDS_CERT,
+	FDS_CHALLENGE,
+	FDS_ACCOUNT,
+	FDS_KEY,
+	FDS_NET
+};
+
+static	const char *const subps[COMP__MAX] = {
+	"netproc", /* COMP_NET */
+	"keyproc", /* COMP_KEY */
+	"certproc", /* COMP_CERT */
+	"acctproc", /* COMP_ACCOUNT */
+	"chngproc", /* COMP_CHALLENGE */
+	"fileproc", /* COMP_FILE */
+	"dnsproc", /* COMP_DNS */
+	"revokeproc", /* COMP_REVOKE */
+};
+
 /*
  * This isn't RFC1035 compliant, but does the bare minimum in making
  * sure that we don't get bogus domain names on the command line, which
@@ -56,12 +79,33 @@ domain_valid(const char *cp)
 	return (1);
 }
 
+static void
+xdup(int infd, int outfd)
+{
+
+	if (-1 == dup2(infd, outfd)) 
+		err(EXIT_FAILURE, "dup2");
+	if (outfd != infd)
+		close(infd);
+}
+
+static __dead void
+xrun(enum comp comp, const char **newargs)
+{
+
+	newargs[2] = subps[comp];
+	execvp(newargs[0], (char *const *)newargs);
+	warn("%s", newargs[0]);
+	exit(EXIT_FAILURE);
+	/* NOTREACHED */
+}
+
 int
 main(int argc, char *argv[])
 {
 	const char	 *domain, *agreement = AGREEMENT, 
-	      		 *challenge = NULL;
-	const char	**alts = NULL;
+	      		 *challenge = NULL, *sp = NULL;
+	const char	**alts = NULL, **newargs = NULL;
 	char		 *certdir = NULL, *acctkey = NULL, 
 			 *chngdir = NULL, *keyfile = NULL,
 			 *keydir, *acctdir;
@@ -75,9 +119,29 @@ main(int argc, char *argv[])
 	pid_t		  pids[COMP__MAX];
 	extern int	  verbose;
 	extern enum comp  proccomp;
-	size_t		  i, altsz, ne;
+	size_t		  i, j, altsz, ne, newargsz;
 
-	while (-1 != (c = getopt(argc, argv, "bFmnNrsva:f:c:C:k:t:"))) 
+	/*
+	 * Start by copying over our arguments as if were going to run a
+	 * subprocess with the "-x" argument (subprocess name).
+	 * This is only used by the master process when invoking
+	 * children in a distinct subprocess, but we run it for all
+	 * processes in the interests of simplicity.
+	 */
+
+	newargsz = (size_t)argc + 3; /* nil ptr, '-x', arg */
+	newargs = calloc(newargsz, sizeof(char *));
+	if (NULL == newargs)
+		err(EXIT_FAILURE, "calloc");
+	newargs[0] = argv[0];
+	newargs[1] = "-x";
+	/* newargs[2] = the_subprocess */
+	for (i = 1, j = 3; i < (size_t)argc; i++, j++)
+		newargs[j] = argv[i];
+
+	/* Now parse arguments. */
+
+	while (-1 != (c = getopt(argc, argv, "bFmnNrsva:f:c:C:k:t:x:"))) 
 		switch (c) {
 		case ('a'):
 			agreement = optarg;
@@ -128,6 +192,9 @@ main(int argc, char *argv[])
 			break;
 		case ('v'):
 			verbose = verbose ? 2 : 1;
+			break;
+		case ('x'):
+			sp = optarg;
 			break;
 		default:
 			goto usage;
@@ -273,7 +340,76 @@ main(int argc, char *argv[])
 		alts[i + 1] = argv[i];
 
 	/*
-	 * Open channels between our components.
+	 * If we're in one of the re-executed child processes, do our
+	 * processing here.
+	 * If we're not (sp is NULL), then we continue straight into the
+	 * forking and exec'ing phase.
+	 */
+
+	if (NULL == sp)
+		goto main;
+
+	if (0 == strcmp(sp, subps[COMP_REVOKE])) {
+		proccomp = COMP_REVOKE;
+		c = revokeproc(FDS_REVOKE, certdir,
+			force, revocate,
+			(const char *const *)alts, altsz);
+		free(alts);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	} else if (0 == strcmp(sp, subps[COMP_DNS])) {
+		proccomp = COMP_DNS;
+		free(alts);
+		c = dnsproc(FDS_DNS);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	} else if (0 == strcmp(sp, subps[COMP_FILE])) {
+		proccomp = COMP_FILE;
+		free(alts);
+		c = fileproc(FDS_FILE, backup, certdir);
+		/*
+		 * This is different from the other processes in that it
+		 * can return 2 if the certificates were updated.
+		 */
+		exit(c > 1 ? 2 :
+		    (c ? EXIT_SUCCESS : EXIT_FAILURE));
+	} else if (0 == strcmp(sp, subps[COMP_CERT])) {
+		proccomp = COMP_CERT;
+		free(alts);
+		c = certproc(FDS_CERT, FDS_FILE);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	} else if (0 == strcmp(sp, subps[COMP_CHALLENGE])) {
+		proccomp = COMP_CHALLENGE;
+		free(alts);
+		c = chngproc(FDS_CHALLENGE, chngdir, challenge);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	} else if (0 == strcmp(sp, subps[COMP_ACCOUNT])) {
+		proccomp = COMP_ACCOUNT;
+		free(alts);
+		c = acctproc(FDS_ACCOUNT, acctkey, newacct);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	} else if (0 == strcmp(sp, subps[COMP_KEY])) {
+		proccomp = COMP_KEY;
+		c = keyproc(FDS_KEY, keyfile,
+			(const char **)alts, altsz, newkey);
+		free(alts);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	} else if (0 == strcmp(sp, subps[COMP_NET])) {
+		proccomp = COMP_NET;
+		c = netproc(FDS_KEY, FDS_ACCOUNT,
+		    FDS_CHALLENGE, FDS_CERT,
+		    FDS_DNS, FDS_REVOKE,
+		    newacct, revocate, staging,
+		    (const char *const *)alts, altsz,
+		    agreement, challenge);
+		free(alts);
+		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+	} else if (NULL != sp)
+		errx(EXIT_FAILURE, "%s: unknown subprocess", sp);
+
+main:
+	/*
+	 * We're now in the main process, whose responsibility it is
+	 * only to start the processes and connect them by pipes.
+	 * Begin by opening channels between our components.
 	 */
 
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, key_fds))
@@ -291,13 +427,17 @@ main(int argc, char *argv[])
 	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, rvk_fds))
 		err(EXIT_FAILURE, "socketpair");
 
-	/* Start with the network-touching process. */
+	/* 
+	 * FIXME: make sure all descriptors are less than the minimum
+	 * dup2 descriptor passed into our children.
+	 * This prevents us from clobbering existing file descriptors
+	 * when we do our dups.
+	 */
 
 	if (-1 == (pids[COMP_NET] = fork()))
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_NET]) {
-		proccomp = COMP_NET;
 		close(key_fds[0]);
 		close(acct_fds[0]);
 		close(chng_fds[0]);
@@ -306,14 +446,12 @@ main(int argc, char *argv[])
 		close(file_fds[1]);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
-		c = netproc(key_fds[1], acct_fds[1],
-		    chng_fds[1], cert_fds[1],
-		    dns_fds[1], rvk_fds[1],
-		    newacct, revocate, staging,
-		    (const char *const *)alts, altsz,
-		    agreement, challenge);
-		free(alts);
-		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+		xdup(key_fds[1], FDS_KEY);
+		xdup(acct_fds[1], FDS_ACCOUNT);
+		xdup(chng_fds[1], FDS_CHALLENGE);
+		xdup(dns_fds[1], FDS_DNS);
+		xdup(rvk_fds[1], FDS_REVOKE);
+		xrun(COMP_NET, newargs);
 	}
 
 	close(key_fds[1]);
@@ -329,7 +467,6 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_KEY]) {
-		proccomp = COMP_KEY;
 		close(cert_fds[0]);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
@@ -337,88 +474,66 @@ main(int argc, char *argv[])
 		close(chng_fds[0]);
 		close(file_fds[0]);
 		close(file_fds[1]);
-		c = keyproc(key_fds[0], keyfile,
-			(const char **)alts, altsz, newkey);
-		free(alts);
-		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+		xdup(key_fds[0], FDS_KEY);
+		xrun(COMP_KEY, newargs);
 	}
 
 	close(key_fds[0]);
-
-	/* The account-touching component. */
 
 	if (-1 == (pids[COMP_ACCOUNT] = fork()))
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_ACCOUNT]) {
-		proccomp = COMP_ACCOUNT;
-		free(alts);
 		close(cert_fds[0]);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
 		close(chng_fds[0]);
 		close(file_fds[0]);
 		close(file_fds[1]);
-		c = acctproc(acct_fds[0], acctkey, newacct);
-		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+		xdup(acct_fds[0], FDS_ACCOUNT);
+		xrun(COMP_ACCOUNT, newargs);
 	}
 
 	close(acct_fds[0]);
-
-	/* The challenge-accepting component. */
 
 	if (-1 == (pids[COMP_CHALLENGE] = fork()))
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_CHALLENGE]) {
-		proccomp = COMP_CHALLENGE;
-		free(alts);
 		close(cert_fds[0]);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
 		close(file_fds[0]);
 		close(file_fds[1]);
-		c = chngproc(chng_fds[0], chngdir, challenge);
-		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+		xdup(chng_fds[0], FDS_CHALLENGE);
+		xrun(COMP_CHALLENGE, newargs);
 	}
 
 	close(chng_fds[0]);
-
-	/* The certificate-handling component. */
 
 	if (-1 == (pids[COMP_CERT] = fork()))
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_CERT]) {
-		proccomp = COMP_CERT;
-		free(alts);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
 		close(file_fds[1]);
-		c = certproc(cert_fds[0], file_fds[0]);
-		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+		xdup(cert_fds[0], FDS_CERT);
+		xdup(file_fds[0], FDS_FILE);
+		xrun(COMP_CERT, newargs);
 	}
 
 	close(cert_fds[0]);
 	close(file_fds[0]);
 
-	/* The certificate-handling component. */
-
 	if (-1 == (pids[COMP_FILE] = fork()))
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_FILE]) {
-		proccomp = COMP_FILE;
-		free(alts);
 		close(dns_fds[0]);
 		close(rvk_fds[0]);
-		c = fileproc(file_fds[1], backup, certdir);
-		/*
-		 * This is different from the other processes in that it
-		 * can return 2 if the certificates were updated.
-		 */
-		exit(c > 1 ? 2 :
-		    (c ? EXIT_SUCCESS : EXIT_FAILURE));
+		xdup(file_fds[1], FDS_FILE);
+		xrun(COMP_FILE, newargs);
 	}
 
 	close(file_fds[1]);
@@ -429,11 +544,9 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_DNS]) {
-		proccomp = COMP_DNS;
-		free(alts);
 		close(rvk_fds[0]);
-		c = dnsproc(dns_fds[0]);
-		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+		xdup(dns_fds[0], FDS_DNS);
+		xrun(COMP_DNS, newargs);
 	}
 
 	close(dns_fds[0]);
@@ -444,12 +557,8 @@ main(int argc, char *argv[])
 		err(EXIT_FAILURE, "fork");
 
 	if (0 == pids[COMP_REVOKE]) {
-		proccomp = COMP_REVOKE;
-		c = revokeproc(rvk_fds[0], certdir,
-			force, revocate,
-			(const char *const *)alts, altsz);
-		free(alts);
-		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
+		xdup(rvk_fds[0], FDS_REVOKE);
+		xrun(COMP_REVOKE, newargs);
 	}
 
 	close(rvk_fds[0]);
@@ -484,6 +593,8 @@ main(int argc, char *argv[])
 	free(acctkey);
 	free(chngdir);
 	free(alts);
+	free(newargs);
+
 	return (COMP__MAX != rc ? EXIT_FAILURE :
 	    (2 == c ? EXIT_SUCCESS : 2));
 usage:
