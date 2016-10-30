@@ -88,10 +88,22 @@ sandbox_after(int arg)
 		}
 		break;
 	case (COMP_NET):
+		/*
+		 * Prior to tls_config.c version 1.19, the CA file was
+		 * lazy-loaded during configuration, which will crash
+		 * the pledge unless rpath is enabled.
+		 */
+#if TLS_API < 20160801
+		if (-1 == pledge("stdio inet rpath", NULL)) {
+			warn("pledge");
+			return(0);
+		}
+#else
 		if (-1 == pledge("stdio inet", NULL)) {
 			warn("pledge");
 			return(0);
 		}
+#endif
 		break;
 	}
 	return(1);
