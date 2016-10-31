@@ -45,7 +45,7 @@
  * This is a hack, but will suffice as I figure out a better way.
  */
 enum	fds {
-	FDS_REVOKE = 32,
+	FDS_REVOKE = 50,
 #define	FDS_FIRST FDS_REVOKE
 	FDS_DNS,
 	FDS_FILE,
