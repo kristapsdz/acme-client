@@ -46,13 +46,15 @@
  */
 enum	fds {
 	FDS_REVOKE = 32,
+#define	FDS_FIRST FDS_REVOKE
 	FDS_DNS,
 	FDS_FILE,
 	FDS_CERT,
 	FDS_CHALLENGE,
 	FDS_ACCOUNT,
 	FDS_KEY,
-	FDS_NET
+	FDS_NET,
+	FDS__MAX
 };
 
 static	const char *const subps[COMP__MAX] = {
@@ -83,6 +85,27 @@ domain_valid(const char *cp)
 	return (1);
 }
 
+/*
+ * XXX: this function is a workaround.
+ * It opens the socket pair properly, then makes sure that the file
+ * descriptors don't clobber those we've set aside to use for the IPC
+ * mechanism.
+ */
+static void
+xsocketpair(int *fds)
+{
+
+	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, fds))
+		err(EXIT_FAILURE, "socketpair");
+	if ((fds[0] >= FDS_FIRST && fds[0] < FDS__MAX) ||
+	    (fds[1] >= FDS_FIRST && fds[1] < FDS__MAX))
+		errx(EXIT_FAILURE, "file descriptor clobbers "
+			"predefined ipc channel");
+}
+
+/*
+ * Duplicate "outfd" as "infd", then close "infd".
+ */
 static void
 xdup(int infd, int outfd)
 {
@@ -93,6 +116,10 @@ xdup(int infd, int outfd)
 		close(infd);
 }
 
+/*
+ * Execute "newargs", which is already created in main(), as a
+ * subprocess of type "comp".
+ */
 static __dead void
 xrun(enum comp comp, const char **newargs)
 {
@@ -425,29 +452,19 @@ main:
 	 * Ok, here we go.
 	 * Begin by opening channels that we'll use to communicate
 	 * between our components.
+	 * Then we start each process in sequence, closing out the
+	 * descriptors we don't need and and having the child inherit
+	 * the ones we do, using the descriptor values we've set aside
+	 * (in "enum fds") for them to use.
 	 */
 
-	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, key_fds))
-		err(EXIT_FAILURE, "socketpair");
-	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, acct_fds))
-		err(EXIT_FAILURE, "socketpair");
-	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, chng_fds))
-		err(EXIT_FAILURE, "socketpair");
-	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, cert_fds))
-		err(EXIT_FAILURE, "socketpair");
-	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, file_fds))
-		err(EXIT_FAILURE, "socketpair");
-	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, dns_fds))
-		err(EXIT_FAILURE, "socketpair");
-	if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, rvk_fds))
-		err(EXIT_FAILURE, "socketpair");
-
-	/* 
-	 * FIXME: make sure all descriptors are less than the minimum
-	 * dup2 descriptor passed into our children.
-	 * This prevents us from clobbering existing file descriptors
-	 * when we do our dups.
-	 */
+	xsocketpair(key_fds);
+	xsocketpair(acct_fds);
+	xsocketpair(chng_fds);
+	xsocketpair(cert_fds);
+	xsocketpair(file_fds);
+	xsocketpair(dns_fds);
+	xsocketpair(rvk_fds);
 
 	if (-1 == (pids[COMP_NET] = fork()))
 		err(EXIT_FAILURE, "fork");
