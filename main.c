@@ -481,6 +481,7 @@ main:
 		xdup(key_fds[1], FDS_KEY);
 		xdup(acct_fds[1], FDS_ACCOUNT);
 		xdup(chng_fds[1], FDS_CHALLENGE);
+		xdup(cert_fds[1], FDS_CERT);
 		xdup(dns_fds[1], FDS_DNS);
 		xdup(rvk_fds[1], FDS_REVOKE);
 		xrun(COMP_NET, newargs);
