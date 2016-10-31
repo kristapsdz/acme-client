@@ -105,7 +105,6 @@ host_dns(const char *s, struct addr *vec)
 
 		dodbg("%s: DNS: %s", s, vec[vecsz].ip);
 		vecsz++;
-		break;
 	}
 
 	freeaddrinfo(res0);
