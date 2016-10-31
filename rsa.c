@@ -91,3 +91,23 @@ rsa_key_load(FILE *f, const char *fname)
 	EVP_PKEY_free(pkey);
 	return (NULL);
 }
+
+EVP_PKEY *
+key_load(FILE *f, const char *fname)
+{
+	EVP_PKEY	*pkey;
+
+	pkey = PEM_read_PrivateKey(f, NULL, NULL, NULL);
+	if (NULL == pkey) {
+		warnx("%s: PEM_read_PrivateKey", fname);
+		return (NULL);
+	} 
+	
+	if (EVP_PKEY_RSA == EVP_PKEY_type(pkey->type) ||
+	    EVP_PKEY_EC == EVP_PKEY_type(pkey->type))
+		return (pkey);
+
+	warnx("%s: unsupported key type", fname);
+	EVP_PKEY_free(pkey);
+	return (NULL);
+}
