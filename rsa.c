@@ -74,7 +74,10 @@ out:
 	return (pkey);
 }
 
-
+/*
+ * Load an RSA key into a public-key envelope.
+ * See key_load().
+ */
 EVP_PKEY *
 rsa_key_load(FILE *f, const char *fname)
 {
@@ -92,6 +95,9 @@ rsa_key_load(FILE *f, const char *fname)
 	return (NULL);
 }
 
+/*
+ * Load an RSA or ECSDA key into a public-key envelope.
+ */
 EVP_PKEY *
 key_load(FILE *f, const char *fname)
 {
