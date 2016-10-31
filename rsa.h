@@ -19,5 +19,6 @@
 
 EVP_PKEY	*rsa_key_create(FILE *, const char *);
 EVP_PKEY	*rsa_key_load(FILE *, const char *);
+EVP_PKEY	*key_load(FILE *, const char *);
 
 #endif /* ! RSA_H */

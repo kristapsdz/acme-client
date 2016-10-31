@@ -139,9 +139,12 @@ keyproc(int netsock, const char *keyfile,
 			goto out;
 		dodbg("%s: generated RSA domain key", keyfile);
 	} else {
-		if (NULL == (pkey = rsa_key_load(f, keyfile)))
+		if (NULL == (pkey = key_load(f, keyfile)))
 			goto out;
-		doddbg("%s: loaded RSA domain key", keyfile);
+		doddbg("%s: loaded %s domain key", keyfile, 
+			EVP_PKEY_RSA == EVP_PKEY_type(pkey->type) ?
+			"RSA" : "ECSDA");
+
 	}
 
 	fclose(f);
