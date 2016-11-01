@@ -14,7 +14,7 @@
 .\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 .\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd $Mdocdate: October 29 2016 $
+.Dd $Mdocdate: October 31 2016 $
 .Dt ACME-CLIENT 1
 .Os
 .Sh NAME
@@ -25,7 +25,7 @@
 .\" Not used in OpenBSD.
 .Sh SYNOPSIS
 .Nm acme-client
-.Op Fl bFmnNrsv
+.Op Fl beFmnNrsv
 .Op Fl a Ar agreement
 .Op Fl C Ar challengedir
 .Op Fl c Ar certdir
@@ -87,6 +87,9 @@ is the current UNIX epoch.
 Any given backup effort will use the same epoch time for all three
 certificates.
 If there are no certificates in place, this does nothing.
+.It Fl e
+Allow expanding the domains listed in the certificate.
+This is a no-op if no certificate exists yet.
 .It Fl F
 Force updating the certificate signature even if it's too soon.
 .It Fl m

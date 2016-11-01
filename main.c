@@ -146,7 +146,7 @@ main(int argc, char *argv[])
 	int		  c, rc, newacct = 0, revocate = 0, force = 0,
 			  staging = 0, multidir = 0, newkey = 0, 
 			  backup = 0, build_certdir, build_ssldir, 
-			  build_acctdir;
+			  build_acctdir, expand = 0;
 	pid_t		  pids[COMP__MAX];
 	extern int	  verbose;
 	extern enum comp  proccomp;
@@ -172,7 +172,7 @@ main(int argc, char *argv[])
 
 	/* Now parse arguments. */
 
-	while (-1 != (c = getopt(argc, argv, "bFmnNrsva:f:c:C:k:t:x:"))) 
+	while (-1 != (c = getopt(argc, argv, "beFmnNrsva:f:c:C:k:t:x:"))) 
 		switch (c) {
 		case ('a'):
 			agreement = optarg;
@@ -189,6 +189,9 @@ main(int argc, char *argv[])
 			free(chngdir);
 			if (NULL == (chngdir = strdup(optarg)))
 				err(EXIT_FAILURE, "strdup");
+			break;
+		case ('e'):
+			expand = 1;
 			break;
 		case ('f'):
 			free(acctkey);
@@ -329,7 +332,7 @@ main(int argc, char *argv[])
 	if (0 == strcmp(sp, subps[COMP_REVOKE])) {
 		proccomp = COMP_REVOKE;
 		c = revokeproc(FDS_REVOKE, certdir,
-			force, revocate,
+			force, revocate, expand,
 			(const char *const *)alts, altsz);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -630,7 +633,7 @@ main:
 	    (2 == c ? EXIT_SUCCESS : 2));
 usage:
 	fprintf(stderr, "usage: %s "
-		"[-bFmnNrsv] "
+		"[-beFmnNrsv] "
 		"[-a agreement] "
 		"[-C challengedir] "
 		"[-c certdir] "
