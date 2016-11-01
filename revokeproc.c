@@ -100,7 +100,7 @@ X509expires(X509 *x)
 
 int
 revokeproc(int fd, const char *certdir, int force, int revocate,
-	const char *const *alts, size_t altsz)
+	int expand, const char *const *alts, size_t altsz)
 {
 	char		*path = NULL, *der = NULL, *dercp, 
 			*der64 = NULL, *san = NULL, *str, *tok;
@@ -233,7 +233,10 @@ revokeproc(int fd, const char *certdir, int force, int revocate,
 
 	/*
 	 * Parse the SAN line.
-	 * Make sure that all of the domains are represented only once.
+	 * Make sure that all of the domains are represented by the
+	 * input domains: we don't allowing removing domains from
+	 * certificates.
+	 * While here, also check for duplicates.
 	 */
 
 	str = san;
@@ -260,9 +263,21 @@ revokeproc(int fd, const char *certdir, int force, int revocate,
 		}
 	}
 
+	/*
+	 * Reverse test: make sure that all of our input domains are
+	 * represented in the certificate.
+	 * If we're allowed to expand, however, allow new domains to
+	 * slip by with a warning.
+	 */
+
 	for (j = 0; j < altsz; j++) {
 		if (found[j])
 			continue;
+		if (expand) {
+			dodbg("%s/%s: expanding with domain: %s",
+				certdir, CERT_PEM, alts[j]);
+			continue;
+		}
 		warnx("%s/%s: domain not listed: %s",
 			certdir, CERT_PEM, alts[j]);
 		goto out;
