@@ -90,6 +90,9 @@ If there are no certificates in place, this does nothing.
 .It Fl e
 Allow expanding the domains listed in the certificate.
 This is a no-op if no certificate exists yet.
+If a new domain is specified, the certificate will be renewed as if
+.Fl F
+were also specified.
 .It Fl F
 Force updating the certificate signature even if it's too soon.
 .It Fl m

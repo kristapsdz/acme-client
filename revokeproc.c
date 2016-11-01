@@ -177,8 +177,8 @@ revokeproc(int fd, const char *certdir, int force, int revocate,
 
 	/*
 	 * Next, the long process to make sure that the SAN entries
-	 * listed with the certificate fully cover those passed on the
-	 * comamnd line.
+	 * listed with the certificate cover those passed on the comamnd
+	 * line.
 	 */
 
 	extsz = NULL != x->cert_info->extensions ?
@@ -276,6 +276,7 @@ revokeproc(int fd, const char *certdir, int force, int revocate,
 		if (expand) {
 			dodbg("%s/%s: expanding with domain: %s",
 				certdir, CERT_PEM, alts[j]);
+			force = 1;
 			continue;
 		}
 		warnx("%s/%s: domain not listed: %s",
