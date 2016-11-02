@@ -68,6 +68,8 @@ static	const char *const subps[COMP__MAX] = {
 	"revokeproc", /* COMP_REVOKE */
 };
 
+static	void xrun(enum comp, const char **) __attribute__((noreturn));
+
 /*
  * This isn't RFC1035 compliant, but does the bare minimum in making
  * sure that we don't get bogus domain names on the command line, which
@@ -120,7 +122,7 @@ xdup(int infd, int outfd)
  * Execute "newargs", which is already created in main(), as a
  * subprocess of type "comp".
  */
-__dead void
+static void
 xrun(enum comp comp, const char **newargs)
 {
 
