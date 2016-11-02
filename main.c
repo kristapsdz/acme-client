@@ -120,7 +120,7 @@ xdup(int infd, int outfd)
  * Execute "newargs", which is already created in main(), as a
  * subprocess of type "comp".
  */
-static __dead void
+__dead void
 xrun(enum comp comp, const char **newargs)
 {
 
