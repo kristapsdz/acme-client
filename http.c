@@ -21,10 +21,17 @@
 #include <sys/socket.h>
 #include <sys/param.h>
 #include <arpa/inet.h>
+#if TLS_API < 20160801
+# include <sys/stat.h>
+# include <sys/mman.h>
+#endif
 
 #include <assert.h>
 #include <ctype.h>
 #include <err.h>
+#if TLS_API < 20160801
+# include <fcntl.h>
+#endif
 #include <limits.h>
 #include <netdb.h>
 #include <stdio.h>
@@ -37,7 +44,9 @@
 #include "http.h"
 #include "extern.h"
 
-#define DEFAULT_CA_FILE "/etc/ssl/cert.pem"
+#ifndef DEFAULT_CA_FILE
+# define DEFAULT_CA_FILE "/etc/ssl/cert.pem"
+#endif
 
 /*
  * A buffer for transferring HTTP/S data.
@@ -204,6 +213,45 @@ http_uninit(struct httpcfg *p)
 }
 
 /*
+ * Work around the "lazy-loading" problem in earlier versions of libtls.
+ * In these systems, using tls_config_set_ca_file() would only cause the
+ * file location to be copied.
+ * It would then be used after the pledge and/or chroot.
+ * We work around this by loading the file directly.
+ */
+#if TLS_API < 20160801
+static int
+http_config_set_ca_file(struct httpcfg *p)
+{
+	int	 	 fd, rc = 0;
+	struct stat	 st;
+	void		*buf;
+
+	if (-1 == (fd = open(DEFAULT_CA_FILE, O_RDONLY, 0))) {
+		warn("%s", DEFAULT_CA_FILE);
+		return(0);
+	} else if (-1 == fstat(fd, &st)) {
+		warn("%s", DEFAULT_CA_FILE);
+		close(fd);
+		return(0);
+	}
+	buf = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+	if (MAP_FAILED == buf) {
+		warn("%s", DEFAULT_CA_FILE);
+		close(fd);
+		return(0);
+	}
+	if (-1 == tls_config_set_ca_mem(p->tlscfg, buf, st.st_size))
+		warn("%s: tls_config_set_ca_file", DEFAULT_CA_FILE);
+	else
+		rc = 1;
+	munmap(buf, st.st_size);
+	close(fd);
+	return(rc);
+}
+#endif
+
+/*
  * This function allocates a configuration shared among multiple
  * connections.
  * It will generally be called once, then used in a series of
@@ -233,15 +281,17 @@ http_init(void)
 
 	tls_config_set_protocols(p->tlscfg, TLS_PROTOCOLS_ALL);
 
-	if (-1 == tls_config_set_ca_file(p->tlscfg, DEFAULT_CA_FILE)) {
 #if TLS_API < 20160801
-		warn("tls_config_set_ca_file");
+	if ( ! http_config_set_ca_file(p))
+		goto err;
 #else
+	if (-1 == tls_config_set_ca_file(p->tlscfg, DEFAULT_CA_FILE)) {
 		warn("tls_config_set_ca_file: %s", 
 			tls_config_error(p->tlscfg));
-#endif
 		goto err;
 	}
+#endif
+
 	if (-1 == tls_config_set_ciphers(p->tlscfg, "compat")) {
 #if TLS_API < 20160801
 		warn("tls_config_set_ciphers");
