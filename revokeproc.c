@@ -95,7 +95,7 @@ X509expires(X509 *x)
 	t.tm_min  = (str[i + 6] - '0') * 10 + (str[i + 7] - '0');
 	t.tm_sec  = (str[i + 8] - '0') * 10 + (str[i + 9] - '0');
 
-	return (mktime(&t));
+	return (timegm(&t));
 }
 
 int
