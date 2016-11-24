@@ -21,6 +21,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h> /* mkdir(2) */
 
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <stdarg.h>
@@ -131,6 +132,27 @@ xrun(enum comp comp, const char **newargs)
 	warn("%s", newargs[0]);
 	exit(EXIT_FAILURE);
 	/* NOTREACHED */
+}
+
+/*
+ * Splice the argument "rm" from the array of arguments "nargs".
+ * "nargs" may consist of NULL pointers, so be careful.
+ * Require the "rm" exist.
+ * This is an in-place modification.
+ */
+static void
+spliceargs(const char **nargs, size_t nargsz, const char *rm)
+{
+	size_t	 i;
+
+	for (i = 0; i < nargsz; i++) 
+		if (NULL != nargs[i] && 
+		    0 == strcmp(rm, nargs[i]))
+			break;
+
+	assert(i < nargsz);
+	memmove(&nargs[i], &nargs[i + 1], 
+		(nargsz - i - 1) * sizeof(char *));
 }
 
 int
@@ -324,13 +346,6 @@ main(int argc, char *argv[])
 	if (NULL == sp)
 		goto main;
 
-	/* FIXME: push this into file reading part. */
-
-	if (newacct && -1 != access(acctkey, R_OK))
-		newacct = 0;
-	if (newkey && -1 != access(keyfile, R_OK))
-		newkey = 0;
-
 	if (0 == strcmp(sp, subps[COMP_REVOKE])) {
 		proccomp = COMP_REVOKE;
 		c = revokeproc(FDS_REVOKE, certdir,
@@ -388,6 +403,22 @@ main(int argc, char *argv[])
 		errx(EXIT_FAILURE, "%s: unknown subprocess", sp);
 
 main:
+	/*
+	 * Begin by checking to see whether we already have our keys on
+	 * disc when we've been ordered to generate them.
+	 * If we have them, then strip out the generation flags.
+	 */
+
+	if (newacct && -1 != access(acctkey, R_OK)) {
+		newacct = 0;
+		spliceargs(newargs, newargsz, "-n");
+	}
+
+	if (newkey && -1 != access(keyfile, R_OK)) {
+		newkey = 0;
+		spliceargs(newargs, newargsz, "-N");
+	}
+
 	/*
 	 * If we're running in multi-mode with default paths, try to
 	 * build the domain-specific directory component if not found.
