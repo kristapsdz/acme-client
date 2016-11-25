@@ -259,6 +259,11 @@ main(int argc, char *argv[])
 	if (0 == argc)
 		goto usage;
 
+	/* Forbidden in parent. */
+
+	if (NULL != modval && NULL == sp) 
+		goto usage;
+
 	/* Make sure that the domains are sane. */
 
 	for (i = 0; i < (size_t)argc; i++) {
