@@ -347,23 +347,35 @@ http_write(const char *buf, size_t sz, const struct http *http)
  * In the old way, tls_close() will close the underlying file
  * descriptors.
  * In the new way, it won't.
+ * Also account for the TLS_READ_AGAIN invocation versus the new
+ * TLS_WANT_POLLIN.
  */
 void
 http_disconnect(struct http *http)
 {
+	int	 rc;
 
 	if (NULL != http->ctx) {
-		/* TLS connection. */
-		if (-1 == tls_close(http->ctx))
+#if defined(TLS_READ_AGAIN) && defined(TLS_WRITE_AGAIN)
+		/* Old-style. */
+		do {
+			rc = tls_close(http->ctx);
+		} while (TLS_READ_AGAIN == rc || TLS_WRITE_AGAIN == rc);
+		if (rc < 0)
 			warnx("%s: tls_close: %s",
-				http->src.ip,
-				tls_error(http->ctx));
-		if (NULL != http->ctx)
-			tls_free(http->ctx);
-#if ! defined(TLS_READ_AGAIN) && ! defined(TLS_WRITE_AGAIN)
+				http->src.ip, tls_error(http->ctx));
+#else
+		/* New-style. */
+		do {
+			rc = tls_close(http->ctx);
+		} while (TLS_WANT_POLLIN == rc || TLS_WANT_POLLOUT == rc);
+		if (rc < 0)
+			warnx("%s: tls_close: %s",
+				http->src.ip, tls_error(http->ctx));
 		if (-1 == close(http->fd))
 			warn("%s: close", http->src.ip);
 #endif
+		tls_free(http->ctx);
 	} else if (-1 != http->fd) {
 		/* Non-TLS connection. */
 		if (-1 == close(http->fd))
