@@ -18,6 +18,8 @@
 # include "config.h"
 #endif
 
+#include <sys/stat.h>
+
 #include <assert.h>
 #include <err.h>
 #include <errno.h>
@@ -50,6 +52,15 @@ chngproc(int netsock, const char *root, const char *challenge)
 		goto out;
 	else if ( ! sandbox_after(NULL != challenge))
 		goto out;
+
+	/*
+	 * Make sure that the created file can be read by all parties,
+	 * but not written to.
+	 * (Our default umask for root is sometimes to disallow others
+	 * from reading the file.)
+	 */
+
+	(void)umask(S_IWGRP | S_IWOTH);
 
 	/*
 	 * Loop while we wait to get a thumbprint and token.
