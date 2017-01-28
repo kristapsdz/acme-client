@@ -272,21 +272,31 @@ in which case the caller must create the challenge environment.
 This may be used for implementing
 .Dq dns-01
 and other system-specific challenges.
-To use
+.Pp
+When using
 .Fl t ,
-the caller invoking
+each domain (primary and altnames) is authorised over standard output
+and input between the caller and
 .Nm
-must wait for the system to print the thumbprint and token as
-.Dq token.thumbprint\en
+as follows:
+.Bl -enum
+.It
+.Nm
+prints
+.Dq challenge-type dns-domain token.thumbprint\en
 .Pq note the trailing newline
-for each domain on standard output.
-After each line, the caller must implement the challenge.
-Following that, the caller must write the same exact string (along with
-the newline) as standard input to
+on its standard output.
+.It
+The caller performs any tasks to implement the challenge's response.
+.It
+The caller writes the same three-field string and the newline to the
+standard input of
 .Nm .
-When
+.El
+.Pp
+This cycle repeats for each requested domain, then
 .Nm
-exits, there are no more domains.
+exits.
 .Ss Certificates
 Public certificates (domain certificate, chain, and the full-chain) are
 placed by default in
