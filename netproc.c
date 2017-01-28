@@ -720,6 +720,8 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	for (i = 0; i < altsz; i++) {
 		if (writeop(Cfd, COMM_CHNG_OP, CHNG_SYN) <= 0)
 			goto out;
+		else if (writestr(Cfd, COMM_DNSA, alts[i]) <= 0)
+			goto out;
 		else if (writestr(Cfd, COMM_THUMB, thumb) <= 0)
 			goto out;
 		else if (writestr(Cfd, COMM_TOK, chngs[i].token) <= 0)

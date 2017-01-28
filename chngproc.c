@@ -34,7 +34,7 @@
 int
 chngproc(int netsock, const char *root, const char *challenge)
 {
-	char		 *tok = NULL, *th = NULL, *fmt = NULL, 
+	char		 *alt = NULL, *tok = NULL, *th = NULL, *fmt = NULL, 
 			 *fmtbuf = NULL;
 	char		**fs = NULL;
 	size_t		  i, fsz = 0, sz;
@@ -83,12 +83,14 @@ chngproc(int netsock, const char *root, const char *challenge)
 		assert(CHNG_SYN == op);
 
 		/*
-		 * Read the thumbprint and token.
+		 * Read the alt, thumbprint, and token.
 		 * The token is the filename, so store that in a vector
 		 * of tokens that we'll later clean up.
 		 */
 
-		if (NULL == (th = readstr(netsock, COMM_THUMB)))
+		if (NULL == (alt = readstr(netsock, COMM_DNSA)))
+			goto out;
+		else if (NULL == (th = readstr(netsock, COMM_THUMB)))
 			goto out;
 		else if (NULL == (tok = readstr(netsock, COMM_TOK)))
 			goto out;
@@ -112,7 +114,7 @@ chngproc(int netsock, const char *root, const char *challenge)
 			 * and wait for a reply (which must be an echo
 			 * of the output) to indicate that all's well.
 			 */
-			fmt = doasprintf("%s.%s\n", fs[fsz - 1], th);
+			fmt = doasprintf("%s %s %s.%s\n", challenge, alt, fs[fsz - 1], th);
 			if (NULL == fmt) {
 				warn("asprintf");
 				goto out;

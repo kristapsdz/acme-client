@@ -72,6 +72,7 @@ static	const char *const comms[COMM__MAX] = {
 	"revoke-op", /* COMM_REVOKE_OP */
 	"revoke-check", /* COMM_REVOKE_CHECK */
 	"revoke-response", /* COMM_REVOKE_RESP */
+	"challenge-type", /* COMM_CHNG_TYPE */
 };
 
 static void
