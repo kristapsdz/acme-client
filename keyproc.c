@@ -205,6 +205,7 @@ keyproc(int netsock, int ocsp, const char *keyfile,
 		 */
 
 		for (i = 1; i < altsz; i++) {
+			dodbg("adding SAN: %s", alts[i]);
 			san = doasprintf("%sDNS:%s", 
 				i > 1 ? "," : "", alts[i]);
 			if (NULL == san) {
@@ -246,6 +247,7 @@ keyproc(int netsock, int ocsp, const char *keyfile,
 	 */
 	
 	if (ocsp) {
+		dodbg("adding OCSP stapling");
 		if (NULL == (exts = sk_X509_EXTENSION_new_null())) {
 			warnx("sk_X509_EXTENSION_new_null");
 			goto out;

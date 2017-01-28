@@ -149,7 +149,7 @@ main(int argc, char *argv[])
 	int		  c, rc, newacct = 0, revocate = 0, force = 0,
 			  staging = 0, multidir = 0, newkey = 0, 
 			  backup = 0, build_certdir, build_ssldir, 
-			  build_acctdir, expand = 0;
+			  build_acctdir, expand = 0, ocsp = 0;
 	pid_t		  pids[COMP__MAX];
 	extern int	  verbose;
 	extern enum comp  proccomp;
@@ -177,7 +177,7 @@ main(int argc, char *argv[])
 
 	/* Now parse arguments. */
 
-	while (-1 != (c = getopt(argc, argv, "beFmnNrsva:f:c:C:k:t:x:X:"))) 
+	while (-1 != (c = getopt(argc, argv, "beFmnNOrsva:f:c:C:k:t:x:X:"))) 
 		switch (c) {
 		case ('a'):
 			agreement = optarg;
@@ -219,6 +219,9 @@ main(int argc, char *argv[])
 			break;
 		case ('N'):
 			newkey = 1;
+			break;
+		case ('O'):
+			ocsp = 1;
 			break;
 		case ('r'):
 			revocate = 1;
@@ -389,7 +392,7 @@ main(int argc, char *argv[])
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_KEY])) {
 		proccomp = COMP_KEY;
-		c = keyproc(FDS_KEY, 1, keyfile,
+		c = keyproc(FDS_KEY, ocsp, keyfile,
 			(const char **)alts, altsz, newkey);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
