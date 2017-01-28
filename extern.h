@@ -185,7 +185,7 @@ int		 dnsproc(int);
 int		 revokeproc(int, const char *, int,
 			int, int, const char *const *, size_t);
 int		 fileproc(int, int, const char *);
-int		 keyproc(int, const char *,
+int		 keyproc(int, int, const char *,
 			const char **, size_t, int);
 int		 netproc(int, int, int, int, int, int, int, int, int,
 			const char *const *, size_t, const char *,

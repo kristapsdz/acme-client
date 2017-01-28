@@ -77,7 +77,7 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
  * jail and, on success, ship it to "netsock" as an X509 request.
  */
 int
-keyproc(int netsock, const char *keyfile,
+keyproc(int netsock, int ocsp, const char *keyfile,
 	const char **alts, size_t altsz, int newkey)
 {
 	char		*der64 = NULL, *der = NULL, *dercp, 
@@ -234,6 +234,40 @@ keyproc(int netsock, const char *keyfile,
 			(exts, X509_EXTENSION_free);
 	}
 
+	/*
+	 * OCSP stapling.
+	 * This is very unpleasant because we need to create a new NID
+	 * from a magical OID.
+	 * The OID is given in RFC 7633, section 4.
+	 * The extension feature (same, section 4.1) is the DER encoded
+	 * version of "status_request", section 4.2.3.1.
+	 * We follow the same logic of adding SAN entries.
+	 * I give an arbitrary name for the NID.
+	 */
+	
+	if (ocsp) {
+		if (NULL == (exts = sk_X509_EXTENSION_new_null())) {
+			warnx("sk_X509_EXTENSION_new_null");
+			goto out;
+		}
+
+		nid = OBJ_create("1.3.6.1.5.5.7.1.24", 
+			"OCSPReq", "OCSP Request");
+		if (NID_undef == nid) {
+			warnx("OBJ_create");
+			goto out;
+		} else if ( ! add_ext(exts, nid, "DER:30:03:02:01:05")) {
+			warnx("add_ext");
+			goto out;
+		} else if ( ! X509_REQ_add_extensions(x, exts)) {
+			warnx("X509_REQ_add_extensions");
+			goto out;
+		}
+
+		sk_X509_EXTENSION_pop_free
+			(exts, X509_EXTENSION_free);
+	}
+
 	/* Sign the X509 request using SHA256. */
 
 	if ( ! X509_REQ_sign(x, pkey, EVP_sha256())) {
@@ -283,6 +317,8 @@ out:
 		X509_NAME_free(name);
 	if (NULL != pkey)
 		EVP_PKEY_free(pkey);
+	if (ocsp)
+		OBJ_cleanup();
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
 	return (rc);

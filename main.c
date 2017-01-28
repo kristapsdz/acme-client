@@ -389,7 +389,7 @@ main(int argc, char *argv[])
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_KEY])) {
 		proccomp = COMP_KEY;
-		c = keyproc(FDS_KEY, keyfile,
+		c = keyproc(FDS_KEY, 1, keyfile,
 			(const char **)alts, altsz, newkey);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
