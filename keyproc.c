@@ -135,10 +135,11 @@ keyproc(int netsock, int ocsp, const char *keyfile,
 	}
 
 	if (newkey) {
+		dodbg("%s: generating RSA domain key", keyfile);
 		if (NULL == (pkey = rsa_key_create(f, keyfile)))
 			goto out;
-		dodbg("%s: generated RSA domain key", keyfile);
 	} else {
+		doddbg("%s: loading domain key", keyfile);
 		if (NULL == (pkey = key_load(f, keyfile)))
 			goto out;
 		doddbg("%s: loaded %s domain key", keyfile, 
