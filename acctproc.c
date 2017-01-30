@@ -353,13 +353,13 @@ acctproc(int netsock, const char *acctkey, int newacct)
 	}
 
 	if (newacct) {
+		dodbg("%s: generating RSA account key", acctkey);
 		if (NULL == (pkey = rsa_key_create(f, acctkey)))
 			goto out;
-		dodbg("%s: generated RSA account key", acctkey);
 	} else {
+		doddbg("%s: loading RSA account key", acctkey);
 		if (NULL == (pkey = rsa_key_load(f, acctkey)))
 			goto out;
-		doddbg("%s: loaded RSA account key", acctkey);
 	}
 
 	fclose(f);
