@@ -19,7 +19,7 @@
 .Os
 .Sh NAME
 .Nm acme-client
-.Nd secure Let's Encrypt client
+.Nd secure ACME client
 .\" .Sh LIBRARY
 .\" For sections 2, 3, and 9 only.
 .\" Not used in OpenBSD.
@@ -41,9 +41,9 @@ utility submits an X509 certificate for
 .Ar domain
 and its alternate DNS names
 .Ar altnames
-to a
+to the
 .Dq Let's Encrypt
-server for automated signing.
+ACME server for automated signing.
 It can also revoke previously-submitted signatures.
 It must be run as root.
 (Why?
@@ -143,9 +143,7 @@ See
 for details.
 .It Fl f Ar accountkey
 The account private key.
-This was either made with a previous
-.Dq Let's Encrypt
-client or with
+This was either made with a previous ACME client or with
 .Fl n .
 .It Fl k Ar domainkey
 The private key for the domain.
@@ -174,9 +172,8 @@ domain when specifying
 Alternative names
 .Pq Dq SAN
 for the domain name.
-The number of SAN entries is limited by
-.Dq Let's Encrypt
-to 100 or so.
+The number of SAN entries is limited by ACME servers, usually to 100 or
+so.
 .El
 .Pp
 The process by which
@@ -233,8 +230,8 @@ Submit a request for revocation to the CA.
 Remove the certificate, the chain, and the full-chain.
 .El
 .Ss Challenges
-Let's Encrypt uses challenges to verify that the submitter has access to
-the registered domains.
+ACME uses challenges to verify that the submitter has access to the
+registered domains.
 .Nm
 internally implements only the
 .Dq http-01
@@ -263,8 +260,8 @@ might be as follows:
 .Pp
 This way, the files placed in
 .Pa /var/www/acme
-will be properly mapped by the web server when the Let's Encrypt
-responds to a challenge.
+will be properly mapped by the web server when the ACME server responds
+to a challenge.
 .Pp
 An alternate challenge type, however, may be specified with
 .Fl t ,
