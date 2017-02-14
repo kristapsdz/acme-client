@@ -18,7 +18,11 @@ older OpenBSD) see
 This repository mirrors the master CVS repository: any source changes
 will occur in the master and be pushed periodically to GitHub.  If you
 have bug reports or patches, either file them here or e-mail them to me.
-Feature requests will be ignored unless joined by a patch.
+
+**Feature requests will be ignored unless joined by a patch.**  If
+there's something you need, I'm happy to work with you to make it
+happen.  If you really need it, I'm available for contract (contact me
+by e-mail).
 
 ## License
 
