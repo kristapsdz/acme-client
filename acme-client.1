@@ -357,17 +357,11 @@ You'll then probably want to restart your web server to pick up the new
 certificates.
 .Pp
 You can then keep your certificates fresh with a daily
-.Xr cron 8
-invocation running the following:
+.Xr crontab 5
+entry:
 .Bd -literal
-#! /bin/sh
 
-acme-client foo.com www.foo.com smtp.foo.com
-
-if [ $? -eq 0 ]
-then
-	/etc/rc.d/httpd reload
-fi
+@daily	acme-client foo.com www.foo.com smtp.foo.com && rcctl reload httpd
 .Ed
 .Pp
 You'll need to replace the httpd-reload statement with the correct
