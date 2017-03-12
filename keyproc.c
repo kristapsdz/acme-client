@@ -89,7 +89,7 @@ keyproc(int netsock, int ocsp, const char *keyfile,
 	X509_REQ	*x = NULL;
 	X509_NAME	*name = NULL;
 	unsigned char	 rbuf[64];
-	int		 len, rc = 0, nid;
+	int		 len, rc = 0, rrc, nid;
 	mode_t		 prev;
 	STACK_OF(X509_EXTENSION) *exts = NULL;
 
@@ -296,13 +296,13 @@ keyproc(int netsock, int ocsp, const char *keyfile,
 
 	/*
 	 * Write that we're ready, then write.
-	 * We ignore reader-closed failure, as we're just going to roll
-	 * into the exit case anyway.
+	 * If the netproc has already closed, don't try to write the
+	 * certificate to it.
 	 */
 
-	if (writeop(netsock, COMM_KEY_STAT, KEY_READY) < 0)
+	if ((rrc = writeop(netsock, COMM_KEY_STAT, KEY_READY)) < 0)
 		goto out;
-	if (writestr(netsock, COMM_CERT, der64) < 0)
+	if (rrc > 0 && writestr(netsock, COMM_CERT, der64) < 0)
 		goto out;
 
 	rc = 1;
