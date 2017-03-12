@@ -348,7 +348,7 @@ section:
 # mkdir /etc/ssl/acme
 # mkdir /etc/ssl/acme/private /etc/acme
 # chmod 0700 /etc/ssl/acme/private /etc/acme
-# acme-client -vNn foo.com www.foo.com smtp.foo.com
+# acme-client -vNn foo.com www.foo.com
 .Ed
 .Pp
 After generating the necessary directories, the above will create all
@@ -357,27 +357,21 @@ You'll then probably want to restart your web server to pick up the new
 certificates.
 .Pp
 You can then keep your certificates fresh with a daily
-.Xr cron 8
-invocation running the following:
+.Xr crontab 5
+invocation:
 .Bd -literal
-#! /bin/sh
-
-acme-client foo.com www.foo.com smtp.foo.com
-
-if [ $? -eq 0 ]
-then
-	/etc/rc.d/httpd reload
-fi
+13 1 * * * acme-client foo.com www.foo.com && rcctl reload httpd
 .Ed
 .Pp
-You'll need to replace the httpd-reload statement with the correct
-script to have your web server reload its certificates.
+You'll need to replace the rcctl statement with the correct script to
+have your web server reload its certificates.
 .\" .Sh DIAGNOSTICS
 .\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
 .\" .Sh ERRORS
 .\" For sections 2, 3, 4, and 9 errno settings only.
 .Sh SEE ALSO
-.Xr openssl 1
+.Xr openssl 1 ,
+.Xr crontab 5
 .\" .Sh STANDARDS
 .\" .Sh HISTORY
 .Sh AUTHORS
