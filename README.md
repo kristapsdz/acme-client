@@ -11,9 +11,10 @@ Please see
 [kristaps.bsd.lv/acme-client](https://kristaps.bsd.lv/acme-client) for
 stable releases: this repository is for current development of the
 [OpenBSD](http://www.openbsd.org) version, requiring OpenBSD 5.9 or
-greater.  For the portable version (Mac OS X, Linux, FreeBSD, NetBSD,
-older OpenBSD) see
+greater.  For the portable version (Mac OS X, Linux, FreeBSD, NetBSD) see
 [acme-client-portable](https://github.com/kristapsdz/acme-client-portable).
+
+**Note**: this is *not* the same as the OpenBSD version of *acme-client*.
 
 This repository mirrors the master CVS repository: any source changes
 will occur in the master and be pushed periodically to GitHub.  If you
