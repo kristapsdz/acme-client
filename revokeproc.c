@@ -100,7 +100,7 @@ X509expires(X509 *x)
 
 int
 revokeproc(int fd, const char *certdir, 
-	int expand, const char *const *alts, size_t altsz, const struct config *cfg)
+	const char *const *alts, size_t altsz, const struct config *cfg)
 {
 	char		*path = NULL, *der = NULL, *dercp, 
 			*der64 = NULL, *san = NULL, *str, *tok;
@@ -274,7 +274,7 @@ revokeproc(int fd, const char *certdir,
 	for (j = 0; j < altsz; j++) {
 		if (found[j])
 			continue;
-		if (expand) {
+		if (cfg->expand) {
 			dodbg("%s/%s: expanding with domain: %s",
 				certdir, CERT_PEM, alts[j]);
 			force = 1;

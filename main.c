@@ -149,8 +149,8 @@ main(int argc, char *argv[])
 			  rvk_fds[2];
 	int		  c, rc, newacct = 0, 
 			  staging = 0, multidir = 0, 
-			  backup = 0, build_certdir, build_ssldir, 
-			  build_acctdir, expand = 0;
+			  build_certdir, build_ssldir, 
+			  build_acctdir;
 	pid_t		  pids[COMP__MAX];
 	extern int	  verbose;
 	extern enum comp  proccomp;
@@ -186,7 +186,7 @@ main(int argc, char *argv[])
 			agreement = optarg;
 			break;
 		case ('b'):
-			backup = 1;
+			cfg.backup = 1;
 			break;
 		case ('c'):
 			free(certdir);
@@ -199,7 +199,7 @@ main(int argc, char *argv[])
 				err(EXIT_FAILURE, "strdup");
 			break;
 		case ('e'):
-			expand = 1;
+			cfg.expand = 1;
 			break;
 		case ('f'):
 			free(acctkey);
@@ -359,7 +359,6 @@ main(int argc, char *argv[])
 	if (0 == strcmp(sp, subps[COMP_REVOKE])) {
 		proccomp = COMP_REVOKE;
 		c = revokeproc(FDS_REVOKE, certdir,
-			expand,
 			(const char *const *)alts, altsz, &cfg);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -371,7 +370,7 @@ main(int argc, char *argv[])
 	} else if (0 == strcmp(sp, subps[COMP_FILE])) {
 		proccomp = COMP_FILE;
 		free(alts);
-		c = fileproc(FDS_FILE, backup, certdir);
+		c = fileproc(FDS_FILE, certdir, &cfg);
 		/*
 		 * This is different from the other processes in that it
 		 * can return 2 if the certificates were updated.
