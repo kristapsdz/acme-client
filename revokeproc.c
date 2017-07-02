@@ -99,8 +99,7 @@ X509expires(X509 *x)
 }
 
 int
-revokeproc(int fd, const char *certdir, 
-	const char *const *alts, size_t altsz, const struct config *cfg)
+revokeproc(int fd, const char *certdir, const struct config *cfg)
 {
 	char		*path = NULL, *der = NULL, *dercp, 
 			*der64 = NULL, *san = NULL, *str, *tok;
@@ -227,7 +226,7 @@ revokeproc(int fd, const char *certdir,
 
 	/* An array of buckets: the number of entries found. */
 
-	if (NULL == (found = calloc(altsz, sizeof(size_t)))) {
+	if (NULL == (found = calloc(cfg->altsz, sizeof(size_t)))) {
 		warn("calloc");
 		goto out;
 	}
@@ -249,10 +248,10 @@ revokeproc(int fd, const char *certdir,
 		if (strncmp(tok, "DNS:", 4))
 			continue;
 		tok += 4;
-		for (j = 0; j < altsz; j++)
-			if (0 == strcmp(tok, alts[j]))
+		for (j = 0; j < cfg->altsz; j++)
+			if (0 == strcmp(tok, cfg->alts[j]))
 				break;
-		if (j == altsz) {
+		if (j == cfg->altsz) {
 			warnx("%s/%s: unknown SAN entry: %s",
 				certdir, CERT_PEM, tok);
 			goto out;
@@ -271,17 +270,17 @@ revokeproc(int fd, const char *certdir,
 	 * slip by with a warning.
 	 */
 
-	for (j = 0; j < altsz; j++) {
+	for (j = 0; j < cfg->altsz; j++) {
 		if (found[j])
 			continue;
 		if (cfg->expand) {
 			dodbg("%s/%s: expanding with domain: %s",
-				certdir, CERT_PEM, alts[j]);
+				certdir, CERT_PEM, cfg->alts[j]);
 			force = 1;
 			continue;
 		}
 		warnx("%s/%s: domain not listed: %s",
-			certdir, CERT_PEM, alts[j]);
+			certdir, CERT_PEM, cfg->alts[j]);
 		goto out;
 	}
 

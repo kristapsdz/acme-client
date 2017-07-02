@@ -77,8 +77,7 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
  * jail and, on success, ship it to "netsock" as an X509 request.
  */
 int
-keyproc(int netsock, const char *keyfile,
-	const char **alts, size_t altsz, const struct config *cfg)
+keyproc(int netsock, const char *keyfile, const struct config *cfg)
 {
 	char		*der64 = NULL, *der = NULL, *dercp, 
 			*sans = NULL, *san = NULL;
@@ -170,8 +169,8 @@ keyproc(int netsock, const char *keyfile,
 		warnx("X509_NAME_new");
 		goto out;
 	} else if ( ! X509_NAME_add_entry_by_txt(name, "CN",
-		MBSTRING_ASC, (u_char *)alts[0], -1, -1, 0)) {
-		warnx("X509_NAME_add_entry_by_txt: CN=%s", alts[0]);
+		MBSTRING_ASC, (u_char *)cfg->alts[0], -1, -1, 0)) {
+		warnx("X509_NAME_add_entry_by_txt: CN=%s", cfg->alts[0]);
 		goto out;
 	} else if ( ! X509_REQ_set_subject_name(x, name)) {
 		warnx("X509_req_set_issuer_name");
@@ -186,7 +185,7 @@ keyproc(int netsock, const char *keyfile,
 	 * TODO: is this the best way of doing this?
 	 */
 
-	if (altsz > 1) {
+	if (cfg->altsz > 1) {
 		nid = NID_subject_alt_name;
 		if (NULL == (exts = sk_X509_EXTENSION_new_null())) {
 			warnx("sk_X509_EXTENSION_new_null");
@@ -205,10 +204,10 @@ keyproc(int netsock, const char *keyfile,
 		 * domains: NOT an entry per domain!
 		 */
 
-		for (i = 1; i < altsz; i++) {
-			dodbg("adding SAN: %s", alts[i]);
+		for (i = 1; i < cfg->altsz; i++) {
+			dodbg("adding SAN: %s", cfg->alts[i]);
 			san = doasprintf("%sDNS:%s", 
-				i > 1 ? "," : "", alts[i]);
+				i > 1 ? "," : "", cfg->alts[i]);
 			if (NULL == san) {
 				warn("asprintf");
 				goto out;

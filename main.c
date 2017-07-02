@@ -140,9 +140,8 @@ int
 main(int argc, char *argv[])
 {
 	struct config	  cfg;
-	const char	 *domain, 
-	      		 *sp = NULL;
-	const char	**alts = NULL, **newargs = NULL, *modval = NULL;
+	const char	 *sp = NULL;
+	const char	**newargs = NULL, *modval = NULL;
 	char		 *certdir = NULL, *acctkey = NULL, 
 			 *chngdir = NULL, *keyfile = NULL,
 			 *keydir, *acctdir;
@@ -156,7 +155,7 @@ main(int argc, char *argv[])
 	pid_t		  pids[COMP__MAX];
 	extern int	  verbose;
 	extern enum comp  proccomp;
-	size_t		  i, j, altsz, ne, newargsz;
+	size_t		  i, j, ne, newargsz;
 
 	/*
 	 * Start by copying over our arguments as if were going to run a
@@ -282,9 +281,8 @@ main(int argc, char *argv[])
 		errx(EXIT_FAILURE, "%s: bad domain syntax", argv[i]);
 	}
 
-	domain = argv[0];
-	argc--;
-	argv++;
+	cfg.altsz = argc;
+	cfg.alts = (const char *const *)argv;
 
 	if ( ! checkprivs())
 		errx(EXIT_FAILURE, "must be run as root");
@@ -304,42 +302,32 @@ main(int argc, char *argv[])
 
 	if (NULL == certdir)
 		certdir = multidir ?
-			doasprintf(SSL_DIR "/%s", domain) :
+			doasprintf(SSL_DIR "/%s", argv[0]) :
 			strdup(SSL_DIR);
 	if (NULL == keyfile)
 		keyfile = multidir ?
 			doasprintf(SSL_PRIV_DIR "/%s/"
-				PRIVKEY_FILE, domain) :
+				PRIVKEY_FILE, argv[0]) :
 			strdup(SSL_PRIV_DIR "/" PRIVKEY_FILE);
 	if (NULL == acctkey)
 		acctkey = multidir ?
 			doasprintf(ETC_DIR "/%s/"
-				PRIVKEY_FILE, domain) :
+				PRIVKEY_FILE, argv[0]) :
 			strdup(ETC_DIR "/" PRIVKEY_FILE);
 	if (NULL == chngdir)
 		chngdir = strdup(WWW_DIR);
 
 	keydir = multidir ?
-		doasprintf(SSL_PRIV_DIR "/%s", domain) :
+		doasprintf(SSL_PRIV_DIR "/%s", argv[0]) :
 		strdup(SSL_PRIV_DIR);
 	acctdir = multidir ?
-		doasprintf(ETC_DIR "/%s", domain) :
+		doasprintf(ETC_DIR "/%s", argv[0]) :
 		strdup(ETC_DIR);
 
 	if (NULL == certdir || NULL == keyfile ||
 	    NULL == acctkey || NULL == chngdir ||
 	    NULL == keydir || NULL == acctdir)
 		err(EXIT_FAILURE, "strdup");
-
-	/* Set the zeroth altname as our domain. */
-
-	altsz = argc + 1;
-	alts = calloc(altsz, sizeof(char *));
-	if (NULL == alts)
-		err(EXIT_FAILURE, "calloc");
-	alts[0] = domain;
-	for (i = 0; i < (size_t)argc; i++)
-		alts[i + 1] = argv[i];
 
 	/*
 	 * If we're in one of the re-executed child processes, do our
@@ -362,18 +350,14 @@ main(int argc, char *argv[])
 
 	if (0 == strcmp(sp, subps[COMP_REVOKE])) {
 		proccomp = COMP_REVOKE;
-		c = revokeproc(FDS_REVOKE, certdir,
-			(const char *const *)alts, altsz, &cfg);
-		free(alts);
+		c = revokeproc(FDS_REVOKE, certdir, &cfg);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_DNS])) {
 		proccomp = COMP_DNS;
-		free(alts);
 		c = dnsproc(FDS_DNS);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_FILE])) {
 		proccomp = COMP_FILE;
-		free(alts);
 		c = fileproc(FDS_FILE, certdir, &cfg);
 		/*
 		 * This is different from the other processes in that it
@@ -383,32 +367,25 @@ main(int argc, char *argv[])
 		    (c ? EXIT_SUCCESS : EXIT_FAILURE));
 	} else if (0 == strcmp(sp, subps[COMP_CERT])) {
 		proccomp = COMP_CERT;
-		free(alts);
 		c = certproc(FDS_CERT, FDS_FILE);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_CHALLENGE])) {
 		proccomp = COMP_CHALLENGE;
-		free(alts);
 		c = chngproc(FDS_CHALLENGE, chngdir, &cfg);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_ACCOUNT])) {
 		proccomp = COMP_ACCOUNT;
-		free(alts);
 		c = acctproc(FDS_ACCOUNT, acctkey, &cfg);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_KEY])) {
 		proccomp = COMP_KEY;
-		c = keyproc(FDS_KEY, keyfile,
-			(const char **)alts, altsz, &cfg);
-		free(alts);
+		c = keyproc(FDS_KEY, keyfile, &cfg);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_NET])) {
 		proccomp = COMP_NET;
 		c = netproc(FDS_KEY, FDS_ACCOUNT,
 		    FDS_CHALLENGE, FDS_CERT,
-		    FDS_DNS, FDS_REVOKE,
-		    (const char *const *)alts, altsz, &cfg);
-		free(alts);
+		    FDS_DNS, FDS_REVOKE, &cfg);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (NULL != sp)
 		errx(EXIT_FAILURE, "%s: unknown subprocess", sp);
@@ -676,7 +653,6 @@ main:
 	free(keyfile);
 	free(acctkey);
 	free(chngdir);
-	free(alts);
 	free(newargs);
 
 	return (COMP__MAX != rc ? EXIT_FAILURE :

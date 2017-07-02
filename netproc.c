@@ -572,7 +572,6 @@ dofullchain(struct conn *c, const char *addr)
  */
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
-	const char *const *alts, size_t altsz, 
 	const struct config *cfg)
 {
 	int		 rc = 0;
@@ -649,7 +648,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	/* Allocate main state. */
 
-	chngs = calloc(altsz, sizeof(struct chng));
+	chngs = calloc(cfg->altsz, sizeof(struct chng));
 	if (NULL == chngs) {
 		warn("calloc");
 		goto out;
@@ -694,8 +693,8 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	/* Pre-authorise all domains with CA server. */
 
-	for (i = 0; i < altsz; i++)
-		if ( ! dochngreq(&c, alts[i], 
+	for (i = 0; i < cfg->altsz; i++)
+		if ( ! dochngreq(&c, cfg->alts[i], 
 		    &chngs[i], &paths, cfg->challenge))
 			goto out;
 
@@ -713,10 +712,10 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	/* We'll now ask chngproc to build the challenge. */
 
-	for (i = 0; i < altsz; i++) {
+	for (i = 0; i < cfg->altsz; i++) {
 		if (writeop(Cfd, COMM_CHNG_OP, CHNG_SYN) <= 0)
 			goto out;
-		else if (writestr(Cfd, COMM_DNSA, alts[i]) <= 0)
+		else if (writestr(Cfd, COMM_DNSA, cfg->alts[i]) <= 0)
 			goto out;
 		else if (writestr(Cfd, COMM_THUMB, thumb) <= 0)
 			goto out;
@@ -740,7 +739,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	 * every five seconds.
 	 */
 
-	for (i = 0; i < altsz; i++) {
+	for (i = 0; i < cfg->altsz; i++) {
 		if (1 == chngs[i].status)
 			continue;
 
@@ -807,7 +806,7 @@ out:
 	http_uninit(c.cfg);
 	free(c.buf.buf);
 	if (NULL != chngs)
-		for (i = 0; i < altsz; i++)
+		for (i = 0; i < cfg->altsz; i++)
 			json_free_challenge(&chngs[i]);
 	free(chngs);
 	json_free_capaths(&paths);
