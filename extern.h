@@ -178,6 +178,7 @@ struct	config {
 	int		 newkey; /* generate new domain key */
 	int		 ocsp; /* request OCSP */
 	int		 revocate; /* revoke certificate */
+	int		 force; /* renew even if not needed */
 };
 
 struct	jsmnn;
@@ -192,7 +193,7 @@ int		 acctproc(int, const char *, int);
 int		 certproc(int, int);
 int		 chngproc(int, const char *, const char *);
 int		 dnsproc(int);
-int		 revokeproc(int, const char *, int,
+int		 revokeproc(int, const char *, 
 			int, const char *const *, size_t, const struct config *);
 int		 fileproc(int, int, const char *);
 int		 keyproc(int, const char *,
