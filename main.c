@@ -32,7 +32,7 @@
 
 #include "extern.h"
 
-#define AGREEMENT "https://letsencrypt.org" \
+#define URL_AGREE "https://letsencrypt.org" \
 		  "/documents/LE-SA-v1.1.1-August-1-2016.pdf"
 #define SSL_DIR "/etc/ssl/acme"
 #define SSL_PRIV_DIR "/etc/ssl/acme/private"
@@ -140,7 +140,7 @@ int
 main(int argc, char *argv[])
 {
 	struct config	  cfg;
-	const char	 *domain, *agreement = AGREEMENT, 
+	const char	 *domain, 
 	      		 *challenge = NULL, *sp = NULL;
 	const char	**alts = NULL, **newargs = NULL, *modval = NULL;
 	char		 *certdir = NULL, *acctkey = NULL, 
@@ -178,15 +178,16 @@ main(int argc, char *argv[])
 	for (i = 1, j = 5; i < (size_t)argc; i++, j++)
 		newargs[j] = argv[i];
 
-	/* Now parse arguments. */
+	/* Now set defaults and parse arguments. */
 
 	memset(&cfg, 0, sizeof(struct config));
 	cfg.url = URL_REAL_CA;
+	cfg.agree = URL_AGREE;
 
 	while (-1 != (c = getopt(argc, argv, "beFmnNOrsva:f:c:C:k:t:x:X:"))) 
 		switch (c) {
 		case ('a'):
-			agreement = optarg;
+			cfg.agree = optarg;
 			break;
 		case ('b'):
 			cfg.backup = 1;
@@ -407,7 +408,7 @@ main(int argc, char *argv[])
 		    FDS_CHALLENGE, FDS_CERT,
 		    FDS_DNS, FDS_REVOKE,
 		    (const char *const *)alts, altsz,
-		    agreement, challenge, &cfg);
+		    challenge, &cfg);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (NULL != sp)
