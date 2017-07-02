@@ -141,7 +141,7 @@ main(int argc, char *argv[])
 {
 	struct config	  cfg;
 	const char	 *domain, 
-	      		 *challenge = NULL, *sp = NULL;
+	      		 *sp = NULL;
 	const char	**alts = NULL, **newargs = NULL, *modval = NULL;
 	char		 *certdir = NULL, *acctkey = NULL, 
 			 *chngdir = NULL, *keyfile = NULL,
@@ -237,7 +237,7 @@ main(int argc, char *argv[])
 			cfg.url = URL_STAGE_CA;
 			break;
 		case ('t'):
-			challenge = optarg;
+			cfg.challenge = optarg;
 			break;
 		case ('v'):
 			verbose = verbose ? 2 : 1;
@@ -389,7 +389,7 @@ main(int argc, char *argv[])
 	} else if (0 == strcmp(sp, subps[COMP_CHALLENGE])) {
 		proccomp = COMP_CHALLENGE;
 		free(alts);
-		c = chngproc(FDS_CHALLENGE, chngdir, challenge);
+		c = chngproc(FDS_CHALLENGE, chngdir, &cfg);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_ACCOUNT])) {
 		proccomp = COMP_ACCOUNT;
@@ -407,8 +407,7 @@ main(int argc, char *argv[])
 		c = netproc(FDS_KEY, FDS_ACCOUNT,
 		    FDS_CHALLENGE, FDS_CERT,
 		    FDS_DNS, FDS_REVOKE,
-		    (const char *const *)alts, altsz,
-		    challenge, &cfg);
+		    (const char *const *)alts, altsz, &cfg);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (NULL != sp)
@@ -489,7 +488,7 @@ main:
 		ne++;
 	} 
 
-	if (NULL == challenge && -1 == access(chngdir, R_OK)) {
+	if (NULL == cfg.challenge && -1 == access(chngdir, R_OK)) {
 		warnx("%s: -C directory must exist", chngdir);
 		ne++;
 	}

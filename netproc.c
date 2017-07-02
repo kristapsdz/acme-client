@@ -573,7 +573,7 @@ dofullchain(struct conn *c, const char *addr)
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	const char *const *alts, size_t altsz, 
-	const char *challenge, const struct config *cfg)
+	const struct config *cfg)
 {
 	int		 rc = 0;
 	size_t		 i;
@@ -696,7 +696,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	for (i = 0; i < altsz; i++)
 		if ( ! dochngreq(&c, alts[i], 
-		    &chngs[i], &paths, challenge))
+		    &chngs[i], &paths, cfg->challenge))
 			goto out;
 
 	/*
