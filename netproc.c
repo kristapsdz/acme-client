@@ -1,6 +1,6 @@
 /*	$Id$ */
 /*
- * Copyright (c) 2016 Kristaps Dzonsons <kristaps@bsd.lv>
+ * Copyright (c) 2016--2017 Kristaps Dzonsons <kristaps@bsd.lv>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -28,9 +28,6 @@
 
 #include "http.h"
 #include "extern.h"
-
-#define URL_REAL_CA "https://acme-v01.api.letsencrypt.org/directory"
-#define URL_STAGE_CA "https://acme-staging.api.letsencrypt.org/directory"
 
 #define	RETRY_DELAY 5
 #define RETRY_MAX 10
@@ -575,7 +572,6 @@ dofullchain(struct conn *c, const char *addr)
  */
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
-	int staging, 
 	const char *const *alts, size_t altsz, const char *agreement,
 	const char *challenge, const struct config *cfg)
 {
@@ -661,7 +657,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	c.dfd = dfd;
 	c.fd = afd;
-	c.na = staging ? URL_STAGE_CA : URL_REAL_CA;
+	c.na = cfg->url;
 
 	if (NULL == c.cfg)
 		goto out;

@@ -39,6 +39,8 @@
 #define ETC_DIR "/etc/acme"
 #define WWW_DIR "/var/www/acme"
 #define PRIVKEY_FILE "privkey.pem"
+#define URL_REAL_CA "https://acme-v01.api.letsencrypt.org/directory"
+#define URL_STAGE_CA "https://acme-staging.api.letsencrypt.org/directory"
 
 /*
  * XXX: I arbitrarily choose a starting descriptor and hope that we
@@ -148,15 +150,13 @@ main(int argc, char *argv[])
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
 	int		  c, rc, 
-			  staging = 0, multidir = 0, 
+			  multidir = 0, 
 			  build_certdir, build_ssldir, 
 			  build_acctdir;
 	pid_t		  pids[COMP__MAX];
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, j, altsz, ne, newargsz;
-
-	memset(&cfg, 0, sizeof(struct config));
 
 	/*
 	 * Start by copying over our arguments as if were going to run a
@@ -179,6 +179,9 @@ main(int argc, char *argv[])
 		newargs[j] = argv[i];
 
 	/* Now parse arguments. */
+
+	memset(&cfg, 0, sizeof(struct config));
+	cfg.url = URL_REAL_CA;
 
 	while (-1 != (c = getopt(argc, argv, "beFmnNOrsva:f:c:C:k:t:x:X:"))) 
 		switch (c) {
@@ -230,7 +233,7 @@ main(int argc, char *argv[])
 			cfg.revocate = 1;
 			break;
 		case ('s'):
-			staging = 1;
+			cfg.url = URL_STAGE_CA;
 			break;
 		case ('t'):
 			challenge = optarg;
@@ -403,7 +406,6 @@ main(int argc, char *argv[])
 		c = netproc(FDS_KEY, FDS_ACCOUNT,
 		    FDS_CHALLENGE, FDS_CERT,
 		    FDS_DNS, FDS_REVOKE,
-		    staging,
 		    (const char *const *)alts, altsz,
 		    agreement, challenge, &cfg);
 		free(alts);
