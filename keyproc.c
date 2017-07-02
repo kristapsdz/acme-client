@@ -77,8 +77,8 @@ add_ext(STACK_OF(X509_EXTENSION) *sk, int nid, const char *value)
  * jail and, on success, ship it to "netsock" as an X509 request.
  */
 int
-keyproc(int netsock, int ocsp, const char *keyfile,
-	const char **alts, size_t altsz, int newkey)
+keyproc(int netsock, const char *keyfile,
+	const char **alts, size_t altsz, const struct config *cfg)
 {
 	char		*der64 = NULL, *der = NULL, *dercp, 
 			*sans = NULL, *san = NULL;
@@ -100,7 +100,7 @@ keyproc(int netsock, int ocsp, const char *keyfile,
 	 */
 
 	prev = umask((S_IWUSR | S_IXUSR) | S_IRWXG | S_IRWXO);
-	f = fopen(keyfile, newkey ? "wx" : "r");
+	f = fopen(keyfile, cfg->newkey ? "wx" : "r");
 	umask(prev);
 
 	if (NULL == f) {
@@ -134,7 +134,7 @@ keyproc(int netsock, int ocsp, const char *keyfile,
 		RAND_seed(rbuf, sizeof(rbuf));
 	}
 
-	if (newkey) {
+	if (cfg->newkey) {
 		dodbg("%s: generating RSA domain key", keyfile);
 		if (NULL == (pkey = rsa_key_create(f, keyfile)))
 			goto out;
@@ -247,7 +247,7 @@ keyproc(int netsock, int ocsp, const char *keyfile,
 	 * I give an arbitrary name for the NID.
 	 */
 	
-	if (ocsp) {
+	if (cfg->ocsp) {
 		dodbg("adding OCSP stapling");
 		if (NULL == (exts = sk_X509_EXTENSION_new_null())) {
 			warnx("sk_X509_EXTENSION_new_null");
@@ -320,7 +320,7 @@ out:
 		X509_NAME_free(name);
 	if (NULL != pkey)
 		EVP_PKEY_free(pkey);
-	if (ocsp)
+	if (cfg->ocsp)
 		OBJ_cleanup();
 	ERR_print_errors_fp(stderr);
 	ERR_free_strings();
