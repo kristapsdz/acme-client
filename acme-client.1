@@ -315,9 +315,7 @@ as the challenge directory and
 .Pa /etc/ssl/acme
 to contain the certificates.
 .Pp
-An
-.Xr nginx 8
-configuration could be as follows:
+An nginx configuration could be as follows:
 .Bd -literal
 server {
   listen 443;
@@ -334,8 +332,7 @@ server {
 }
 .Ed
 .Pp
-The following for
-.Xr apache2 8 :
+The following for Apache:
 .Bd -literal
 <VirtualHost *:443>
   ServerName foo.com
@@ -350,6 +347,22 @@ The following for
   ServerAlias www.foo.com
   Alias /.well-known/acme-challenge /var/www/acme
 </VirtualHost>
+.Ed
+.Pp
+And lastly, OpenBSD's httpd:
+.Bd -literal
+server "www.foo.com" {
+  alias "foo.com"
+  listen on $ext_addr port 80
+  listen on $ext_addr tls port 443
+  location "/.well-known/acme-challenge/*" {
+    root { "/acme", strip 2 }
+  }
+  tls {
+    certificate "/etc/ssl/acme/fullchain.pem"
+    key "/etc/ssl/acme/private/privkey.pem"
+  }
+}
 .Ed
 .Pp
 Next, request a new certificate for the new domain.
