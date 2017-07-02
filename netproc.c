@@ -575,9 +575,9 @@ dofullchain(struct conn *c, const char *addr)
  */
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
-	int newacct, int revocate, int staging, 
+	int newacct, int staging, 
 	const char *const *alts, size_t altsz, const char *agreement,
-	const char *challenge)
+	const char *challenge, const struct config *cfg)
 {
 	int		 rc = 0;
 	size_t		 i;
@@ -681,7 +681,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 	 * certproc, which will in turn notify the fileproc.
 	 */
 
-	if (revocate) {
+	if (cfg->revocate) {
 		if (NULL == (cert = readstr(rfd, COMM_CSR)))
 			goto out;
 		if ( ! dorevoke(&c, paths.revokecert, cert))

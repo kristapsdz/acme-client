@@ -137,6 +137,7 @@ xrun(enum comp comp, const char **newargs)
 int
 main(int argc, char *argv[])
 {
+	struct config	  cfg;
 	const char	 *domain, *agreement = AGREEMENT, 
 	      		 *challenge = NULL, *sp = NULL;
 	const char	**alts = NULL, **newargs = NULL, *modval = NULL;
@@ -146,14 +147,16 @@ main(int argc, char *argv[])
 	int		  key_fds[2], acct_fds[2], chng_fds[2],
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
-	int		  c, rc, newacct = 0, revocate = 0, force = 0,
-			  staging = 0, multidir = 0, newkey = 0, 
+	int		  c, rc, newacct = 0, force = 0,
+			  staging = 0, multidir = 0, 
 			  backup = 0, build_certdir, build_ssldir, 
-			  build_acctdir, expand = 0, ocsp = 0;
+			  build_acctdir, expand = 0;
 	pid_t		  pids[COMP__MAX];
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, j, altsz, ne, newargsz;
+
+	memset(&cfg, 0, sizeof(struct config));
 
 	/*
 	 * Start by copying over our arguments as if were going to run a
@@ -218,13 +221,13 @@ main(int argc, char *argv[])
 			newacct = 1;
 			break;
 		case ('N'):
-			newkey = 1;
+			cfg.newkey = 1;
 			break;
 		case ('O'):
-			ocsp = 1;
+			cfg.ocsp = 1;
 			break;
 		case ('r'):
-			revocate = 1;
+			cfg.revocate = 1;
 			break;
 		case ('s'):
 			staging = 1;
@@ -349,15 +352,15 @@ main(int argc, char *argv[])
 	if (NULL != modval) {
 		if (newacct && NULL != strchr(modval, 'n'))
 			newacct = 0;
-		if (newkey && NULL != strchr(modval, 'N'))
-			newkey = 0;
+		if (cfg.newkey && NULL != strchr(modval, 'N'))
+			cfg.newkey = 0;
 	}
 
 	if (0 == strcmp(sp, subps[COMP_REVOKE])) {
 		proccomp = COMP_REVOKE;
 		c = revokeproc(FDS_REVOKE, certdir,
-			force, revocate, expand,
-			(const char *const *)alts, altsz);
+			force, expand,
+			(const char *const *)alts, altsz, &cfg);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_DNS])) {
@@ -392,8 +395,8 @@ main(int argc, char *argv[])
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_KEY])) {
 		proccomp = COMP_KEY;
-		c = keyproc(FDS_KEY, ocsp, keyfile,
-			(const char **)alts, altsz, newkey);
+		c = keyproc(FDS_KEY, keyfile,
+			(const char **)alts, altsz, &cfg);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_NET])) {
@@ -401,9 +404,9 @@ main(int argc, char *argv[])
 		c = netproc(FDS_KEY, FDS_ACCOUNT,
 		    FDS_CHALLENGE, FDS_CERT,
 		    FDS_DNS, FDS_REVOKE,
-		    newacct, revocate, staging,
+		    newacct, staging,
 		    (const char *const *)alts, altsz,
-		    agreement, challenge);
+		    agreement, challenge, &cfg);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (NULL != sp)
@@ -424,8 +427,8 @@ main:
 			"(not creating)", acctkey);
 	}
 
-	if (newkey && -1 != access(keyfile, R_OK)) {
-		newkey = 0;
+	if (cfg.newkey && -1 != access(keyfile, R_OK)) {
+		cfg.newkey = 0;
 		modval = NULL != modval ? "nN" : "N";
 		dodbg("%s: domain key exists "
 			"(not creating)", keyfile);
@@ -479,7 +482,7 @@ main:
 		ne++;
 	}
 
-	if ( ! newkey && -1 == access(keyfile, R_OK)) {
+	if ( ! cfg.newkey && -1 == access(keyfile, R_OK)) {
 		warnx("%s: -k file must exist", keyfile);
 		ne++;
 	} 
