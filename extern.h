@@ -179,6 +179,8 @@ struct	config {
 	int		 ocsp; /* request OCSP */
 	int		 revocate; /* revoke certificate */
 	int		 force; /* renew even if not needed */
+	int		 backup; /* backup certificates on change */
+	int		 expand; /* allow expanding SAN lineup */
 };
 
 struct	jsmnn;
@@ -194,13 +196,13 @@ int		 certproc(int, int);
 int		 chngproc(int, const char *, const char *);
 int		 dnsproc(int);
 int		 revokeproc(int, const char *, 
-			int, const char *const *, size_t, const struct config *);
-int		 fileproc(int, int, const char *);
+			const char *const *, size_t, const struct config *);
+int		 fileproc(int, const char *, const struct config *);
 int		 keyproc(int, const char *,
 			const char **, size_t, const struct config *);
 int		 netproc(int, int, int, int, int, int, int, int,
 			const char *const *, size_t, const char *,
-			const char *, const struct config *cfg);
+			const char *, const struct config *);
 
 /*
  * Debugging functions.
