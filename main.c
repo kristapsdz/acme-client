@@ -1,6 +1,6 @@
 /*	$Id$ */
 /*
- * Copyright (c) 2016 Kristaps Dzonsons <kristaps@bsd.lv>
+ * Copyright (c) 2016--2017 Kristaps Dzonsons <kristaps@bsd.lv>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -147,7 +147,7 @@ main(int argc, char *argv[])
 	int		  key_fds[2], acct_fds[2], chng_fds[2],
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
-	int		  c, rc, newacct = 0, 
+	int		  c, rc, 
 			  staging = 0, multidir = 0, 
 			  build_certdir, build_ssldir, 
 			  build_acctdir;
@@ -218,7 +218,7 @@ main(int argc, char *argv[])
 			multidir = 1;
 			break;
 		case ('n'):
-			newacct = 1;
+			cfg.newacct = 1;
 			break;
 		case ('N'):
 			cfg.newkey = 1;
@@ -350,8 +350,8 @@ main(int argc, char *argv[])
 	/* Check if we're overriding any given values. */
 
 	if (NULL != modval) {
-		if (newacct && NULL != strchr(modval, 'n'))
-			newacct = 0;
+		if (cfg.newacct && NULL != strchr(modval, 'n'))
+			cfg.newacct = 0;
 		if (cfg.newkey && NULL != strchr(modval, 'N'))
 			cfg.newkey = 0;
 	}
@@ -390,7 +390,7 @@ main(int argc, char *argv[])
 	} else if (0 == strcmp(sp, subps[COMP_ACCOUNT])) {
 		proccomp = COMP_ACCOUNT;
 		free(alts);
-		c = acctproc(FDS_ACCOUNT, acctkey, newacct);
+		c = acctproc(FDS_ACCOUNT, acctkey, &cfg);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
 	} else if (0 == strcmp(sp, subps[COMP_KEY])) {
 		proccomp = COMP_KEY;
@@ -403,7 +403,7 @@ main(int argc, char *argv[])
 		c = netproc(FDS_KEY, FDS_ACCOUNT,
 		    FDS_CHALLENGE, FDS_CERT,
 		    FDS_DNS, FDS_REVOKE,
-		    newacct, staging,
+		    staging,
 		    (const char *const *)alts, altsz,
 		    agreement, challenge, &cfg);
 		free(alts);
@@ -419,8 +419,8 @@ main:
 	 * don't want to perform these operations.
 	 */
 
-	if (newacct && -1 != access(acctkey, R_OK)) {
-		newacct = 0;
+	if (cfg.newacct && -1 != access(acctkey, R_OK)) {
+		cfg.newacct = 0;
 		modval = "n";
 		dodbg("%s: account key exists "
 			"(not creating)", acctkey);
@@ -491,7 +491,7 @@ main:
 		ne++;
 	}
 
-	if ( ! newacct && -1 == access(acctkey, R_OK)) {
+	if ( ! cfg.newacct && -1 == access(acctkey, R_OK)) {
 		warnx("%s: -f file must exist", acctkey);
 		ne++;
 	} 
