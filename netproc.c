@@ -572,7 +572,7 @@ dofullchain(struct conn *c, const char *addr)
  */
 int
 netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
-	const char *const *alts, size_t altsz, const char *agreement,
+	const char *const *alts, size_t altsz, 
 	const char *challenge, const struct config *cfg)
 {
 	int		 rc = 0;
@@ -689,7 +689,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	/* If new, register with the CA server. */
 
-	if (cfg->newacct && ! donewreg(&c, agreement, &paths))
+	if (cfg->newacct && ! donewreg(&c, cfg->agree, &paths))
 		goto out;
 
 	/* Pre-authorise all domains with CA server. */

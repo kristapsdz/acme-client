@@ -183,6 +183,7 @@ struct	config {
 	int		 backup; /* backup certificates on change */
 	int		 expand; /* allow expanding SAN lineup */
 	const char	*url; /* URL for CA directory service */
+	const char	*agree; /* URL for usage agreement */
 };
 
 struct	jsmnn;
@@ -203,7 +204,7 @@ int		 fileproc(int, const char *, const struct config *);
 int		 keyproc(int, const char *,
 			const char **, size_t, const struct config *);
 int		 netproc(int, int, int, int, int, int, 
-			const char *const *, size_t, const char *,
+			const char *const *, size_t, 
 			const char *, const struct config *);
 
 /*
