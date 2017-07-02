@@ -99,12 +99,13 @@ X509expires(X509 *x)
 }
 
 int
-revokeproc(int fd, const char *certdir, int force, 
+revokeproc(int fd, const char *certdir, 
 	int expand, const char *const *alts, size_t altsz, const struct config *cfg)
 {
 	char		*path = NULL, *der = NULL, *dercp, 
 			*der64 = NULL, *san = NULL, *str, *tok;
-	int		 rc = 0, cc, i, extsz, ssz, len;
+	int		 rc = 0, cc, i, extsz, ssz, len, 
+			 force = cfg->force;
 	size_t		*found = NULL;
 	BIO		*bio = NULL;
 	FILE		*f = NULL;

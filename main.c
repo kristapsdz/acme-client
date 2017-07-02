@@ -147,7 +147,7 @@ main(int argc, char *argv[])
 	int		  key_fds[2], acct_fds[2], chng_fds[2],
 			  cert_fds[2], file_fds[2], dns_fds[2],
 			  rvk_fds[2];
-	int		  c, rc, newacct = 0, force = 0,
+	int		  c, rc, newacct = 0, 
 			  staging = 0, multidir = 0, 
 			  backup = 0, build_certdir, build_ssldir, 
 			  build_acctdir, expand = 0;
@@ -207,7 +207,7 @@ main(int argc, char *argv[])
 				err(EXIT_FAILURE, "strdup");
 			break;
 		case ('F'):
-			force = 1;
+			cfg.force = 1;
 			break;
 		case ('k'):
 			free(keyfile);
@@ -359,7 +359,7 @@ main(int argc, char *argv[])
 	if (0 == strcmp(sp, subps[COMP_REVOKE])) {
 		proccomp = COMP_REVOKE;
 		c = revokeproc(FDS_REVOKE, certdir,
-			force, expand,
+			expand,
 			(const char *const *)alts, altsz, &cfg);
 		free(alts);
 		exit(c ? EXIT_SUCCESS : EXIT_FAILURE);
