@@ -22,6 +22,9 @@ OBJS 	 = acctproc.o \
 acme-client: $(OBJS)
 	$(CC) -o $@ $(OBJS) -ltls -lssl -lcrypto
 
+parse: parse.c
+	$(CC) $(CFLAGS) -o $@ parse.c
+
 rsa.o acctproc.o keyproc.o: rsa.h
 
 jsmn.o json.o: jsmn.h
