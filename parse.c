@@ -672,12 +672,12 @@ parse_domain_block(struct parse *p, struct domain *d)
 			return(0);
 		} 
 		parse_advance(p);
-		if (NULL != d->auth)
+		if (NULL != d->authname)
 			logwarnx(p, "sign with redefined");
-		free(d->auth);
-		if (NULL == (d->auth = parse_value(p, '}', 1)))
+		free(d->authname);
+		if (NULL == (d->authname = parse_value(p, '}', 1)))
 			return(0);
-		logdbg(p, "auth: %s", d->auth);
+		logdbg(p, "auth: %s", d->authname);
 	} else if (parse_match(p, "challengedir")) {
 		parse_advance(p);
 		if (NULL != d->cdir)
@@ -752,6 +752,20 @@ parse_domain(struct parse *p)
 		return(0);
 	}
 	parse_nextchar(p);
+
+	if (NULL == d->authname) 
+		logwarnx(p, "sign as required");
+	else if (NULL == d->cdir)
+		logwarnx(p, "challengedir required");
+	else if (NULL == d->key)
+		logwarnx(p, "domain key required");
+	else if (NULL == d->cert)
+		logwarnx(p, "domain certificate required");
+	else if (NULL == d->chain)
+		logwarnx(p, "domain chain certificate required");
+	else if (NULL == d->full)
+		logwarnx(p, "domain full chain certificate required");
+
 	return(1);
 }
 
@@ -868,6 +882,10 @@ parse_authority_block(struct parse *p, struct auth *a)
 	return(1);
 }
 
+/*
+ * Parse a top-level authority block:
+ *   "authority" name "{" ... "}"
+ */
 static int
 parse_authority(struct parse *p)
 {
@@ -910,7 +928,17 @@ parse_authority(struct parse *p)
 		return(0);
 	}
 	parse_nextchar(p);
-	return(1);
+
+	if (NULL == a->accountkey)
+		logwarnx(p, "account key required");
+	else if (NULL == a->agreement)
+		logwarnx(p, "agreement url required");
+	else if (NULL == a->api)
+		logwarnx(p, "api url required");
+	else
+		return(1);
+
+	return(0);
 }
 
 static int
@@ -986,7 +1014,7 @@ cfg_free(struct cfgfile *p)
 			free(an);
 		}
 		free(d->name);
-		free(d->auth);
+		free(d->authname);
 		free(d->cdir);
 		free(d->key);
 		free(d->cert);
@@ -1041,6 +1069,8 @@ struct cfgfile *
 cfg_parse(const char *file)
 {
 	struct parse	 p;
+	struct domain	*d;
+	struct auth	*a;
 
 	memset(&p, 0, sizeof(struct parse));
 
@@ -1068,6 +1098,21 @@ cfg_parse(const char *file)
 	/* On proper exit, we should have no file in our buffer. */
 
 	assert(NULL == p.cur && 0 == p.stacksz);
+
+	TAILQ_FOREACH(d, &p.cfg->domains, entries) {
+		TAILQ_FOREACH(a, &p.cfg->auths, entries) {
+			if (0 == strcmp(a->name, d->authname)) {
+				d->auth = a;
+				break;
+			}
+		}
+		if (NULL == a) {
+			logwarnx(NULL, "authority not found");
+			goto out;
+		}
+		assert(NULL != d->auth);
+	}
+
 	parse_free(&p);
 	return(p.cfg);
 out:
