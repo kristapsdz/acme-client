@@ -54,8 +54,11 @@ struct	curparse {
 	struct point	 point; /* current point */
 };
 
+/*
+ * One of a chain of alternative names for a domain.
+ */
 struct	altname {
-	char		*alt;
+	char		*alt; /* the name */
 	TAILQ_ENTRY(altname) entries;
 };
 
@@ -107,12 +110,12 @@ struct	cfgfile {
  * This maintains the stack of parsing files.
  */
 struct	parse {
-	TAILQ_HEAD(, macro) macros;
-	struct curparse	*stack;
-	size_t		 stacksz;
-	size_t		 stackmax;
-	struct curparse	*cur;
-	struct cfgfile	*cfg;
+	TAILQ_HEAD(, macro) macros; /* current macros */
+	struct curparse	*stack; /* parsed file stack */
+	size_t		 stacksz; /* position in stack < max */
+	size_t		 stackmax; /* stack memory size */
+	struct curparse	*cur; /* current parsing file */
+	struct cfgfile	*cfg; /* parsed configuration */
 };
 
 static void
@@ -590,6 +593,7 @@ parse_altnames(struct parse *p, struct domain *d)
 static int
 parse_domain_block(struct parse *p, struct domain *d)
 {
+	struct altname	*an;
 
 	if (parse_match(p, "alternative")) {
 		parse_advance(p);
@@ -598,6 +602,13 @@ parse_domain_block(struct parse *p, struct domain *d)
 			return(0);
 		} 
 		parse_advance(p);
+		if ( ! TAILQ_EMPTY(&d->altnames))
+			logwarnx(p, "alternative names redefined");
+		while (NULL != (an = TAILQ_FIRST(&d->altnames))) {
+			TAILQ_REMOVE(&d->altnames, an, entries);
+			free(an->alt);
+			free(an);
+		}
 		if ( ! parse_altnames(p, d))
 			return(0);
 	} else if (parse_match(p, "domain")) {
@@ -608,6 +619,9 @@ parse_domain_block(struct parse *p, struct domain *d)
 				return(0);
 		} else if (parse_match(p, "certificate")) {
 			parse_advance(p);
+			if (NULL != d->cert)
+				logwarnx(p, "certificate redefined");
+			free(d->cert);
 			if (NULL == (d->cert = parse_value(p, '}', 1)))
 				return(0);
 			logdbg(p, "certificate: %s", d->key);
@@ -618,6 +632,10 @@ parse_domain_block(struct parse *p, struct domain *d)
 				return(0);
 			}
 			parse_advance(p);
+			if (NULL != d->chain)
+				logwarnx(p, "chain "
+					"certificate redefined");
+			free(d->chain);
 			if (NULL == (d->chain = parse_value(p, '}', 1)))
 				return(0);
 			logdbg(p, "chain: %s", d->chain);
@@ -633,6 +651,10 @@ parse_domain_block(struct parse *p, struct domain *d)
 				return(0);
 			}
 			parse_advance(p);
+			if (NULL != d->full)
+				logwarnx(p, "full chain "
+					"certificate redefined");
+			free(d->full);
 			if (NULL == (d->full = parse_value(p, '}', 1)))
 				return(0);
 			logdbg(p, "full: %s", d->full);
@@ -647,11 +669,17 @@ parse_domain_block(struct parse *p, struct domain *d)
 			return(0);
 		} 
 		parse_advance(p);
+		if (NULL != d->auth)
+			logwarnx(p, "sign with redefined");
+		free(d->auth);
 		if (NULL == (d->auth = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "auth: %s", d->auth);
 	} else if (parse_match(p, "challengedir")) {
 		parse_advance(p);
+		if (NULL != d->cdir)
+			logwarnx(p, "challengedir redefined");
+		free(d->cdir);
 		if (NULL == (d->cdir = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "challengedir: %s", d->cdir);
@@ -715,18 +743,36 @@ parse_macro(struct parse *p)
 {
 	struct curparse	*cp;
 	struct macro	*m;
+	int		 repl;
+	char		*key, *value;
 
 	cp = p->cur;
 	assert(NULL != cp);
 
-	if (NULL == (m = calloc(1, sizeof(struct macro)))) {
-		warn(NULL);
+	if (NULL == (key = parse_ident(p, '=')))
 		return(0);
-	}
-	TAILQ_INSERT_TAIL(&p->macros, m, entries);
 
-	if (NULL == (m->key = parse_ident(p, '=')))
-		return(0);
+	TAILQ_FOREACH(m, &p->macros, entries)
+		if (0 == strcmp(m->key, key))
+			break;
+
+	repl = NULL != m;
+
+	/* 
+	 * Look up the macro.
+	 * If it already exists, then use its entry; otherwise, create
+	 * and install a new one.
+	 */
+
+	if (NULL == m) {
+		if (NULL == (m = calloc(1, sizeof(struct macro)))) {
+			warn(NULL);
+			return(0);
+		}
+		TAILQ_INSERT_TAIL(&p->macros, m, entries);
+		m->key = key;
+	} else
+		free(key);
 
 	parse_advance(p);
 	if (NULL == (cp = p->cur) || '=' != cp->b[cp->pos]) {
@@ -736,10 +782,14 @@ parse_macro(struct parse *p)
 
 	parse_nextchar(p);
 	parse_advance(p);
-	if (NULL == (m->value = parse_value(p, EOF, 0)))
+	if (NULL == (value = parse_value(p, EOF, 0)))
 		return(0);
 
-	logdbg(p, "macro: [%s]=[%s]", m->key, m->value);
+	free(m->value);
+	m->value = value;
+
+	logdbg(p, "%s macro: [%s]=[%s]", repl ? 
+		"replace" : "new", m->key, m->value);
 	return(1);
 }
 
@@ -759,6 +809,9 @@ parse_authority_block(struct parse *p, struct auth *a)
 			return(0);
 		}
 		parse_advance(p);
+		if (NULL != a->accountkey)
+			logwarnx(p, "account key redefined");
+		free(a->accountkey);
 		if (NULL == (a->accountkey = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "account key: %s", a->accountkey);
@@ -769,6 +822,9 @@ parse_authority_block(struct parse *p, struct auth *a)
 			return(0);
 		}
 		parse_advance(p);
+		if (NULL != a->agreement)
+			logwarnx(p, "agreement url redefined");
+		free(a->agreement);
 		if (NULL == (a->agreement = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "agreement: %s", a->agreement);
@@ -779,6 +835,9 @@ parse_authority_block(struct parse *p, struct auth *a)
 			return(0);
 		}
 		parse_advance(p);
+		if (NULL != a->api)
+			logwarnx(p, "api url redefined");
+		free(a->api);
 		if (NULL == (a->api = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "api: %s", a->api);
