@@ -195,13 +195,14 @@ struct	auth {
  */
 struct	domain {
 	TAILQ_HEAD(, altname) altnames;
-	char		*name; /* name of domain */
-	char		*auth; /* sign with */
-	char		*cdir; /* challengedir */
-	char		*key; /* domain key */
-	char		*cert; /* domain certificate */
-	char		*chain; /* domain chain certificate */
-	char		*full; /* domain full chain certificate */
+	const struct auth *auth; /* authorisation */
+	char		  *name; /* name of domain */
+	char		  *authname; /* sign with */
+	char		  *cdir; /* challengedir */
+	char		  *key; /* domain key */
+	char		  *cert; /* domain certificate */
+	char		  *chain; /* domain chain certificate */
+	char		  *full; /* domain full chain certificate */
 	TAILQ_ENTRY(domain) entries;
 };
 
