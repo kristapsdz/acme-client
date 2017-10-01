@@ -158,10 +158,17 @@ curparse_push(struct parse *p, const char *file)
 	struct stat	 st;
 	char		*buf = NULL, *fn = NULL;
 	ssize_t		 ssz;
+	size_t		 i;
 	void		*pp;
 
 	assert((p->stacksz && NULL != p->cur) ||
 	       (0 == p->stacksz && NULL == p->cur));
+
+	for (i = 0; i < p->stacksz; i++)
+		if (0 == strcmp(p->stack[i].filename, file)) {
+			logwarnx(p, "%s: recursive parse", file);
+			return(0);
+		}
 
 	if (-1 == (fd = open(file, O_RDONLY, 0))) {
 		warn("%s", file);
@@ -399,8 +406,10 @@ parse_value(struct parse *p, char delim)
 	size_t		 i, start, end;
 	char		*val;
 
-	cp = p->cur;
-	assert(NULL != cp);
+	if (NULL == (cp = p->cur)) {
+		logwarnx(p, "expected quoted string or identifier");
+		return(NULL);
+	}
 	assert(cp->pos < cp->bsz);
 
 	if ('"' == cp->b[cp->pos]) {
@@ -510,6 +519,10 @@ parse_altnames(struct parse *p, struct domain *d)
 		free(v);
 		parse_advance(p);
 	}
+	if (NULL == p->cur) {
+		logwarnx(p, "expected \'}\'");
+		return(0);
+	}
 
 	parse_nextchar(p);
 	return(1);
@@ -604,8 +617,11 @@ parse_domain(struct parse *p)
 	struct domain	*d;
 
 	parse_advance(p);
-	cp = p->cur;
-	assert(NULL != cp);
+
+	if (NULL == (cp = p->cur)) {
+		logwarnx(p, "expected domain name");
+		return(0);
+	}
 
 	if (NULL == (d = malloc(sizeof(struct domain)))) {
 		warn(NULL);
@@ -631,8 +647,10 @@ parse_domain(struct parse *p)
 		if ( ! parse_domain_block(p, d))
 			return(0);
 
-	if (NULL == p->cur)
+	if (NULL == p->cur) {
+		logwarnx(p, "expected \'}\'");
 		return(0);
+	}
 	parse_nextchar(p);
 	return(1);
 }
@@ -663,11 +681,7 @@ parse_macro(struct parse *p)
 
 	parse_nextchar(p);
 	parse_advance(p);
-
-	if (NULL == (cp = p->cur)) {
-		logwarnx(p, "unexpected eof");
-		return(0);
-	} else if (NULL == (m->value = parse_value(p, EOF)))
+	if (NULL == (m->value = parse_value(p, EOF)))
 		return(0);
 
 	logdbg(p, "macro: [%s]=[%s]", m->key, m->value);
@@ -729,8 +743,11 @@ parse_authority(struct parse *p)
 	struct auth	*a;
 
 	parse_advance(p);
-	cp = p->cur;
-	assert(NULL != cp);
+
+	if (NULL == (cp = p->cur)) {
+		logwarnx(p, "expected authority name");
+		return(0);
+	}
 
 	if (NULL == (a = malloc(sizeof(struct auth)))) {
 		warn(NULL);
@@ -756,8 +773,10 @@ parse_authority(struct parse *p)
 		if ( ! parse_authority_block(p, a))
 			return(0);
 
-	if (NULL == p->cur)
+	if (NULL == p->cur) {
+		logwarnx(p, "expected \'}\'");
 		return(0);
+	}
 	parse_nextchar(p);
 	return(1);
 }
@@ -765,14 +784,10 @@ parse_authority(struct parse *p)
 static int
 parse_include(struct parse *p)
 {
-	struct curparse	*cp;
 	char		*v;
 	int		 rc;
 
 	parse_advance(p);
-	cp = p->cur;
-	assert(NULL != cp);
-
 	if (NULL == (v = parse_value(p, EOF)))
 		return(0);
 
