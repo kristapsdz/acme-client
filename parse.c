@@ -188,8 +188,7 @@ curparse_push(struct parse *p, const char *file)
 		warn("%s", file);
 		goto out;
 	} else if (NULL == (fn = strdup(file))) {
-		warn(NULL);
-		goto out;
+		err(EXIT_FAILURE, NULL);
 	} else if (-1 == fstat(fd, &st)) {
 		warn("%s", file);
 		goto out;
@@ -197,8 +196,7 @@ curparse_push(struct parse *p, const char *file)
 		warnx("%s: too large", file);
 		goto out;
 	} else if (NULL == (buf = malloc(st.st_size))) {
-		warn(NULL);
-		goto out;
+		err(EXIT_FAILURE, NULL);
 	} else if ((ssz = read(fd, buf, st.st_size)) < 0) {
 		warn("%s", file);
 		goto out;
@@ -391,10 +389,8 @@ parse_ident(struct parse *p, char delim)
 		parse_nextchar(p);
 	end = cp->pos;
 
-	if (NULL == (val = malloc((end - start) + 1))) {
-		warn(NULL);
-		return(NULL);
-	}
+	if (NULL == (val = malloc((end - start) + 1)))
+		err(EXIT_FAILURE, NULL);
 
 	for (i = 0; start < end; start++) {
 		if ('\\' == cp->b[start] &&
@@ -476,10 +472,8 @@ parse_value(struct parse *p, char delim, int expand)
 		return(NULL);
 	}
 
-	if (NULL == (val = malloc((end - start) + 1))) {
-		warn(NULL);
-		return(NULL);
-	}
+	if (NULL == (val = malloc((end - start) + 1)))
+		err(EXIT_FAILURE, NULL);
 
 	for (i = 0; start < end; start++) {
 		if ('\\' == cp->b[start] &&
@@ -503,7 +497,7 @@ parse_value(struct parse *p, char delim, int expand)
 		if (NULL == m)
 			logwarnx(p, "macro not found");
 		else if (NULL == (val = strdup(m->value)))
-			warn(NULL);
+			err(EXIT_FAILURE, NULL);
 	}
 
 	return(val);
@@ -569,12 +563,8 @@ parse_altnames(struct parse *p, struct domain *d)
 			return(0);
 		}
 		logdbg(p, "altname for %s: %s", d->name, v);
-		an = calloc(1, sizeof(struct altname));
-		if (NULL == an) {
-			warn(NULL);
-			free(v);
-			return(0);
-		}
+		if (NULL == (an = calloc(1, sizeof(struct altname))))
+			err(EXIT_FAILURE, NULL);
 		TAILQ_INSERT_TAIL(&d->altnames, an, entries);
 		an->alt = v;
 		parse_advance(p);
@@ -706,7 +696,7 @@ parse_domain(struct parse *p)
 {
 	struct curparse	*cp;
 	struct domain	*d;
-	char		*name;
+	char		*name, *v;
 
 	parse_advance(p);
 
@@ -729,11 +719,8 @@ parse_domain(struct parse *p)
 
 	logdbg(p, "parsing domain: %s", name);
 
-	if (NULL == (d = calloc(1, sizeof(struct domain)))) {
-		warn(NULL);
-		free(name);
-		return(0);
-	}
+	if (NULL == (d = calloc(1, sizeof(struct domain))))
+		err(EXIT_FAILURE, NULL);
 	d->name = name;
 	TAILQ_INSERT_TAIL(&p->cfg->domains, d, entries);
 	TAILQ_INIT(&d->altnames);
@@ -753,18 +740,75 @@ parse_domain(struct parse *p)
 	}
 	parse_nextchar(p);
 
-	if (NULL == d->authname) 
+	if (NULL == d->authname) {
 		logwarnx(p, "sign as required");
-	else if (NULL == d->cdir)
+		return(0);
+	} else if (NULL == d->cdir) {
 		logwarnx(p, "challengedir required");
-	else if (NULL == d->key)
+		return(0);
+	} else if (NULL == d->key) {
 		logwarnx(p, "domain key required");
-	else if (NULL == d->cert)
+		return(0);
+	} else if (NULL == d->cert) {
 		logwarnx(p, "domain certificate required");
-	else if (NULL == d->chain)
+		return(0);
+	} else if ('/' != d->cert[0]) {
+		logwarnx(p, "domain certificate not an absolute path");
+		return(0);
+	} else if ('/' == d->cert[strlen(d->cert) - 1]) {
+		logwarnx(p, "domain certificate is a directory");
+		return(0);
+	} else if (NULL == d->chain) {
 		logwarnx(p, "domain chain certificate required");
-	else if (NULL == d->full)
+		return(0);
+	} else if (NULL == d->full) {
 		logwarnx(p, "domain full chain certificate required");
+		return(0);
+	}
+
+	/* Get the directory part of our certificate file. */
+
+	assert(NULL == d->dir);
+	if (NULL == (d->dir = strdup(d->cert)))
+		err(EXIT_FAILURE, NULL);
+
+	v = strrchr(d->dir, '/');
+	assert(NULL != v);
+	*v = '\0';
+
+	logdbg(p, "certificate directory: %s", d->dir);
+
+	/*
+	 * If not already relative paths, re-write the chain and full
+	 * chain components to be relative to the certificate directory.
+	 * Validate them along the way.
+	 */
+
+	if ('/' == d->chain[0] &&
+   	    strncmp(d->chain, d->dir, strlen(d->dir))) {
+		logwarnx(p, "certificate chain "
+			"not in certificate directory");
+		return(0);
+	} else if ('/' == d->chain[0]) {
+		v = strdup(d->chain + strlen(d->dir) + 1);
+		if (NULL == v)
+			err(EXIT_FAILURE, NULL);
+		free(d->chain);
+		d->chain = v;
+	}
+
+	if ('/' == d->full[0] &&
+   	    strncmp(d->full, d->dir, strlen(d->dir))) {
+		logwarnx(p, "certificate full chain "
+			"not in certificate directory");
+		return(0);
+	} else if ('/' == d->full[0]) {
+		v = strdup(d->full + strlen(d->dir) + 1);
+		if (NULL == v)
+			err(EXIT_FAILURE, NULL);
+		free(d->full);
+		d->full = v;
+	}
 
 	return(1);
 }
@@ -796,11 +840,8 @@ parse_macro(struct parse *p)
 	 */
 
 	if (NULL == m) {
-		if (NULL == (m = calloc(1, sizeof(struct macro)))) {
-			warn(NULL);
-			free(key);
-			return(0);
-		}
+		if (NULL == (m = calloc(1, sizeof(struct macro))))
+			err(EXIT_FAILURE, NULL);
 		TAILQ_INSERT_TAIL(&p->macros, m, entries);
 		m->key = key;
 	} else
@@ -899,10 +940,8 @@ parse_authority(struct parse *p)
 		return(0);
 	}
 
-	if (NULL == (a = calloc(1, sizeof(struct auth)))) {
-		warn(NULL);
-		return(0);
-	}
+	if (NULL == (a = calloc(1, sizeof(struct auth))))
+		err(EXIT_FAILURE, NULL);
 	TAILQ_INSERT_TAIL(&p->cfg->auths, a, entries);
 
 	if (NULL == (a->name = parse_ident(p, '{')))
@@ -1013,6 +1052,7 @@ cfg_free(struct cfgfile *p)
 			free(an->alt);
 			free(an);
 		}
+		free(d->dir);
 		free(d->name);
 		free(d->authname);
 		free(d->cdir);
@@ -1076,11 +1116,8 @@ cfg_parse(const char *file)
 
 	TAILQ_INIT(&p.macros);
 
-	p.cfg = calloc(1, sizeof(struct cfgfile));
-	if (NULL == p.cfg) {
-		warn(NULL);
-		return(NULL);
-	}
+	if (NULL == (p.cfg = calloc(1, sizeof(struct cfgfile))))
+		err(EXIT_FAILURE, NULL);
 
 	TAILQ_INIT(&p.cfg->domains);
 	TAILQ_INIT(&p.cfg->auths);
