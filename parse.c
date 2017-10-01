@@ -54,6 +54,11 @@ struct	curparse {
 	struct point	 point; /* current point */
 };
 
+struct	altname {
+	char		*alt;
+	TAILQ_ENTRY(altname) entries;
+};
+
 /*
  * A signing authority, e.g., Let's Encrypt.
  */
@@ -69,6 +74,7 @@ struct	auth {
  * A domain whose certificates we control.
  */
 struct	domain {
+	TAILQ_HEAD(, altname) altnames;
 	char		*name; /* name of domain */
 	char		*auth; /* sign with */
 	char		*cdir; /* challengedir */
@@ -88,6 +94,12 @@ struct	macro {
 	TAILQ_ENTRY(macro) entries;
 };
 
+struct	cfgfile {
+	TAILQ_HEAD(, domain) domains;
+	TAILQ_HEAD(, macro) macros;
+	TAILQ_HEAD(, auth) auths;
+};
+
 /*
  * The current parse situation.
  * This maintains the stack of parsing files.
@@ -96,10 +108,8 @@ struct	parse {
 	struct curparse	*stack;
 	size_t		 stacksz;
 	size_t		 stackmax;
-	TAILQ_HEAD(domainq, domain) domains;
-	TAILQ_HEAD(macroq, macro) macros;
-	TAILQ_HEAD(authq, auth) auths;
 	struct curparse	*cur;
+	struct cfgfile	*cfg;
 };
 
 static void
@@ -503,6 +513,7 @@ static int
 parse_altnames(struct parse *p, struct domain *d)
 {
 	struct curparse	*cp;
+	struct altname	*an;
 	char		*v;
 
 	if (NULL == (cp = p->cur) || '{' != cp->b[cp->pos]) {
@@ -516,7 +527,13 @@ parse_altnames(struct parse *p, struct domain *d)
 		if (NULL == (v = parse_value(p, '}')))
 			return(0);
 		logdbg(p, "altname for %s: %s", d->name, v);
-		free(v);
+		an = calloc(1, sizeof(struct altname));
+		if (NULL == an) {
+			warn(NULL);
+			return(0);
+		}
+		TAILQ_INSERT_TAIL(&d->altnames, an, entries);
+		an->alt = v;
 		parse_advance(p);
 	}
 	if (NULL == p->cur) {
@@ -623,11 +640,12 @@ parse_domain(struct parse *p)
 		return(0);
 	}
 
-	if (NULL == (d = malloc(sizeof(struct domain)))) {
+	if (NULL == (d = calloc(1, sizeof(struct domain)))) {
 		warn(NULL);
 		return(0);
 	}
-	TAILQ_INSERT_TAIL(&p->domains, d, entries);
+	TAILQ_INSERT_TAIL(&p->cfg->domains, d, entries);
+	TAILQ_INIT(&d->altnames);
 
 	if (NULL == (d->name = parse_ident(p, '{')))
 		return(0);
@@ -664,11 +682,11 @@ parse_macro(struct parse *p)
 	cp = p->cur;
 	assert(NULL != cp);
 
-	if (NULL == (m = malloc(sizeof(struct macro)))) {
+	if (NULL == (m = calloc(1, sizeof(struct macro)))) {
 		warn(NULL);
 		return(0);
 	}
-	TAILQ_INSERT_TAIL(&p->macros, m, entries);
+	TAILQ_INSERT_TAIL(&p->cfg->macros, m, entries);
 
 	if (NULL == (m->key = parse_ident(p, '=')))
 		return(0);
@@ -749,11 +767,11 @@ parse_authority(struct parse *p)
 		return(0);
 	}
 
-	if (NULL == (a = malloc(sizeof(struct auth)))) {
+	if (NULL == (a = calloc(1, sizeof(struct auth)))) {
 		warn(NULL);
 		return(0);
 	}
-	TAILQ_INSERT_TAIL(&p->auths, a, entries);
+	TAILQ_INSERT_TAIL(&p->cfg->auths, a, entries);
 
 	if (NULL == (a->name = parse_ident(p, '{')))
 		return(0);
@@ -824,25 +842,84 @@ parse_block(struct parse *p)
 }
 
 /*
- * Parse the file "file" and all of its nested inclusions.
+ * Free a configuration parsed with cfg_parse().
+ * This is safe to call with a NULL value.
  */
-int
-parse(const char *file)
+void
+cfg_free(struct cfgfile *p)
+{
+	struct macro	*m;
+	struct auth	*a;
+	struct domain	*d;
+	struct altname	*an;
+
+	if (NULL == p)
+		return;
+
+	while (NULL != (m = TAILQ_FIRST(&p->macros))) {
+		TAILQ_REMOVE(&p->macros, m, entries);
+		free(m->key);
+		free(m->value);
+		free(m);
+	}
+
+	while (NULL != (a = TAILQ_FIRST(&p->auths))) {
+		TAILQ_REMOVE(&p->auths, a, entries);
+		free(a->name);
+		free(a->accountkey);
+		free(a->agreement);
+		free(a->api);
+		free(a);
+	}
+
+	while (NULL != (d = TAILQ_FIRST(&p->domains))) {
+		TAILQ_REMOVE(&p->domains, d, entries);
+		while (NULL != (an = TAILQ_FIRST(&d->altnames))) {
+			TAILQ_REMOVE(&d->altnames, an, entries);
+			free(an->alt);
+			free(an);
+		}
+		free(d->name);
+		free(d->auth);
+		free(d->cdir);
+		free(d->key);
+		free(d->cert);
+		free(d->chain);
+		free(d->full);
+		free(d);
+	}
+
+	free(p);
+}
+
+/*
+ * Parse the file "file" and all of its nested inclusions.
+ * Returns the parsed configuration contents or NULL on error.
+ * This must be freed with cfg_free().
+ */
+struct cfgfile *
+cfg_parse(const char *file)
 {
 	struct parse	 p;
 
 	memset(&p, 0, sizeof(struct parse));
 
-	TAILQ_INIT(&p.domains);
-	TAILQ_INIT(&p.auths);
-	TAILQ_INIT(&p.macros);
+	p.cfg = calloc(1, sizeof(struct cfgfile));
+	if (NULL == p.cfg) {
+		warn(NULL);
+		return(NULL);
+	}
+
+	TAILQ_INIT(&p.cfg->domains);
+	TAILQ_INIT(&p.cfg->auths);
+	TAILQ_INIT(&p.cfg->macros);
 
 	/* Start with the given file. */
 
 	if ( ! curparse_push(&p, file))
 		goto out;
-	assert(NULL != p.cur);
 
+	assert(NULL != p.cur);
 	while (NULL != p.cur)
 		if ( ! parse_block(&p))
 			goto out;
@@ -850,11 +927,14 @@ parse(const char *file)
 	/* On proper exit, we should have no file in our buffer. */
 
 	assert(NULL == p.cur);
-	return(1);
+	free(p.stack);
+	return(p.cfg);
 out:
 	while (p.stacksz)
 		curparse_pop(&p);
-	return(0);
+	free(p.stack);
+	cfg_free(p.cfg);
+	return(NULL);
 }
 
 /*
@@ -863,13 +943,16 @@ out:
 int
 main(int argc, char *argv[])
 {
-	int	 i;
+	int	 	 i;
+	struct cfgfile  *p;
 
-	for (i = 1; i < argc; i++) 
-		if ( ! parse(argv[i])) {
+	for (i = 1; i < argc; i++) {
+		if (NULL == (p = cfg_parse(argv[i]))) {
 			warnx("BAD");
 			return(EXIT_FAILURE);
 		}
+		cfg_free(p);
+	}
 
 	return(EXIT_SUCCESS);
 }
