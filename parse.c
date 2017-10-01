@@ -17,6 +17,7 @@
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
+
 #include <sys/stat.h>
 #include <sys/queue.h>
 
@@ -25,14 +26,14 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
+
+#include "extern.h"
 
 /*
  * A point in the parse sequence.
@@ -55,54 +56,12 @@ struct	curparse {
 };
 
 /*
- * One of a chain of alternative names for a domain.
- */
-struct	altname {
-	char		*alt; /* the name */
-	TAILQ_ENTRY(altname) entries;
-};
-
-/*
- * A signing authority, e.g., Let's Encrypt.
- */
-struct	auth {
-	char		*name; /* name of authority */
-	char		*accountkey; /* account file */
-	char		*agreement; /* agreement URL */
-	char		*api; /* API URL */
-	TAILQ_ENTRY(auth) entries;
-};
-
-/*
- * A domain whose certificates we control.
- */
-struct	domain {
-	TAILQ_HEAD(, altname) altnames;
-	char		*name; /* name of domain */
-	char		*auth; /* sign with */
-	char		*cdir; /* challengedir */
-	char		*key; /* domain key */
-	char		*cert; /* domain certificate */
-	char		*chain; /* domain chain certificate */
-	char		*full; /* domain full chain certificate */
-	TAILQ_ENTRY(domain) entries;
-};
-
-/*
  * A macro pair.
  */
 struct	macro {
 	char		*key; /* lhs */
 	char		*value; /* rhs */
 	TAILQ_ENTRY(macro) entries;
-};
-
-/*
- * Full parsed configuration file.
- */
-struct	cfgfile {
-	TAILQ_HEAD(, domain) domains;
-	TAILQ_HEAD(, auth) auths;
 };
 
 /*
@@ -148,6 +107,9 @@ logdbg(const struct parse *p, const char *fmt, ...)
 {
 	va_list	 ap;
 
+	if ( ! verbose)
+		return;
+
 	if (NULL != p && NULL != p->cur)
 		fprintf(stderr, "%s:%zu:%zu: ",
 			p->cur->filename,
@@ -158,6 +120,42 @@ logdbg(const struct parse *p, const char *fmt, ...)
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
 	fputc('\n', stderr);
+}
+
+/*
+ * This isn't RFC1035 compliant, but does the bare minimum in making
+ * sure that we don't get bogus domain names on the command line, which
+ * might otherwise screw up our directory structure.
+ * Also check to make sure that the domain name hasn't already appeared
+ * as either an altname or top-level domain name.
+ * Returns zero on failure, non-zero on success.
+ */
+static int
+domain_valid(const struct parse *p, const char *cp)
+{
+	struct domain	*d;
+	struct altname	*an;
+
+	for ( ; '\0' != *cp; cp++)
+		if (!('.' == *cp || '-' == *cp ||
+		    '_' == *cp || isalnum((unsigned char)*cp))) {
+			logwarnx(p, "invalid domain syntax");
+			return (0);
+		}
+
+	TAILQ_FOREACH(d, &p->cfg->domains, entries) {
+		if (0 == strcasecmp(d->name, cp)) {
+			logwarnx(p, "duplicate domain name");
+			return (0);
+		}
+		TAILQ_FOREACH(an, &d->altnames, entries)
+			if (0 == strcasecmp(an->alt, cp)) {
+				logwarnx(p, "duplicate domain name");
+				return (0);
+			}
+	}
+
+	return (1);
 }
 
 /*
@@ -564,12 +562,17 @@ parse_altnames(struct parse *p, struct domain *d)
 	parse_nextchar(p);
 	parse_advance(p);
 	while (NULL != p->cur && '}' != p->cur->b[p->cur->pos]) {
-		if (NULL == (v = parse_value(p, '}', 1)))
+		if (NULL == (v = parse_value(p, '}', 1))) {
 			return(0);
+		} else if ( ! domain_valid(p, v)) {
+			free(v);
+			return(0);
+		}
 		logdbg(p, "altname for %s: %s", d->name, v);
 		an = calloc(1, sizeof(struct altname));
 		if (NULL == an) {
 			warn(NULL);
+			free(v);
 			return(0);
 		}
 		TAILQ_INSERT_TAIL(&d->altnames, an, entries);
@@ -692,39 +695,53 @@ parse_domain_block(struct parse *p, struct domain *d)
 	return(1);
 }
 
+/*
+ * Parse the domain block-level element:
+ *   "domain" name "{" ... "}" 
+ *  The domain name must be well-formed and not be a duplicate of a
+ *  prior domain name invocation.
+ */
 static int
 parse_domain(struct parse *p)
 {
 	struct curparse	*cp;
 	struct domain	*d;
+	char		*name;
 
 	parse_advance(p);
 
 	if (NULL == (cp = p->cur)) {
 		logwarnx(p, "expected domain name");
 		return(0);
-	}
-
-	if (NULL == (d = calloc(1, sizeof(struct domain)))) {
-		warn(NULL);
+	} else if (NULL == (name = parse_ident(p, '{'))) {
+		return(0);
+	} else if ( ! domain_valid(p, name)) {
+		free(name);
 		return(0);
 	}
-	TAILQ_INSERT_TAIL(&p->cfg->domains, d, entries);
-	TAILQ_INIT(&d->altnames);
-
-	if (NULL == (d->name = parse_ident(p, '{')))
-		return(0);
-
-	logdbg(p, "new domain: %s", d->name);
 
 	parse_advance(p);
 	if (NULL == (cp = p->cur) || '{' != cp->b[cp->pos]) {
 		logwarnx(p, "expected \'{\'");
+		free(name);
 		return(0);
 	}
 
+	logdbg(p, "parsing domain: %s", name);
+
+	if (NULL == (d = calloc(1, sizeof(struct domain)))) {
+		warn(NULL);
+		free(name);
+		return(0);
+	}
+	d->name = name;
+	TAILQ_INSERT_TAIL(&p->cfg->domains, d, entries);
+	TAILQ_INIT(&d->altnames);
+
 	parse_nextchar(p);
 	parse_advance(p);
+
+	/* Parse domain name block. */
 
 	while (NULL != p->cur && '}' != p->cur->b[p->cur->pos])
 		if ( ! parse_domain_block(p, d))
@@ -767,6 +784,7 @@ parse_macro(struct parse *p)
 	if (NULL == m) {
 		if (NULL == (m = calloc(1, sizeof(struct macro)))) {
 			warn(NULL);
+			free(key);
 			return(0);
 		}
 		TAILQ_INSERT_TAIL(&p->macros, m, entries);
@@ -1002,6 +1020,18 @@ parse_free(struct parse *p)
 	free(p->stack);
 }
 
+const struct domain *
+cfg_domain(const struct cfgfile *p, const char *name)
+{
+	const struct domain *d;
+
+	TAILQ_FOREACH(d, &p->domains, entries) 
+		if (0 == strcasecmp(d->name, name))
+			return(d);
+
+	return(NULL);
+}
+
 /*
  * Parse the file "file" and all of its nested inclusions.
  * Returns the parsed configuration contents or NULL on error.
@@ -1046,6 +1076,7 @@ out:
 	return(NULL);
 }
 
+#if 0
 /*
  * TESTING UTILITY.
  */
@@ -1065,3 +1096,4 @@ main(int argc, char *argv[])
 
 	return(EXIT_SUCCESS);
 }
+#endif

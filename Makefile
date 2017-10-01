@@ -1,5 +1,5 @@
 PREFIX	 = /usr/local
-CFLAGS	+= -g -W -Wall
+CFLAGS	+= -g -W -Wall -Wextra
 OBJS 	 = acctproc.o \
 	   base64.o \
 	   certproc.o \
@@ -13,6 +13,7 @@ OBJS 	 = acctproc.o \
 	   keyproc.o \
 	   main.o \
 	   netproc.o \
+	   parse.o \
 	   revokeproc.o \
 	   rsa.o \
 	   sandbox-pledge.o \
@@ -21,9 +22,6 @@ OBJS 	 = acctproc.o \
 
 acme-client: $(OBJS)
 	$(CC) -o $@ $(OBJS) -ltls -lssl -lcrypto
-
-parse: parse.c
-	$(CC) $(CFLAGS) -o $@ parse.c
 
 rsa.o acctproc.o keyproc.o: rsa.h
 

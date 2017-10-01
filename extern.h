@@ -172,6 +172,48 @@ struct	capaths {
 };
 
 /*
+ * One of a chain of alternative names for a domain.
+ */
+struct	altname {
+	char		*alt; /* the name */
+	TAILQ_ENTRY(altname) entries;
+};
+
+/*
+ * A signing authority, e.g., Let's Encrypt.
+ */
+struct	auth {
+	char		*name; /* name of authority */
+	char		*accountkey; /* account file */
+	char		*agreement; /* agreement URL */
+	char		*api; /* API URL */
+	TAILQ_ENTRY(auth) entries;
+};
+
+/*
+ * A domain whose certificates we control.
+ */
+struct	domain {
+	TAILQ_HEAD(, altname) altnames;
+	char		*name; /* name of domain */
+	char		*auth; /* sign with */
+	char		*cdir; /* challengedir */
+	char		*key; /* domain key */
+	char		*cert; /* domain certificate */
+	char		*chain; /* domain chain certificate */
+	char		*full; /* domain full chain certificate */
+	TAILQ_ENTRY(domain) entries;
+};
+
+/*
+ * Full parsed configuration file.
+ */
+struct	cfgfile {
+	TAILQ_HEAD(, domain) domains;
+	TAILQ_HEAD(, auth) auths;
+};
+
+/*
  * Configuration for a given domain and its altnames.
  */
 struct	config {
@@ -187,6 +229,7 @@ struct	config {
 	const char	*challenge; /* challenge type (or NULL) */
 	const char *const *alts; /* all domains */
 	size_t		 altsz; /* domains in "alts" */
+	struct cfgfile	*conf;
 };
 
 struct	jsmnn;
@@ -271,6 +314,14 @@ int		 checkprivs(void);
 
 int		 sandbox_after(int);
 int		 sandbox_before(void);
+
+/*
+ * Parsing of our configuration file.
+ */
+const struct domain	
+		*cfg_domain(const struct cfgfile *, const char *);
+struct cfgfile	*cfg_parse(const char *);
+void		 cfg_free(struct cfgfile *);
 
 /*
  * Should we print debugging messages?
