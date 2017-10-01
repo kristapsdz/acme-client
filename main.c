@@ -18,6 +18,7 @@
 # include "config.h"
 #endif
 
+#include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/stat.h> /* mkdir(2) */
 
@@ -156,6 +157,7 @@ main(int argc, char *argv[])
 	extern int	  verbose;
 	extern enum comp  proccomp;
 	size_t		  i, j, ne, newargsz;
+	const char	 *conffile = "/etc/acme.conf";
 
 	/*
 	 * Start by copying over our arguments as if were going to run a
@@ -286,6 +288,9 @@ main(int argc, char *argv[])
 
 	if ( ! checkprivs())
 		errx(EXIT_FAILURE, "must be run as root");
+
+	if (NULL == (cfg.conf = cfg_parse(conffile)))
+		exit(EXIT_FAILURE);
 
 	/* 
 	 * Now we allocate our directories and file path buffers IFF we
@@ -654,6 +659,8 @@ main:
 	free(acctkey);
 	free(chngdir);
 	free(newargs);
+
+	cfg_free(cfg.conf);
 
 	return (COMP__MAX != rc ? EXIT_FAILURE :
 	    (2 == c ? EXIT_SUCCESS : 2));

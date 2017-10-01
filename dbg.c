@@ -18,6 +18,8 @@
 # include "config.h"
 #endif
 
+#include <sys/queue.h>
+
 #include <err.h>
 #include <stdarg.h>
 #include <stdlib.h>

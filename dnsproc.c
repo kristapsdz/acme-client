@@ -18,6 +18,7 @@
 # include "config.h"
 #endif
 
+#include <sys/queue.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
