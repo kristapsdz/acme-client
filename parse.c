@@ -89,14 +89,16 @@ struct	domain {
  * A macro pair.
  */
 struct	macro {
-	char		*key;
-	char		*value;
+	char		*key; /* lhs */
+	char		*value; /* rhs */
 	TAILQ_ENTRY(macro) entries;
 };
 
+/*
+ * Full parsed configuration file.
+ */
 struct	cfgfile {
 	TAILQ_HEAD(, domain) domains;
-	TAILQ_HEAD(, macro) macros;
 	TAILQ_HEAD(, auth) auths;
 };
 
@@ -105,6 +107,7 @@ struct	cfgfile {
  * This maintains the stack of parsing files.
  */
 struct	parse {
+	TAILQ_HEAD(, macro) macros;
 	struct curparse	*stack;
 	size_t		 stacksz;
 	size_t		 stackmax;
@@ -686,7 +689,7 @@ parse_macro(struct parse *p)
 		warn(NULL);
 		return(0);
 	}
-	TAILQ_INSERT_TAIL(&p->cfg->macros, m, entries);
+	TAILQ_INSERT_TAIL(&p->macros, m, entries);
 
 	if (NULL == (m->key = parse_ident(p, '=')))
 		return(0);
@@ -848,20 +851,12 @@ parse_block(struct parse *p)
 void
 cfg_free(struct cfgfile *p)
 {
-	struct macro	*m;
 	struct auth	*a;
 	struct domain	*d;
 	struct altname	*an;
 
 	if (NULL == p)
 		return;
-
-	while (NULL != (m = TAILQ_FIRST(&p->macros))) {
-		TAILQ_REMOVE(&p->macros, m, entries);
-		free(m->key);
-		free(m->value);
-		free(m);
-	}
 
 	while (NULL != (a = TAILQ_FIRST(&p->auths))) {
 		TAILQ_REMOVE(&p->auths, a, entries);
@@ -893,6 +888,28 @@ cfg_free(struct cfgfile *p)
 }
 
 /*
+ * Deallocate the resources used during a parse.
+ * This does not touch the "cfg" pointer.
+ */
+static void
+parse_free(struct parse *p)
+{
+	struct macro	*m;
+
+	while (NULL != (m = TAILQ_FIRST(&p->macros))) {
+		TAILQ_REMOVE(&p->macros, m, entries);
+		free(m->key);
+		free(m->value);
+		free(m);
+	}
+
+	while (p->stacksz)
+		curparse_pop(p);
+
+	free(p->stack);
+}
+
+/*
  * Parse the file "file" and all of its nested inclusions.
  * Returns the parsed configuration contents or NULL on error.
  * This must be freed with cfg_free().
@@ -904,6 +921,8 @@ cfg_parse(const char *file)
 
 	memset(&p, 0, sizeof(struct parse));
 
+	TAILQ_INIT(&p.macros);
+
 	p.cfg = calloc(1, sizeof(struct cfgfile));
 	if (NULL == p.cfg) {
 		warn(NULL);
@@ -912,7 +931,6 @@ cfg_parse(const char *file)
 
 	TAILQ_INIT(&p.cfg->domains);
 	TAILQ_INIT(&p.cfg->auths);
-	TAILQ_INIT(&p.cfg->macros);
 
 	/* Start with the given file. */
 
@@ -926,13 +944,11 @@ cfg_parse(const char *file)
 
 	/* On proper exit, we should have no file in our buffer. */
 
-	assert(NULL == p.cur);
-	free(p.stack);
+	assert(NULL == p.cur && 0 == p.stacksz);
+	parse_free(&p);
 	return(p.cfg);
 out:
-	while (p.stacksz)
-		curparse_pop(&p);
-	free(p.stack);
+	parse_free(&p);
 	cfg_free(p.cfg);
 	return(NULL);
 }
