@@ -766,7 +766,10 @@ parse_domain(struct parse *p)
 		return(0);
 	}
 
-	/* Get the directory part of our certificate file. */
+	/* 
+	 * Get the directory part of our certificate file.
+	 * Then re-write our certificate to be relative. 
+	 */
 
 	assert(NULL == d->dir);
 	if (NULL == (d->dir = strdup(d->cert)))
@@ -776,7 +779,12 @@ parse_domain(struct parse *p)
 	assert(NULL != v);
 	*v = '\0';
 
+	free(d->cert);
+	if (NULL == (d->cert = strdup(&v[1])))
+		err(EXIT_FAILURE, NULL);
+
 	logdbg(p, "certificate directory: %s", d->dir);
+	logdbg(p, "certificate (relative): %s", d->cert);
 
 	/*
 	 * If not already relative paths, re-write the chain and full
@@ -795,6 +803,7 @@ parse_domain(struct parse *p)
 			err(EXIT_FAILURE, NULL);
 		free(d->chain);
 		d->chain = v;
+		logdbg(p, "certificate chain (relative): %s", d->chain);
 	}
 
 	if ('/' == d->full[0] &&
@@ -808,6 +817,7 @@ parse_domain(struct parse *p)
 			err(EXIT_FAILURE, NULL);
 		free(d->full);
 		d->full = v;
+		logdbg(p, "certificate full (relative): %s", d->full);
 	}
 
 	return(1);
