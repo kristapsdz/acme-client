@@ -410,20 +410,32 @@ parse_ident(struct parse *p, char delim)
 /*
  * Parse an identifier (possibly-quoted name) ending, if not quoted, in
  * "delim" (or EOF if not wishing a delim), whitespace, or comment.
+ * If "expand" is set, non-quoted strings starting with a '$' are
+ * replaced, if found, with the macro value.
  * Returns the value, which may be zero-length, else NULL on failure.
  */
 static char *
-parse_value(struct parse *p, char delim)
+parse_value(struct parse *p, char delim, int expand)
 {
 	struct curparse	*cp;
+	struct macro	*m;
 	size_t		 i, start, end;
 	char		*val;
+	int		 quoted = 0, macro = 0;
 
 	if (NULL == (cp = p->cur)) {
 		logwarnx(p, "expected quoted string or identifier");
 		return(NULL);
 	}
 	assert(cp->pos < cp->bsz);
+
+	quoted = '"' == cp->b[cp->pos];
+	macro = '$' == cp->b[cp->pos];
+
+	if (macro && ! expand) {
+		logwarnx(p, "macro expansion prohibited");
+		return(NULL);
+	}
 
 	if ('"' == cp->b[cp->pos]) {
 		parse_nextchar(p);
@@ -457,6 +469,12 @@ parse_value(struct parse *p, char delim)
 		end = cp->pos;
 	}
 
+	if (0 == (end - start) ||
+	    (macro && 1 == (end - start))) {
+		logwarnx(p, "zero-length value");
+		return(NULL);
+	}
+
 	if (NULL == (val = malloc((end - start) + 1))) {
 		warn(NULL);
 		return(NULL);
@@ -471,6 +489,22 @@ parse_value(struct parse *p, char delim)
 		val[i++] = cp->b[start];
 	}
 	val[i] = '\0';
+
+	/* Look us up in our macro queue, if applicable. */
+
+	if (macro && expand) {
+		assert( ! quoted);
+		TAILQ_FOREACH(m, &p->macros, entries)
+			if (0 == strcmp(m->key, val + 1))
+				break;
+		free(val);
+		val = NULL;
+		if (NULL == m)
+			logwarnx(p, "macro not found");
+		else if (NULL == (val = strdup(m->value)))
+			warn(NULL);
+	}
+
 	return(val);
 }
 
@@ -527,7 +561,7 @@ parse_altnames(struct parse *p, struct domain *d)
 	parse_nextchar(p);
 	parse_advance(p);
 	while (NULL != p->cur && '}' != p->cur->b[p->cur->pos]) {
-		if (NULL == (v = parse_value(p, '}')))
+		if (NULL == (v = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "altname for %s: %s", d->name, v);
 		an = calloc(1, sizeof(struct altname));
@@ -570,11 +604,11 @@ parse_domain_block(struct parse *p, struct domain *d)
 		parse_advance(p);
 		if (parse_match(p, "key")) {
 			parse_advance(p);
-			if (NULL == (d->key = parse_value(p, '}')))
+			if (NULL == (d->key = parse_value(p, '}', 1)))
 				return(0);
 		} else if (parse_match(p, "certificate")) {
 			parse_advance(p);
-			if (NULL == (d->cert = parse_value(p, '}')))
+			if (NULL == (d->cert = parse_value(p, '}', 1)))
 				return(0);
 			logdbg(p, "certificate: %s", d->key);
 		} else if (parse_match(p, "chain")) {
@@ -584,7 +618,7 @@ parse_domain_block(struct parse *p, struct domain *d)
 				return(0);
 			}
 			parse_advance(p);
-			if (NULL == (d->chain = parse_value(p, '}')))
+			if (NULL == (d->chain = parse_value(p, '}', 1)))
 				return(0);
 			logdbg(p, "chain: %s", d->chain);
 		} else if (parse_match(p, "full")) {
@@ -599,7 +633,7 @@ parse_domain_block(struct parse *p, struct domain *d)
 				return(0);
 			}
 			parse_advance(p);
-			if (NULL == (d->full = parse_value(p, '}')))
+			if (NULL == (d->full = parse_value(p, '}', 1)))
 				return(0);
 			logdbg(p, "full: %s", d->full);
 		} else {
@@ -613,12 +647,12 @@ parse_domain_block(struct parse *p, struct domain *d)
 			return(0);
 		} 
 		parse_advance(p);
-		if (NULL == (d->auth = parse_value(p, '}')))
+		if (NULL == (d->auth = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "auth: %s", d->auth);
 	} else if (parse_match(p, "challengedir")) {
 		parse_advance(p);
-		if (NULL == (d->cdir = parse_value(p, '}')))
+		if (NULL == (d->cdir = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "challengedir: %s", d->cdir);
 	} else {
@@ -702,7 +736,7 @@ parse_macro(struct parse *p)
 
 	parse_nextchar(p);
 	parse_advance(p);
-	if (NULL == (m->value = parse_value(p, EOF)))
+	if (NULL == (m->value = parse_value(p, EOF, 0)))
 		return(0);
 
 	logdbg(p, "macro: [%s]=[%s]", m->key, m->value);
@@ -725,7 +759,7 @@ parse_authority_block(struct parse *p, struct auth *a)
 			return(0);
 		}
 		parse_advance(p);
-		if (NULL == (a->accountkey = parse_value(p, '}')))
+		if (NULL == (a->accountkey = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "account key: %s", a->accountkey);
 	} else if (parse_match(p, "agreement")) {
@@ -735,7 +769,7 @@ parse_authority_block(struct parse *p, struct auth *a)
 			return(0);
 		}
 		parse_advance(p);
-		if (NULL == (a->agreement = parse_value(p, '}')))
+		if (NULL == (a->agreement = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "agreement: %s", a->agreement);
 	} else if (parse_match(p, "api")) {
@@ -745,7 +779,7 @@ parse_authority_block(struct parse *p, struct auth *a)
 			return(0);
 		}
 		parse_advance(p);
-		if (NULL == (a->api = parse_value(p, '}')))
+		if (NULL == (a->api = parse_value(p, '}', 1)))
 			return(0);
 		logdbg(p, "api: %s", a->api);
 	} else {
@@ -809,7 +843,7 @@ parse_include(struct parse *p)
 	int		 rc;
 
 	parse_advance(p);
-	if (NULL == (v = parse_value(p, EOF)))
+	if (NULL == (v = parse_value(p, EOF, 0)))
 		return(0);
 
 	logdbg(p, "new inclusion: %s", v);
