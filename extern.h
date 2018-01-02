@@ -169,6 +169,7 @@ struct	capaths {
 	char		*newcert;  /* sign certificate */
 	char		*newreg; /* new acme account */
 	char		*revokecert; /* revoke certificate */
+	char		*agreement; /* terms of service*/
 };
 
 /*
@@ -183,7 +184,6 @@ struct	config {
 	int		 backup; /* backup certificates on change */
 	int		 expand; /* allow expanding SAN lineup */
 	const char	*url; /* URL for CA directory service */
-	const char	*agree; /* URL for usage agreement */
 	const char	*challenge; /* challenge type (or NULL) */
 };
 

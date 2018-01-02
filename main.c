@@ -32,8 +32,6 @@
 
 #include "extern.h"
 
-#define URL_AGREE "https://letsencrypt.org" \
-		  "/documents/LE-SA-v1.1.1-August-1-2016.pdf"
 #define SSL_DIR "/etc/ssl/acme"
 #define SSL_PRIV_DIR "/etc/ssl/acme/private"
 #define ETC_DIR "/etc/acme"
@@ -182,12 +180,12 @@ main(int argc, char *argv[])
 
 	memset(&cfg, 0, sizeof(struct config));
 	cfg.url = URL_REAL_CA;
-	cfg.agree = URL_AGREE;
 
 	while (-1 != (c = getopt(argc, argv, "beFmnNOrsva:f:c:C:k:t:x:X:"))) 
 		switch (c) {
 		case ('a'):
-			cfg.agree = optarg;
+			warnx("option -a has been removed. license "
+				"agreement URL is autodiscovered now.");
 			break;
 		case ('b'):
 			cfg.backup = 1;
@@ -684,7 +682,6 @@ main:
 usage:
 	fprintf(stderr, "usage: %s "
 		"[-beFmnNrsv] "
-		"[-a agreement] "
 		"[-C challengedir] "
 		"[-c certdir] "
 		"[-f accountkey] "

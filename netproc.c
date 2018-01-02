@@ -330,8 +330,7 @@ sreq(struct conn *c, const char *addr, const char *req)
  * Returns non-zero on success.
  */
 static int
-donewreg(struct conn *c, const char *agreement,
-	const struct capaths *p)
+donewreg(struct conn *c, const struct capaths *p)
 {
 	int		 rc = 0;
 	char		*req;
@@ -339,7 +338,7 @@ donewreg(struct conn *c, const char *agreement,
 
 	dodbg("%s: new-reg", p->newreg);
 
-	if (NULL == (req = json_fmt_newreg(agreement)))
+	if (NULL == (req = json_fmt_newreg(p->agreement)))
 		warnx("json_fmt_newreg");
 	else if ((lc = sreq(c, p->newreg, req)) < 0)
 		warnx("%s: bad comm", p->newreg);
@@ -689,7 +688,7 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	/* If new, register with the CA server. */
 
-	if (cfg->newacct && ! donewreg(&c, cfg->agree, &paths))
+	if (cfg->newacct && ! donewreg(&c, &paths))
 		goto out;
 
 	/* Pre-authorise all domains with CA server. */
