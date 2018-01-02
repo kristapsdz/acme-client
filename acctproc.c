@@ -308,7 +308,6 @@ acctproc(int netsock, const char *acctkey, const struct config *cfg)
 	EVP_PKEY	*pkey = NULL;
 	long		 lval;
 	enum acctop	 op;
-	unsigned char	 rbuf[64];
 	int		 rc = 0, cc;
 	mode_t		 prev;
 
@@ -340,17 +339,6 @@ acctproc(int netsock, const char *acctkey, const struct config *cfg)
 		goto out;
 	else if ( ! sandbox_after(0))
 		goto out;
-
-	/*
-	 * Seed our PRNG with data from arc4random().
-	 * Do this until we're told it's ok and use increments of 64
-	 * bytes (arbitrarily).
-	 */
-
-	while (0 == RAND_status()) {
-		arc4random_buf(rbuf, sizeof(rbuf));
-		RAND_seed(rbuf, sizeof(rbuf));
-	}
 
 	if (cfg->newacct) {
 		dodbg("%s: generating RSA account key", acctkey);

@@ -88,7 +88,6 @@ keyproc(int netsock, const char *keyfile,
 	EVP_PKEY	*pkey = NULL;
 	X509_REQ	*x = NULL;
 	X509_NAME	*name = NULL;
-	unsigned char	 rbuf[64];
 	int		 len, rc = 0, rrc, nid;
 	mode_t		 prev;
 	STACK_OF(X509_EXTENSION) *exts = NULL;
@@ -121,18 +120,6 @@ keyproc(int netsock, const char *keyfile,
 		goto out;
 	else if ( ! sandbox_after(0))
 		goto out;
-
-	/*
-	 * Seed our PRNG with data from arc4random().
-	 * Do this until we're told it's ok and use increments of 64
-	 * bytes (arbitrarily).
-	 * TODO: is this sufficient as a RAND source?
-	 */
-
-	while (0 == RAND_status()) {
-		arc4random_buf(rbuf, sizeof(rbuf));
-		RAND_seed(rbuf, sizeof(rbuf));
-	}
 
 	if (cfg->newkey) {
 		dodbg("%s: generating RSA domain key", keyfile);
