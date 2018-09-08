@@ -261,14 +261,14 @@ checkexit(pid_t pid, enum comp comp)
 		return (0);
 	} else if ( ! WIFEXITED(c) && WIFSIGNALED(c)) {
 		cp = strsignal(WTERMSIG(c));
-		warnx("signal: %s(%u): %s", comps[comp], pid, cp);
+		warnx("signal: %s(%lld): %s", comps[comp], (long long int) pid, cp);
 		return (0);
 	} else if ( ! WIFEXITED(c)) {
-		warnx("did not exit: %s(%u)", comps[comp], pid);
+		warnx("did not exit: %s(%lld)", comps[comp], (long long int) pid);
 		return (0);
 	} else if (EXIT_SUCCESS != WEXITSTATUS(c)) {
 		cc = WEXITSTATUS(c);
-		dodbg("bad exit: %s(%u): %d", comps[comp], pid, cc);
+		dodbg("bad exit: %s(%lld): %d", comps[comp], (long long int) pid, cc);
 		return (0);
 	}
 
