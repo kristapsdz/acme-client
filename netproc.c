@@ -212,12 +212,12 @@ nreq(struct conn *c, const char *addr)
 	free(c->buf.buf);
 	c->buf.sz = g->bodypartsz;
 	c->buf.buf = malloc(c->buf.sz);
-	memcpy(c->buf.buf, g->bodypart, c->buf.sz);
-	http_get_free(g);
 	if (NULL == c->buf.buf) {
 		warn("malloc");
 		return (-1);
 	}
+	memcpy(c->buf.buf, g->bodypart, c->buf.sz);
+	http_get_free(g);
 	return (code);
 }
 
