@@ -155,6 +155,9 @@ readbuf(int fd, enum comm comm, size_t *sz)
 			rsz += (size_t)ssz;
 			lsz -= (size_t)ssz;
 		}
+		else {
+			assert("What about me?!" && 0);
+		}
 	}
 
 	if (lsz) {
