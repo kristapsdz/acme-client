@@ -13,7 +13,6 @@ OBJS 	 = acctproc.o \
 	   keyproc.o \
 	   main.o \
 	   netproc.o \
-	   parse.o \
 	   revokeproc.o \
 	   rsa.o \
 	   sandbox-pledge.o \
