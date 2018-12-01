@@ -25,29 +25,23 @@ The
 .Nm
 file describes the domains processed by
 .Xr acme-client 1 .
-It uses a free-form syntax, so white-space is not significant.
-A general configuration consists of certificate authorities and domains:
+A configuration consists primarily of certificate authorities and
+domains:
 .Bd -literal
-authority letsencrypt {
-  agreement url https://letsencrypt.org/documents/LE-SA-v1.1.1-August-1-2016.pdf
-  api url "https://acme-v01.api.letsencrypt.org/directory"
-  account key "/etc/ssl/private/my-acme.key"
+authority custom {
+  agreement url https://example.com/agreement.pdf
+  api url https://api.example.com/directory
+  account key /etc/ssl/private/my-acme.key
 }
 
-domain example.com {
-  alternative names { www.example.com }
-  sign with letsencrypt
+domain myname.com {
+  alternative names { www.myname.com }
+  sign with custom
 }
 .Ed
 .Pp
-The
-.Cm authority
-blocks define certificate authorities, while
-.Cm domain
-blocks are for domains.
-.Pp
-At the top level, one may also specify key-value assignments that can
-later be referenced, and file inclusions from other sources.
+The top level may also include variable assignments and file
+inclusions.
 .Sh AUTHORITIES
 Certificate authorities are defined in top-level blocks as follows:
 .Bd -literal
