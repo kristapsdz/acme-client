@@ -1,3 +1,8 @@
+**Attention: *acme-client* has moved permanently into OpenBSD.  It is
+not maintained here any more.  If you're using this repository---which
+is intended for OpenBSD anyway---you're using old code.  Please use the
+local version instead!**
+
 ## Synopsis
 
 *acme-client* is yet another
