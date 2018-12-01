@@ -3,6 +3,9 @@ not maintained here any more.  If you're using this repository---which
 is intended for OpenBSD anyway---you're using old code.  Please use the
 local version instead!**
 
+If you'd like to contribute to *acme-client*, please submit patches to
+the OpenBSD tree.
+
 ## Synopsis
 
 *acme-client* is yet another
